@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turtle Trading - Minimal</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .money {
+            font-weight: bold;
+        }
+        .positive { color: green; }
+        .negative { color: red; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+        #chart-container {
+            margin: 20px 0;
+            border: 1px solid #ccc;
+            background: white;
+        }
+        #price-chart {
+            display: block;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Turtle Trading Simulator - Minimal</h1>
+
+    <div id="initial-state" class="section">
+        <h2>Initial Setup</h2>
+        <p>Starting Capital: <span class="money">$20,000</span></p>
+        <p>SPY Price: <span id="start-spy">$590.00</span></p>
+        <button id="setup-btn">Setup Positions</button>
+    </div>
+
+    <div id="strike-selector" class="section" style="display:none;">
+        <h2>Select Short Call Strike</h2>
+
+        <div id="chart-container">
+            <canvas id="price-chart" width="800" height="300"></canvas>
+        </div>
+
+        <p>LEAPS opened: <span id="leaps-info">-</span></p>
+        <p>Current SPY: <span id="current-spy-price" class="money">-</span></p>
+        <p>Now choose which weekly call to sell:</p>
+
+        <table>
+            <tr>
+                <th>Select</th>
+                <th>Strike</th>
+                <th>Type</th>
+                <th>Premium</th>
+                <th>Notes</th>
+            </tr>
+            <tbody id="strike-options">
+                <!-- Populated by JavaScript -->
+            </tbody>
+        </table>
+
+        <button id="run-week-btn" style="margin-top: 15px;">Run Week with Selected Strike</button>
+    </div>
+
+    <div id="positions-state" class="section" style="display:none;">
+        <h2>Positions Opened (Monday)</h2>
+        <table>
+            <tr>
+                <th>Position</th>
+                <th>Strike</th>
+                <th>Cost/Premium</th>
+                <th>Delta</th>
+                <th>Theta</th>
+            </tr>
+            <tr>
+                <td>LEAPS (Long Call)</td>
+                <td id="leaps-strike">-</td>
+                <td id="leaps-cost">-</td>
+                <td id="leaps-delta">-</td>
+                <td id="leaps-theta">-</td>
+            </tr>
+            <tr>
+                <td>Short Call</td>
+                <td id="call-strike">-</td>
+                <td id="call-premium">-</td>
+                <td>-</td>
+                <td>-</td>
+            </tr>
+        </table>
+        <p>Cash Remaining: <span id="cash-remaining" class="money">-</span></p>
+    </div>
+
+    <div id="friday-results" class="section" style="display:none;">
+        <h2>Friday Close - Week <span id="week-number">1</span> Results</h2>
+
+        <div id="chart-container">
+            <canvas id="results-chart" width="800" height="300"></canvas>
+        </div>
+
+        <p>Starting SPY: <span id="start-spy-result" class="money">-</span></p>
+        <p>Final SPY Price: <span id="final-spy" class="money">-</span></p>
+        <p>SPY Change: <span id="spy-change">-</span></p>
+        <hr>
+        <p>Starting Balance: <span id="starting-balance" class="money">-</span></p>
+        <p>Current Balance: <span id="current-balance" class="money">-</span></p>
+
+        <h3>Position P&L</h3>
+        <table>
+            <tr>
+                <th>Position</th>
+                <th>Starting Value</th>
+                <th>Ending Value</th>
+                <th>P&L</th>
+            </tr>
+            <tr>
+                <td>LEAPS</td>
+                <td id="leaps-start-value">-</td>
+                <td id="leaps-end-value">-</td>
+                <td id="leaps-pnl">-</td>
+            </tr>
+            <tr>
+                <td>Short Call</td>
+                <td id="call-start-value">-</td>
+                <td id="call-end-value">-</td>
+                <td id="call-pnl">-</td>
+            </tr>
+        </table>
+
+        <h3>Final Account Status</h3>
+        <p>Total Portfolio Value: <span id="final-value" class="money">-</span></p>
+        <p>Weekly P&L: <span id="weekly-pnl" class="money">-</span></p>
+
+        <h3>Cumulative Performance</h3>
+        <p>Net Portfolio Change Since Start: <span id="cumulative-pnl" class="money">-</span></p>
+        <p>Total Weeks: <span id="total-weeks">-</span></p>
+        <p>Average P&L per Week: <span id="average-weekly-pnl" class="money">-</span></p>
+
+        <h3>Calculation Breakdown</h3>
+        <pre id="calculation-details"></pre>
+
+        <button id="continue-btn">Continue to Next Week</button>
+        <button id="reset-btn">Reset & Start Over</button>
+    </div>
+
+    <script type="module">
+        // Simplified pricing functions (ported from our tested model)
+
+        function calculateSimpleDelta(stockPrice, strike) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+
+            if (percentITM >= 15) return 0.90;
+            else if (percentITM >= 10) return 0.85;
+            else if (percentITM >= 5) return 0.75 + ((percentITM - 5) / 5) * 0.10;
+            else if (percentITM >= 0) return 0.60 + (percentITM / 5) * 0.15;
+            else return Math.max(0.50, 0.60 + (percentITM / 5) * 0.10);
+        }
+
+        function calculateSimpleExtrinsic(stockPrice, strike, dte) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+            let dailyExtrinsic = 2.5;
+
+            if (percentITM >= 12) dailyExtrinsic = 2.0;
+            else if (percentITM >= 8) dailyExtrinsic = 2.5;
+            else if (percentITM >= 5) dailyExtrinsic = 3.0;
+            else dailyExtrinsic = 3.5;
+
+            return dailyExtrinsic * dte;
+        }
+
+        function createLEAPS(stockPrice, strike, dte) {
+            const intrinsic = Math.max(0, stockPrice - strike) * 100;
+            const delta = calculateSimpleDelta(stockPrice, strike);
+            const extrinsic = calculateSimpleExtrinsic(stockPrice, strike, dte);
+            const value = intrinsic + extrinsic;
+            const theta = dte > 0 ? -extrinsic / dte : 0;
+
+            return {
+                strike,
+                dte,
+                value,
+                delta,
+                theta,
+                intrinsic,
+                extrinsic,
+                costBasis: value,
+                lastStockPrice: stockPrice
+            };
+        }
+
+        function updateLEAPS(leaps, newStockPrice, days) {
+            let currentLeaps = { ...leaps };
+
+            for (let i = 0; i < days; i++) {
+                const stockChange = i === 0 ? newStockPrice - currentLeaps.lastStockPrice : 0;
+                const stockImpact = stockChange * currentLeaps.delta * 100;
+                const thetaImpact = currentLeaps.theta;
+
+                currentLeaps.value += stockImpact + thetaImpact;
+                currentLeaps.extrinsic += thetaImpact;
+                currentLeaps.intrinsic = Math.max(0, newStockPrice - currentLeaps.strike) * 100;
+                currentLeaps.dte -= 1;
+
+                if (currentLeaps.dte > 0) {
+                    currentLeaps.theta = -currentLeaps.extrinsic / currentLeaps.dte;
+                } else {
+                    currentLeaps.theta = 0;
+                    currentLeaps.extrinsic = 0;
+                }
+
+                currentLeaps.delta = calculateSimpleDelta(newStockPrice, currentLeaps.strike);
+                currentLeaps.lastStockPrice = newStockPrice;
+            }
+
+            return currentLeaps;
+        }
+
+        function calculateWeeklyCallPremium(stockPrice, strike, dte) {
+            const intrinsic = Math.max(0, stockPrice - strike) * 100;
+            const distanceFromStrike = stockPrice - strike;
+            const percentDiff = (distanceFromStrike / strike) * 100;
+
+            // Base extrinsic for 7 DTE ATM (real market data: $450)
+            const baseExtrinsic7DTE = 450;
+            const timeFactor = dte / 7;
+
+            // Moneyness factor - refined for $1 strikes
+            const absPercent = Math.abs(percentDiff);
+            let moneynessFactor;
+
+            if (absPercent < 0.1) {
+                moneynessFactor = 1.0;
+            } else if (absPercent < 0.2) {
+                moneynessFactor = 1.0 - (absPercent - 0.1) * 0.4;
+            } else if (absPercent < 0.35) {
+                moneynessFactor = 0.96 - (absPercent - 0.2) * 0.8;
+            } else if (absPercent < 0.5) {
+                moneynessFactor = 0.84 - (absPercent - 0.35) * 1.2;
+            } else {
+                moneynessFactor = Math.max(0.3, 0.66 - (absPercent - 0.5) * 0.8);
+            }
+
+            const extrinsic = baseExtrinsic7DTE * timeFactor * moneynessFactor;
+            return intrinsic + extrinsic;
+        }
+
+        function createShortCall(stockPrice, strike, dte) {
+            const premium = calculateWeeklyCallPremium(stockPrice, strike, dte);
+            return {
+                strike,
+                dte,
+                premiumCollected: premium,
+                optionValue: premium
+            };
+        }
+
+        function updateShortCall(shortCall, newStockPrice, days) {
+            let currentCall = { ...shortCall };
+            currentCall.dte -= days;
+
+            if (currentCall.dte <= 0) {
+                currentCall.optionValue = Math.max(0, newStockPrice - currentCall.strike) * 100;
+            } else {
+                currentCall.optionValue = calculateWeeklyCallPremium(newStockPrice, currentCall.strike, currentCall.dte);
+            }
+
+            return currentCall;
+        }
+
+        // Simulate random SPY movement for the week (returns candlestick data)
+        function simulateWeeklyPriceMove(startPrice) {
+            const open = startPrice;
+
+            // Random weekly range: -2% to +3%
+            const weeklyChange = (Math.random() * 5 - 2) / 100;
+            const close = startPrice * (1 + weeklyChange);
+
+            // High/Low: add some intraweek volatility
+            const volatility = Math.abs(weeklyChange) + 0.01; // At least 1% range
+            const high = Math.max(open, close) * (1 + volatility * 0.5);
+            const low = Math.min(open, close) * (1 - volatility * 0.5);
+
+            return { open, high, low, close };
+        }
+
+        // Draw candlestick chart
+        function drawChart(canvasId = 'price-chart', numHistoricalCandles = 6) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear canvas
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, width, height);
+
+            if (priceHistory.length === 0) return;
+
+            // Calculate price range
+            let minPrice = Infinity;
+            let maxPrice = -Infinity;
+
+            priceHistory.forEach(candle => {
+                minPrice = Math.min(minPrice, candle.low);
+                maxPrice = Math.max(maxPrice, candle.high);
+            });
+
+            // Add 5% padding
+            const range = maxPrice - minPrice;
+            minPrice -= range * 0.05;
+            maxPrice += range * 0.05;
+
+            // Drawing settings
+            const padding = 40;
+            const chartWidth = width - padding * 2;
+            const chartHeight = height - padding * 2;
+            const candleWidth = Math.min(20, chartWidth / (priceHistory.length * 1.5));
+            const spacing = chartWidth / (priceHistory.length + 1);
+
+            // Draw axes
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            ctx.stroke();
+
+            // Draw price labels
+            ctx.fillStyle = '#666';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 4; i++) {
+                const price = minPrice + (maxPrice - minPrice) * (i / 4);
+                const y = height - padding - (chartHeight * i / 4);
+                ctx.fillText(`$${price.toFixed(2)}`, padding - 5, y + 4);
+
+                // Grid line
+                ctx.strokeStyle = '#f0f0f0';
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+
+            // Draw candlesticks
+            priceHistory.forEach((candle, i) => {
+                const x = padding + spacing * (i + 1);
+
+                const openY = height - padding - ((candle.open - minPrice) / (maxPrice - minPrice)) * chartHeight;
+                const closeY = height - padding - ((candle.close - minPrice) / (maxPrice - minPrice)) * chartHeight;
+                const highY = height - padding - ((candle.high - minPrice) / (maxPrice - minPrice)) * chartHeight;
+                const lowY = height - padding - ((candle.low - minPrice) / (maxPrice - minPrice)) * chartHeight;
+
+                const isUp = candle.close >= candle.open;
+                const isHistorical = i < numHistoricalCandles;
+
+                // Set colors based on whether it's historical or game week
+                const wickColor = isHistorical ? '#ccc' : 'black';
+                const strokeColor = isHistorical ? '#ccc' : 'black';
+                const fillColorUp = isHistorical ? '#f5f5f5' : 'white';
+                const fillColorDown = isHistorical ? '#ccc' : 'black';
+
+                // Draw wick
+                ctx.strokeStyle = wickColor;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, highY);
+                ctx.lineTo(x, lowY);
+                ctx.stroke();
+
+                // Draw body
+                const bodyTop = Math.min(openY, closeY);
+                const bodyBottom = Math.max(openY, closeY);
+                const bodyHeight = bodyBottom - bodyTop;
+
+                ctx.strokeStyle = strokeColor;
+                ctx.lineWidth = 1;
+
+                if (isUp) {
+                    // Hollow candle (white/empty for game, light gray for historical)
+                    ctx.fillStyle = fillColorUp;
+                    ctx.fillRect(x - candleWidth/2, bodyTop, candleWidth, Math.max(bodyHeight, 1));
+                    ctx.strokeRect(x - candleWidth/2, bodyTop, candleWidth, Math.max(bodyHeight, 1));
+                } else {
+                    // Filled candle (black for game, gray for historical)
+                    ctx.fillStyle = fillColorDown;
+                    ctx.fillRect(x - candleWidth/2, bodyTop, candleWidth, Math.max(bodyHeight, 1));
+                }
+
+                // Week label - distinguish historical vs game weeks
+                ctx.fillStyle = '#666';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'center';
+
+                if (i < numHistoricalCandles) {
+                    // Historical candles - no label or gray out
+                    ctx.fillStyle = '#999';
+                    ctx.fillText(`${i + 1}`, x, height - padding + 15);
+                } else {
+                    // Game weeks - labeled as W1, W2, etc.
+                    ctx.fillText(`W${i + 1 - numHistoricalCandles}`, x, height - padding + 15);
+                }
+            });
+        }
+
+        // Main game logic
+        let gameState = null;
+        let setupState = null;
+        let weekNumber = 1;
+        let cumulativeState = {
+            totalStartingBalance: 20000,
+            currentBalance: 20000,
+            leapsPosition: null,
+            currentSPY: 590.0
+        };
+        let priceHistory = []; // Array of {open, high, low, close} for each week
+        let hasGeneratedHistoricalCandles = false;
+        let numHistoricalCandles = 6; // Number of context candles shown before game starts
+
+        // Generate historical context candles (5-6 weeks before game starts)
+        function generateHistoricalCandles(finalPrice, numCandles = 6) {
+            const history = [];
+
+            // Work backwards from finalPrice
+            let currentPrice = finalPrice;
+
+            // Generate candles in reverse order
+            for (let i = 0; i < numCandles; i++) {
+                // Each week, previous week's close was within -2% to +3% of current open
+                const weeklyChange = (Math.random() * 5 - 2) / 100;
+                const open = currentPrice / (1 + weeklyChange);
+                const close = currentPrice;
+
+                // Add intraweek volatility
+                const volatility = Math.abs(weeklyChange) + 0.01;
+                const high = Math.max(open, close) * (1 + volatility * 0.5);
+                const low = Math.min(open, close) * (1 - volatility * 0.5);
+
+                history.unshift({ open, high, low, close });
+                currentPrice = open; // Next iteration works from this open
+            }
+
+            return history;
+        }
+
+        // Setup button - open LEAPS and show strike selector (first time)
+        document.getElementById('setup-btn').addEventListener('click', function() {
+            // First time only: generate historical context candles
+            if (!hasGeneratedHistoricalCandles) {
+                priceHistory = generateHistoricalCandles(cumulativeState.currentSPY, numHistoricalCandles);
+                hasGeneratedHistoricalCandles = true;
+            }
+
+            startNewWeek();
+        });
+
+        function startNewWeek() {
+            const startingSPY = cumulativeState.currentSPY;
+
+            // If we don't have a LEAPS position yet, open one
+            let leaps;
+            let cashAfterLEAPS;
+
+            if (!cumulativeState.leapsPosition) {
+                // Week 1: Buy LEAPS
+                const startingCash = cumulativeState.currentBalance;
+                const leapsStrike = Math.round((startingSPY - 80) / 5) * 5;
+                leaps = createLEAPS(startingSPY, leapsStrike, 120);
+                cumulativeState.leapsPosition = leaps;
+                cashAfterLEAPS = startingCash - leaps.value;
+            } else {
+                // Week 2+: Already own LEAPS, just get cash portion
+                leaps = cumulativeState.leapsPosition;
+                // Cash = total balance - LEAPS value
+                cashAfterLEAPS = cumulativeState.currentBalance - leaps.value;
+            }
+
+            // Store setup state
+            const weekStartingBalance = cumulativeState.currentBalance;
+            setupState = {
+                startingSPY,
+                weekStartingBalance,
+                leaps,
+                cashAfterLEAPS
+            };
+
+            // Show LEAPS info
+            document.getElementById('leaps-info').textContent =
+                `$${leaps.strike} strike, $${leaps.value.toFixed(2)} value, ${leaps.delta.toFixed(2)} delta, ${leaps.dte} DTE`;
+
+            // Show current SPY price
+            document.getElementById('current-spy-price').textContent = `$${startingSPY.toFixed(2)}`;
+
+            // Generate strike options
+            generateStrikeOptions(startingSPY);
+
+            // Draw chart
+            drawChart('price-chart', numHistoricalCandles);
+
+            // Show strike selector
+            document.getElementById('initial-state').style.display = 'none';
+            document.getElementById('strike-selector').style.display = 'block';
+        }
+
+        function generateStrikeOptions(spy) {
+            const strikes = [
+                { offset: -1, label: '1 ITM', notes: 'Max protection, lower premium' },
+                { offset: 0, label: 'ATM', notes: 'Balanced risk/reward' },
+                { offset: 1, label: '1 OTM', notes: 'Good premium, some upside' },
+                { offset: 2, label: '2 OTM', notes: 'Better upside, less premium' },
+                { offset: 3, label: '3 OTM', notes: 'Most common - max upside' },
+                { offset: null, label: 'No Call', notes: 'Leave LEAPS uncovered - full upside/downside' }
+            ];
+
+            const tbody = document.getElementById('strike-options');
+            tbody.innerHTML = '';
+
+            strikes.forEach((strike, index) => {
+                const row = document.createElement('tr');
+
+                if (strike.offset === null) {
+                    // "No Call" option
+                    row.innerHTML = `
+                        <td><input type="radio" name="strike" value="none"></td>
+                        <td>-</td>
+                        <td>${strike.label}</td>
+                        <td class="money">$0.00</td>
+                        <td>${strike.notes}</td>
+                    `;
+                } else {
+                    const strikePrice = Math.ceil(spy) + strike.offset;
+                    const premium = calculateWeeklyCallPremium(spy, strikePrice, 7);
+
+                    row.innerHTML = `
+                        <td><input type="radio" name="strike" value="${strikePrice}" ${index === 4 ? 'checked' : ''}></td>
+                        <td>$${strikePrice}</td>
+                        <td>${strike.label}</td>
+                        <td class="money">$${premium.toFixed(2)}</td>
+                        <td>${strike.notes}</td>
+                    `;
+                }
+
+                tbody.appendChild(row);
+            });
+        }
+
+        // Run week button - simulate with selected strike
+        document.getElementById('run-week-btn').addEventListener('click', function() {
+            const selectedStrike = document.querySelector('input[name="strike"]:checked');
+            if (!selectedStrike) {
+                alert('Please select a strike!');
+                return;
+            }
+
+            const strikeValue = selectedStrike.value;
+            const { startingSPY, weekStartingBalance, leaps, cashAfterLEAPS } = setupState;
+
+            // Open short call (or leave uncovered)
+            let shortCall = null;
+            let cash = cashAfterLEAPS;
+
+            if (strikeValue !== 'none') {
+                const shortCallStrike = parseInt(strikeValue);
+                shortCall = createShortCall(startingSPY, shortCallStrike, 7);
+                cash = cashAfterLEAPS + shortCall.premiumCollected;
+            }
+
+            // Simulate week (get candlestick data)
+            const weeklyCandle = simulateWeeklyPriceMove(startingSPY);
+            const finalSPY = weeklyCandle.close;
+
+            // Add to price history
+            priceHistory.push(weeklyCandle);
+
+            const finalLeaps = updateLEAPS(leaps, finalSPY, 7);
+
+            // Calculate P&L
+            const leapsWeeklyPnL = finalLeaps.value - leaps.value; // Change THIS WEEK
+
+            let finalShortCall = null;
+            let shortCallPnL = 0;
+            let totalValue;
+
+            if (shortCall) {
+                // Has short call
+                finalShortCall = updateShortCall(shortCall, finalSPY, 7);
+                shortCallPnL = shortCall.premiumCollected - finalShortCall.optionValue;
+                totalValue = cash + finalLeaps.value - finalShortCall.optionValue;
+            } else {
+                // No short call (uncovered)
+                totalValue = cash + finalLeaps.value;
+            }
+
+            const weeklyPnL = totalValue - weekStartingBalance; // Compare to week start
+
+            // Store state
+            gameState = {
+                startingSPY,
+                finalSPY,
+                weekStartingBalance,
+                leaps,
+                finalLeaps,
+                shortCall,
+                finalShortCall,
+                cash,
+                totalValue,
+                weeklyPnL,
+                leapsWeeklyPnL,
+                shortCallPnL
+            };
+
+            // Update cumulative state for next week
+            cumulativeState.currentBalance = totalValue;
+            cumulativeState.currentSPY = finalSPY;
+            cumulativeState.leapsPosition = finalLeaps;
+
+            // Display results
+            displayResults();
+        });
+
+        function displayResults() {
+            const s = gameState;
+
+            // Hide strike selector
+            document.getElementById('strike-selector').style.display = 'none';
+
+            // Draw chart on results canvas
+            drawChart('results-chart', numHistoricalCandles);
+
+            // Show positions
+            document.getElementById('positions-state').style.display = 'block';
+            document.getElementById('leaps-strike').textContent = `$${s.leaps.strike}`;
+            document.getElementById('leaps-cost').textContent = `$${s.leaps.value.toFixed(2)}`;
+            document.getElementById('leaps-delta').textContent = s.leaps.delta.toFixed(2);
+            document.getElementById('leaps-theta').textContent = `$${s.leaps.theta.toFixed(2)}/day`;
+
+            if (s.shortCall) {
+                document.getElementById('call-strike').textContent = `$${s.shortCall.strike}`;
+                document.getElementById('call-premium').textContent = `$${s.shortCall.premiumCollected.toFixed(2)}`;
+            } else {
+                document.getElementById('call-strike').textContent = '-';
+                document.getElementById('call-premium').textContent = 'None (Uncovered)';
+            }
+            document.getElementById('cash-remaining').textContent = `$${s.cash.toFixed(2)}`;
+
+            // Show Friday results
+            document.getElementById('friday-results').style.display = 'block';
+            document.getElementById('week-number').textContent = weekNumber;
+            document.getElementById('start-spy-result').textContent = `$${s.startingSPY.toFixed(2)}`;
+            document.getElementById('final-spy').textContent = `$${s.finalSPY.toFixed(2)}`;
+
+            const spyChange = s.finalSPY - s.startingSPY;
+            const spyChangePercent = ((spyChange / s.startingSPY) * 100).toFixed(2);
+            const spyChangeClass = spyChange >= 0 ? 'positive' : 'negative';
+            document.getElementById('spy-change').innerHTML =
+                `<span class="${spyChangeClass}">$${spyChange.toFixed(2)} (${spyChangePercent}%)</span>`;
+
+            // Position values
+            document.getElementById('leaps-start-value').textContent = `$${s.leaps.value.toFixed(2)}`;
+            document.getElementById('leaps-end-value').textContent = `$${s.finalLeaps.value.toFixed(2)}`;
+            document.getElementById('leaps-pnl').innerHTML =
+                `<span class="${s.leapsWeeklyPnL >= 0 ? 'positive' : 'negative'}">$${s.leapsWeeklyPnL.toFixed(2)}</span>`;
+
+            if (s.shortCall) {
+                document.getElementById('call-start-value').textContent = `$${s.shortCall.premiumCollected.toFixed(2)}`;
+                document.getElementById('call-end-value').textContent = `$${s.finalShortCall.optionValue.toFixed(2)}`;
+                document.getElementById('call-pnl').innerHTML =
+                    `<span class="${s.shortCallPnL >= 0 ? 'positive' : 'negative'}">$${s.shortCallPnL.toFixed(2)}</span>`;
+            } else {
+                document.getElementById('call-start-value').textContent = 'None';
+                document.getElementById('call-end-value').textContent = 'None';
+                document.getElementById('call-pnl').textContent = '$0.00';
+            }
+
+            // Balances
+            document.getElementById('starting-balance').textContent = `$${s.weekStartingBalance.toFixed(2)}`;
+            document.getElementById('current-balance').textContent = `$${s.totalValue.toFixed(2)}`;
+
+            // Final totals
+            document.getElementById('final-value').textContent = `$${s.totalValue.toFixed(2)}`;
+            const weeklyPnLClass = s.weeklyPnL >= 0 ? 'positive' : 'negative';
+            document.getElementById('weekly-pnl').innerHTML =
+                `<span class="${weeklyPnLClass}">$${s.weeklyPnL.toFixed(2)}</span>`;
+
+            // Cumulative performance
+            const cumulativePnL = s.totalValue - cumulativeState.totalStartingBalance;
+            const averageWeeklyPnL = cumulativePnL / weekNumber;
+            const cumulativeClass = cumulativePnL >= 0 ? 'positive' : 'negative';
+            const averageClass = averageWeeklyPnL >= 0 ? 'positive' : 'negative';
+
+            document.getElementById('cumulative-pnl').innerHTML =
+                `<span class="${cumulativeClass}">$${cumulativePnL.toFixed(2)}</span>`;
+            document.getElementById('total-weeks').textContent = weekNumber;
+            document.getElementById('average-weekly-pnl').innerHTML =
+                `<span class="${averageClass}">$${averageWeeklyPnL.toFixed(2)}</span>`;
+
+            // Calculation details
+            const details = `
+LEAPS Calculation:
+  Stock Change: $${s.startingSPY.toFixed(2)} → $${s.finalSPY.toFixed(2)} = $${spyChange.toFixed(2)}
+  Delta Impact: $${spyChange.toFixed(2)} × ${s.leaps.delta.toFixed(2)} × 100 = $${(spyChange * s.leaps.delta * 100).toFixed(2)}
+  Theta Cost: $${s.leaps.theta.toFixed(2)}/day × 7 days = $${(s.leaps.theta * 7).toFixed(2)}
+  LEAPS P&L: $${s.leapsWeeklyPnL.toFixed(2)}
+
+${s.shortCall ? `Short Call Calculation:
+  Premium Collected: $${s.shortCall.premiumCollected.toFixed(2)}
+  Final Value: $${s.finalShortCall.optionValue.toFixed(2)}
+  ${s.finalSPY > s.shortCall.strike ?
+    `(Expired ITM: $${((s.finalSPY - s.shortCall.strike) * 100).toFixed(2)} intrinsic)` :
+    `(Expired OTM: Worthless)`}
+  Short Call P&L: $${s.shortCallPnL.toFixed(2)}
+
+Total Weekly P&L: $${s.leapsWeeklyPnL.toFixed(2)} + $${s.shortCallPnL.toFixed(2)} = $${s.weeklyPnL.toFixed(2)}` : `Short Call:
+  None (LEAPS left uncovered)
+  No premium collected
+  Full upside and downside exposure
+
+Total Weekly P&L: $${s.leapsWeeklyPnL.toFixed(2)} (LEAPS only) = $${s.weeklyPnL.toFixed(2)}`}
+            `.trim();
+
+            document.getElementById('calculation-details').textContent = details;
+
+            // Hide start button
+            document.getElementById('initial-state').style.display = 'none';
+        }
+
+        // Continue to next week button
+        document.getElementById('continue-btn').addEventListener('click', function() {
+            // Increment week
+            weekNumber++;
+
+            // Hide results, show strike selector
+            document.getElementById('friday-results').style.display = 'none';
+            document.getElementById('positions-state').style.display = 'none';
+
+            // Start new week with updated state
+            startNewWeek();
+        });
+
+        // Reset button
+        document.getElementById('reset-btn').addEventListener('click', function() {
+            // Reset everything
+            weekNumber = 1;
+            priceHistory = [];
+            hasGeneratedHistoricalCandles = false;
+            cumulativeState = {
+                totalStartingBalance: 20000,
+                currentBalance: 20000,
+                leapsPosition: null,
+                currentSPY: 590.0
+            };
+
+            document.getElementById('initial-state').style.display = 'block';
+            document.getElementById('strike-selector').style.display = 'none';
+            document.getElementById('positions-state').style.display = 'none';
+            document.getElementById('friday-results').style.display = 'none';
+            gameState = null;
+            setupState = null;
+        });
+    </script>
+</body>
+</html>
