@@ -8,6 +8,7 @@ export interface Candle {
   low: number;
   close: number;
   volume?: number;
+  isHistorical?: boolean; // Flag for pre-game historical context candles
 }
 
 export interface MarketScenario {
@@ -185,7 +186,7 @@ export function generateInitialCandles(
 ): Candle[] {
   const candles: Candle[] = [];
   let currentPrice = scenario.initialPrice;
-  
+
   for (let i = 0; i < days; i++) {
     const candle = createCandle(currentPrice, scenario.volatility);
     candles.push({
@@ -194,7 +195,46 @@ export function generateInitialCandles(
     });
     currentPrice = candle.close;
   }
-  
+
+  return candles;
+}
+
+/**
+ * Generate historical context candles (shown before game starts)
+ * Working backwards from the final price to show market context
+ */
+export function generateHistoricalContextCandles(
+  finalPrice: number,
+  numCandles: number = 6,
+  volatility: number = 0.008
+): Candle[] {
+  const candles: Candle[] = [];
+  let currentPrice = finalPrice;
+
+  // Generate candles in reverse order
+  for (let i = 0; i < numCandles; i++) {
+    // Each week, previous week's close was within -2% to +3% of current open
+    const weeklyChange = (Math.random() * 5 - 2) / 100;
+    const open = currentPrice / (1 + weeklyChange);
+    const close = currentPrice;
+
+    // Add intraweek volatility
+    const vol = Math.abs(weeklyChange) + 0.01;
+    const high = Math.max(open, close) * (1 + vol * 0.5);
+    const low = Math.min(open, close) * (1 - vol * 0.5);
+
+    candles.unshift({
+      time: Date.now() - (numCandles - i) * 604800000, // 1 week in ms
+      open,
+      high,
+      low,
+      close,
+      isHistorical: true,
+    });
+
+    currentPrice = open; // Next iteration works from this open
+  }
+
   return candles;
 }
 

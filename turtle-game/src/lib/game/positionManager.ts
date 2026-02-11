@@ -23,7 +23,7 @@ export interface PositionMetrics {
  * Create a new LEAPS position
  */
 export function createLEAPSPosition(
-  _stockPrice: number,
+  stockPrice: number,
   strike: number,
   dte: number,
   pricing: OptionPriceBreakdown
@@ -38,6 +38,8 @@ export function createLEAPSPosition(
     delta: pricing.delta,
     theta: pricing.theta,
     premium: pricing.total,
+    extrinsic: pricing.extrinsic,
+    lastStockPrice: stockPrice,
   };
 }
 
@@ -153,7 +155,7 @@ export function rollLEAPS(
   });
   
   const netCredit = oldValue - newPricing.total;
-  
+
   const newPosition: LEAPSPosition = {
     type: 'leaps',
     quantity: 1,
@@ -164,6 +166,8 @@ export function rollLEAPS(
     delta: newPricing.delta,
     theta: newPricing.theta,
     premium: newPricing.total,
+    extrinsic: newPricing.extrinsic,
+    lastStockPrice: currentStockPrice,
   };
   
   return {

@@ -117,19 +117,27 @@ export class CandlestickChart {
     
     // Draw candles
     const candleWidth = (chartWidth / this.candles.length) * 0.7;
-    
+
     for (let i = 0; i < this.candles.length; i++) {
       const candle = this.candles[i];
       const x = indexToX(i);
-      
+
       const isGreen = candle.close >= candle.open;
-      const color = isGreen ? '#22C55E' : '#EF4444';
-      
+      const isHistorical = candle.isHistorical === true;
+
+      // Color: gray for historical, green/red for game candles
+      let color: string;
+      if (isHistorical) {
+        color = isGreen ? '#9CA3AF' : '#6B7280'; // Gray shades
+      } else {
+        color = isGreen ? '#22C55E' : '#EF4444'; // Green/Red
+      }
+
       const openY = priceToY(candle.open);
       const closeY = priceToY(candle.close);
       const highY = priceToY(candle.high);
       const lowY = priceToY(candle.low);
-      
+
       // Draw wick
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
@@ -137,12 +145,21 @@ export class CandlestickChart {
       ctx.moveTo(x, highY);
       ctx.lineTo(x, lowY);
       ctx.stroke();
-      
+
       // Draw body
-      ctx.fillStyle = color;
       const bodyTop = Math.min(openY, closeY);
       const bodyHeight = Math.max(Math.abs(openY - closeY), 1);
-      ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+
+      if (isGreen && !isHistorical) {
+        // Game candle up: hollow (stroke only)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+      } else {
+        // Down candles or historical: filled
+        ctx.fillStyle = color;
+        ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+      }
     }
     
     // Draw current price line
