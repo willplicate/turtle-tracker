@@ -335,6 +335,9 @@
             minPrice -= range * 0.05;
             maxPrice += range * 0.05;
 
+            // Debug: log the price range
+            console.log('Chart price range:', { minPrice, maxPrice, numCandles: priceHistory.length });
+
             // Drawing settings
             const padding = 40;
             const chartWidth = width - padding * 2;
@@ -357,6 +360,9 @@
             for (let i = 0; i <= 4; i++) {
                 const price = minPrice + (maxPrice - minPrice) * (i / 4);
                 const y = height - padding - (chartHeight * i / 4);
+
+                // Debug: log each price
+                console.log(`Label ${i}: price=${price.toFixed(2)}, y=${y.toFixed(1)}`);
 
                 // Draw price label (ensure fillStyle is set each time)
                 ctx.fillStyle = '#666';
