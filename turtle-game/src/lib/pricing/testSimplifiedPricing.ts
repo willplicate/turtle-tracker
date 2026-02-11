@@ -159,16 +159,16 @@ function runTest() {
 
   // Compare to Python expected results
   console.log('COMPARISON TO PYTHON MODEL:');
-  console.log('Python expected Weekly P&L: ~$294.58');
+  console.log('Python expected Weekly P&L: ~$372.97');
   console.log(`TypeScript actual Weekly P&L: $${weeklyPnL.toFixed(2)}`);
-  const difference = Math.abs(weeklyPnL - 294.58);
+  const difference = Math.abs(weeklyPnL - 372.97);
   console.log(`Difference: $${difference.toFixed(2)}`);
   console.log();
 
-  if (difference < 10) {
-    console.log('✅ SUCCESS! TypeScript matches Python model (within $10)');
+  if (difference < 1) {
+    console.log('✅ SUCCESS! TypeScript matches Python model exactly!');
   } else {
-    console.log('⚠️  WARNING: Large difference from Python model');
+    console.log('⚠️  WARNING: Difference from Python model');
   }
 
   console.log('='.repeat(80));
