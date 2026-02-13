@@ -2,14 +2,22 @@
   "version": 2,
   "builds": [
     {
-      "src": "turtle-game/minimal-game.html",
+      "src": "turtle-game/**",
       "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/",
+      "dest": "/turtle-game/minimal-game-with-leaps-selector.html"
+    },
+    {
+      "src": "/minimal-game",
       "dest": "/turtle-game/minimal-game.html"
+    },
+    {
+      "src": "/leaps",
+      "dest": "/turtle-game/minimal-game-with-leaps-selector.html"
     }
   ]
 }
