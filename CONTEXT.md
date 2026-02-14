@@ -1,5 +1,53 @@
 # Turtle Trading Game - Context & Progress
 
+## 🚀 Quick Summary (Start Here)
+
+**Current Status**: ✅ Fully functional LEAPS trading simulator deployed to Vercel
+
+**Live URL**: https://turtle-trading-game.vercel.app
+
+**What Works**:
+- Market-calibrated delta calculator (< 2% error vs real OptionStrat data)
+- LEAPS selection with ITM slider ($60-$100) and DTE options (200/360/450 days)
+- 4-tier alert system (Excellent/Good/Acceptable/Risky based on delta)
+- Theta acceleration (shorter DTE = higher daily decay, realistic)
+- Full LEAPS rolling functionality (triggers at delta < 0.75 OR DTE < 180 days)
+- Performance tracking (Total Return % and Annualized Return %)
+- Multi-week gameplay (tested 52+ weeks)
+- All strikes display as integers (not decimals)
+
+**Key Files**:
+- `turtle-game/minimal-game-with-leaps-selector.html` - Complete game (single HTML file)
+- `delta_calculator.py` - Market validation (OptionStrat data)
+- `DELTA_SYSTEM_SUMMARY.md` - Delta implementation docs
+- `ROLLING_CRITERIA_CORRECTED.md` - Rolling rules
+
+**How to Test**:
+```bash
+# Open locally
+open "turtle-game/minimal-game-with-leaps-selector.html"
+
+# Or visit live
+https://turtle-trading-game.vercel.app
+```
+
+**Recent Session (Feb 14, 2026)**:
+1. Calibrated delta to real market data (9% ITM = 0.80, 13% ITM = 0.85)
+2. Added theta acceleration (200 DTE = 2x decay vs 450 DTE)
+3. Built complete rolling interface with cost preview
+4. Fixed balance calculation (rolling doesn't change total value)
+5. Added performance metrics (total & annualized returns)
+6. Fixed strike precision (all integers now)
+7. Deployed to Vercel
+
+**Next Steps**:
+- User testing (try rolling LEAPS at different strikes/DTEs)
+- Gather feedback on delta/theta realism
+- Consider adding tutorial mode
+- Potentially integrate into main TypeScript codebase
+
+---
+
 ## Session Summary (Updated Feb 12, 2026)
 
 ### What We Built: Minimal Viable Game
