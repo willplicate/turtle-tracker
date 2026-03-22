@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turtle Trade Tracker v2.0 - Alpha Vantage Edition</title>
+    <style>
+        /* 1990s Web Aesthetic */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #c0c0c0;
+            color: #000;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        /* Header Banner */
+        .header {
+            background: linear-gradient(to bottom, #000080, #0000cd);
+            color: #fff;
+            padding: 10px;
+            border-bottom: 3px solid #000;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            text-shadow: 2px 2px #000;
+            margin-bottom: 5px;
+        }
+        
+        .header .tagline {
+            font-size: 11px;
+            color: #ffff00;
+        }
+        
+        /* API Status */
+        .api-status {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 10px;
+            margin-left: 10px;
+            border: 1px solid;
+        }
+        .api-connected {
+            background: #00ff00;
+            color: #000;
+            border-color: #008000;
+        }
+        .api-disconnected {
+            background: #ff0000;
+            color: #fff;
+            border-color: #800000;
+        }
+        
+        /* Navigation */
+        .nav {
+            background: #d3d3d3;
+            padding: 5px 10px;
+        }
+        
+        .nav a {
+            color: #000080;
+            text-decoration: none;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        
+        .nav a:hover {
+            color: #ff0000;
+            text-decoration: underline;
+        }
+        
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 10px auto;
+            padding: 0 10px;
+        }
+        
+        /* Panels (like old Windows 3.1) */
+        .panel {
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            margin-bottom: 15px;
+        }
+        
+        .panel-header {
+            background: linear-gradient(to right, #000080, #1084d0);
+            color: #fff;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .panel-body {
+            padding: 10px;
+        }
+        
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            font-size: 12px;
+        }
+        
+        th {
+            background: #d3d3d3;
+            border: 1px solid #808080;
+            padding: 5px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        td {
+            border: 1px solid #c0c0c0;
+            padding: 4px 6px;
+        }
+        
+        tr:nth-child(even) {
+            background: #f0f0f0;
+        }
+        
+        tr:hover {
+            background: #ffffcc;
+        }
+        
+        /* Status Colors */
+        .status-open {
+            color: #008000;
+            font-weight: bold;
+        }
+        
+        .status-closed {
+            color: #808080;
+        }
+        
+        .status-expired {
+            color: #ff6600;
+        }
+        
+        .pnl-positive {
+            color: #008000;
+            font-weight: bold;
+        }
+        
+        .pnl-negative {
+            color: #ff0000;
+            font-weight: bold;
+        }
+        
+        /* Buttons */
+        button {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            padding: 4px 12px;
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            cursor: pointer;
+            margin: 2px;
+        }
+        
+        button:hover {
+            background: #c0c0c0;
+        }
+        
+        button:active {
+            border-color: #808080 #fff #fff #808080;
+        }
+        
+        button.primary {
+            background: #000080;
+            color: #fff;
+            border-color: #4040ff #000040 #000040 #4040ff;
+        }
+        
+        button.primary:hover {
+            background: #0000cd;
+        }
+        
+        button.danger {
+            background: #800000;
+            color: #fff;
+            border-color: #ff4040 #400000 #400000 #ff4040;
+        }
+        
+        /* Form Elements */
+        input, select {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 12px;
+            padding: 3px;
+            border: 2px inset #c0c0c0;
+            background: #fff;
+        }
+        
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        
+        .form-row {
+            margin-bottom: 8px;
+        }
+        
+        /* Summary Stats - Grid */
+        .stats-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-box {
+            background: #fff;
+            border: 2px inset #c0c0c0;
+            padding: 10px;
+            min-width: 160px;
+            text-align: center;
+        }
+        
+        .stat-label {
+            font-size: 10px;
+            color: #808080;
+            text-transform: uppercase;
+        }
+        
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        /* Combined P&L Box */
+        .combined-pnl-box {
+            background: #fff;
+            border: 3px solid #000080;
+            padding: 15px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        
+        .combined-pnl-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .combined-pnl-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        /* Modal/Dialog */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            min-width: 400px;
+            z-index: 1001;
+        }
+        
+        .modal-header {
+            background: linear-gradient(to right, #000080, #1084d0);
+            color: #fff;
+            padding: 6px 10px;
+            font-weight: bold;
+        }
+        
+        .modal-body {
+            padding: 15px;
+        }
+        
+        .modal-footer {
+            padding: 10px 15px;
+            text-align: right;
+            border-top: 1px solid #808080;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: #d3d3d3;
+            border-bottom: 2px solid #808080;
+        }
+        
+        .tab {
+            padding: 5px 15px;
+            cursor: pointer;
+            border: 2px solid;
+            border-color: #fff #808080 transparent #fff;
+            margin-right: 2px;
+            background: #c0c0c0;
+        }
+        
+        .tab.active {
+            background: #d3d3d3;
+            border-bottom-color: #d3d3d3;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Trade History Item */
+        .trade-item {
+            background: #fff;
+            border: 1px solid #808080;
+            margin-bottom: 5px;
+            padding: 8px;
+            font-size: 11px;
+        }
+        
+        .trade-header {
+            font-weight: bold;
+            border-bottom: 1px dotted #808080;
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+        }
+        
+        /* HR line */
+        hr {
+            border: none;
+            border-top: 1px solid #808080;
+            border-bottom: 1px solid #fff;
+            margin: 10px 0;
+        }
+        
+        /* Marquee */
+        .marquee {
+            background: #000080;
+            color: #fff;
+            padding: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        /* Position Cards */
+        .position-card {
+            background: #fff;
+            border: 2px solid #808080;
+            margin-bottom: 10px;
+        }
+        
+        .position-title {
+            background: #d3d3d3;
+            padding: 5px;
+            font-weight: bold;
+            border-bottom: 1px solid #808080;
+        }
+        
+        .position-details {
+            padding: 10px;
+        }
+        
+        .position-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 0;
+            border-bottom: 1px dotted #c0c0c0;
+        }
+        
+        .position-row:last-child {
+            border-bottom: none;
+        }
+        
+        /* Live Price Display */
+        .live-price {
+            background: #000;
+            color: #0f0;
+            padding: 8px 15px;
+            font-family: "Courier New", monospace;
+            font-size: 18px;
+            text-decoration: none;
+            display: inline-block;
+            border: 2px inset #808080;
+        }
+        
+        .price-up {
+            color: #00ff00;
+        }
+        
+        .price-down {
+            color: #ff0000;
+        }
+        
+        /* LEAPS Value History Table */
+        .history-table {
+            font-size: 11px;
+        }
+        
+        .history-table th {
+            font-size: 10px;
+        }
+        
+        /* Two Column Layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        /* API Config Panel */
+        .api-config {
+            background: #ffffcc;
+            border: 2px solid #ff6600;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .api-config h3 {
+            color: #ff6600;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>🐢 TURTLE TRADE TRACKER v2.0</h1>
+        <div class="tagline">[ LEAPS + Short Call Strategy ] [ Alpha Vantage Integration ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span></div>
+    </div>
+    
+    <!-- Navigation -->
+    <div class="nav">
+        <a href="#" onclick="showTab('dashboard')">[ Dashboard ]</a>
+        <a href="#" onclick="showTab('leaps')">[ LEAPS Tracker ]</a>
+        <a href="#" onclick="showTab('trades')">[ Short Calls ]</a>
+        <a href="#" onclick="showTab('combined')">[ Combined P&L ]</a>
+        <a href="#" onclick="showTab('data')">[ Data / API ]</a>
+        <span style="float: right; color: #000080;">IWM Live: <span id="live-iwm" class="live-price">--.--</span> <span id="iwm-change"></span></span>
+    </div>
+    
+    <!-- Marquee -->
+    <div class="marquee">
+        <span id="ticker">TURTLE STRATEGY: COLLECT PREMIUM ON DECLINES || MAKE DELTA ON RALLIES || TRACK BOTH SIDES OF THE TRADE </span>
+    </div>
+    
+    <div class="container">
+        <!-- API CONFIG WARNING -->
+        <div class="api-config" id="api-warning" style="display: none;">
+            <h3>⚠️ Alpha Vantage API Key Required</h3>
+            <p>To fetch live IWM prices, enter your Alpha Vantage API key in the <a href="#" onclick="showTab('data')">Data / API tab</a>.</p>
+            <p>Get a free key at: <a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co</a></p>
+        </div>
+        
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content active">
+            <!-- Combined Strategy P&L -->
+            <div class="panel">
+                <div class="panel-header">🎯 Combined Strategy Performance (Short Calls + LEAPS)</div>
+                <div class="panel-body">
+                    <div class="combined-pnl-box">
+                        <div class="combined-pnl-label">TOTAL STRATEGY P&L (Realized + Unrealized)</div>
+                        <div class="combined-pnl-value" id="combined-total-pnl">$0.00</div>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Short Call Credits</div>
+                            <div class="stat-value pnl-positive" id="dash-short-credits">$0.00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Short Call Debits</div>
+                            <div class="stat-value pnl-negative" id="dash-short-debits">$0.00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Net Short Call P&L</div>
+                            <div class="stat-value" id="dash-net-short">$0.00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">LEAPS Unrealized</div>
+                            <div class="stat-value" id="dash-leaps-unrealized">$0.00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">LEAPS Cost Basis</div>
+                            <div class="stat-value" id="dash-leaps-cost">$0.00</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">LEAPS Current</div>
+                            <div class="stat-value" id="dash-leaps-current">$0.00</div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    <p style="font-size: 11px; color: #666;">
+                        <strong>How to read this:</strong> When market drops, Short Calls should be GREEN (collected premium), LEAPS should be RED (lost value). 
+                        When market rallies, Short Calls may show debits (rolled up), but LEAPS gains should offset. The NET is what matters.
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="two-col">
+                <div class="panel">
+                    <div class="panel-header">📈 LEAPS Position</div>
+                    <div class="panel-body">
+                        <div id="dash-leaps-summary">
+                            <p><em>No LEAPS position. Add one in the LEAPS Tracker tab.</em></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-header">📝 Current Short Call</div>
+                    <div class="panel-body">
+                        <div id="dash-call-summary">
+                            <p><em>No active short call.</em></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="panel">
+                <div class="panel-header">📊 Quick Stats</div>
+                <div class="panel-body">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Weeks Traded</div>
+                            <div class="stat-value" id="dash-weeks">0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Total Rolls</div>
+                            <div class="stat-value" id="dash-rolls">0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Expired Worthless</div>
+                            <div class="stat-value pnl-positive" id="dash-expired">0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Avg Credit/Week</div>
+                            <div class="stat-value" id="dash-avg-credit">$0.00</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <button class="primary" onclick="showModal('new-leaps-modal')">[+ Add LEAPS]</button>
+                    <button class="primary" onclick="showModal('new-call-modal')" id="btn-add-call" disabled>[+ Sell Call]</button>
+                    <button onclick="fetchIWMPrice()">[🔄 Refresh IWM Price]</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- LEAPS TRACKER TAB -->
+        <div id="tab-leaps" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">📈 LEAPS Position & Value History</div>
+                <div class="panel-body">
+                    <div id="leaps-detail-panel">
+                        <p><em>No LEAPS position recorded. Add your LEAPS to track its value over time.</em></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">📊 LEAPS Value History Log</div>
+                <div class="panel-body">
+                    <table class="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>IWM Price</th>
+                                <th>LEAPS Value</th>
+                                <th>Unrealized P&L</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaps-history-tbody">
+                            <tr><td colspan="5"><em>No history recorded</em></td></tr>
+                        </tbody>
+                    </table>
+                    <hr>
+                    <button onclick="showModal('update-leaps-modal')">[+ Log LEAPS Value]</button>
+                    <button onclick="fetchHistoricalIWM()">[📥 Fetch Historical IWM]</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SHORT CALLS TAB -->
+        <div id="tab-trades" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">📝 Weekly Short Call History</div>
+                <div class="panel-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Week</th>
+                                <th>Date</th>
+                                <th>Strike</th>
+                                <th>DTE</th>
+                                <th>Sold For</th>
+                                <th>Bought For</th>
+                                <th>P&L</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="calls-tbody">
+                            <tr><td colspan="9"><em>No short calls recorded</em></td></tr>
+                        </tbody>
+                    </table>
+                    <hr>
+                    <button class="primary" onclick="showModal('manual-call-modal')">[+ Manual Entry]</button>
+                    <p style="font-size: 11px; color: #666; margin-top: 5px;">
+                        Manual entry lets you add: Sell call (STO), Buy back (BTC), Roll, or mark expired.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- COMBINED P&L TAB -->
+        <div id="tab-combined" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">📊 Week-by-Week Combined Analysis</div>
+                <div class="panel-body">
+                    <p style="font-size: 11px; margin-bottom: 10px;">
+                        This shows how the strategy performed each week by combining short call P&L with LEAPS value changes.
+                    </p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Week</th>
+                                <th>Period</th>
+                                <th>Short Call P&L</th>
+                                <th>LEAPS Δ Value</th>
+                                <th>Strategy Net</th>
+                                <th>Running Total</th>
+                                <th>IWM Move</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="combined-tbody">
+                            <tr><td colspan="8"><em>Insufficient data for analysis. Import data and log LEAPS values.</em></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">🎯 Strategy Insights</div>
+                <div class="panel-body">
+                    <div id="strategy-insights">
+                        <p><strong>Market Decline Scenario:</strong></p>
+                        <ul style="margin-left: 20px; font-size: 11px;">
+                            <li>Short calls expire worthless → Collect full premium ✓</li>
+                            <li>LEAPS loses value → Unrealized loss ✗</li>
+                            <li><strong>Net:</strong> Premium should offset some LEAPS decay</li>
+                        </ul>
+                        <hr>
+                        <p><strong>Market Rally Scenario:</strong></p>
+                        <ul style="margin-left: 20px; font-size: 11px;">
+                            <li>Short calls go ITM → Must roll up (debit) or buy back ✗</li>
+                            <li>LEAPS gains value → Unrealized gain ✓</li>
+                            <li><strong>Net:</strong> LEAPS gains should exceed roll costs</li>
+                        </ul>
+                        <hr>
+                        <p><strong>Your Current Situation:</strong></p>
+                        <div id="current-situation">
+                            <em>Analyze your trades to see insights...</em>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- DATA / API TAB -->
+        <div id="tab-data" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">🔑 Alpha Vantage API Configuration</div>
+                <div class="panel-body">
+                    <div class="form-row">
+                        <label>API Key:</label>
+                        <input type="text" id="api-key" style="width: 300px;" placeholder="Enter your Alpha Vantage API key">
+                        <button onclick="saveApiKey()">[ Save ]</button>
+                    </div>
+                    <p style="font-size: 11px; color: #666; margin-top: 10px;">
+                        Get free API key: <a href="https://www.alphavantage.co/support/#api-key" target="_blank">alphavantage.co/support/#api-key</a><br>
+                        Free tier: 25 API calls/day. Use wisely!
+                    </p>
+                    <hr>
+                    <button onclick="testApiKey()">[ Test Connection ]</button>
+                    <button onclick="fetchIWMPrice()">[ Fetch Current IWM ]</button>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">💾 Data Import / Export</div>
+                <div class="panel-body">
+                    <p><strong>Export your trades:</strong></p>
+                    <button onclick="exportData()">[ Download JSON ]</button>
+                    <button onclick="exportCSV()">[ Download CSV ]</button>
+                    
+                    <hr>
+                    <p><strong>Import from TastyTrade CSV:</strong></p>
+                    <p style="font-size: 11px; color: #666;">
+                        Copy your tastytrade_activity.csv contents and paste below. 
+                        Format: Date,Action,Symbol,Strike,Expiration,StockPrice,Premium,Notes
+                    </p>
+                    <textarea id="csv-import-data" rows="8" style="width: 100%; font-family: monospace; font-size: 11px;" placeholder="Paste CSV data here...
+Date,Action,Symbol,Strike,Expiration,StockPrice,Premium,Notes
+2025-01-09,STO,IWM,263,2025-01-16,220.0,139,Initial call
+2025-01-15,BTC,IWM,263,2025-01-16,222.0,230,Rolled to 269"></textarea>
+                    <br><br>
+                    <button onclick="importCSV()">[ Import CSV ]</button>
+                    <button onclick="downloadCSVTemplate()">[ Download CSV Template ]</button>
+                    
+                    <hr>
+                    <p><strong>Import from JSON:</strong></p>
+                    <textarea id="import-data" rows="6" style="width: 100%; font-family: monospace; font-size: 11px;" placeholder="Paste JSON data here..."></textarea>
+                    <br><br>
+                    <button onclick="importData()">[ Import JSON ]</button>
+                    <button onclick="clearAllData()" class="danger">[ Clear All Data ]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODALS -->
+    
+    <!-- NEW LEAPS MODAL -->
+    <div class="modal-overlay" id="new-leaps-modal">
+        <div class="modal">
+            <div class="modal-header">Add LEAPS Position</div>
+            <div class="modal-body">
+                <div class="form-row"><label>Symbol:</label><input type="text" id="leaps-symbol" value="IWM" style="width: 80px;"></div>
+                <div class="form-row"><label>Strike:</label><input type="number" id="leaps-strike" step="0.01" placeholder="190"></div>
+                <div class="form-row"><label>Expiration:</label><input type="date" id="leaps-expiration"></div>
+                <div class="form-row"><label>Open Date:</label><input type="date" id="leaps-open-date"></div>
+                <div class="form-row"><label>Stock Price:</label><input type="number" id="leaps-stock-price" step="0.01" placeholder="220.00"></div>
+                <div class="form-row"><label>Cost:</label><input type="number" id="leaps-cost" step="0.01" placeholder="7745.00"></div>
+                <div class="form-row"><label>Qty:</label><input type="number" id="leaps-quantity" value="1" style="width: 60px;"></div>
+                <div class="form-row"><label>Current Value:</label><input type="number" id="leaps-current" step="0.01" placeholder="8000"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="saveLEAPS()" class="primary">[ Save ]</button>
+                <button onclick="hideModal('new-leaps-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW SHORT CALL MODAL -->
+    <div class="modal-overlay" id="new-call-modal">
+        <div class="modal">
+            <div class="modal-header">Sell Short Call</div>
+            <div class="modal-body">
+                <div class="form-row"><label>Strike:</label><input type="number" id="call-strike" step="0.01"></div>
+                <div class="form-row"><label>Expiration:</label><input type="date" id="call-expiration"></div>
+                <div class="form-row"><label>Sell Date:</label><input type="date" id="call-open-date"></div>
+                <div class="form-row"><label>Stock Price:</label><input type="number" id="call-stock-price" step="0.01"></div>
+                <div class="form-row"><label>Premium:</label><input type="number" id="call-premium" step="0.01"></div>
+                <div class="form-row"><label>Qty:</label><input type="number" id="call-quantity" value="1" style="width: 60px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="saveShortCall()" class="primary">[ Sell Call ]</button>
+                <button onclick="hideModal('new-call-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CLOSE CALL MODAL -->
+    <div class="modal-overlay" id="close-modal">
+        <div class="modal">
+            <div class="modal-header">Close Short Call</div>
+            <div class="modal-body">
+                <input type="hidden" id="close-call-id">
+                <div class="form-row"><label>Close Date:</label><input type="date" id="close-date"></div>
+                <div class="form-row"><label>Buyback Cost:</label><input type="number" id="close-cost" step="0.01"></div>
+                <div class="form-row"><label>Stock Price:</label><input type="number" id="close-stock-price" step="0.01"></div>
+                <div class="form-row">
+                    <label>Reason:</label>
+                    <select id="close-reason">
+                        <option value="expired">Expired Worthless</option>
+                        <option value="buyback">Buy to Close</option>
+                        <option value="rolled">Rolled to New Call</option>
+                        <option value="assigned">Assigned</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="executeClose()" class="primary">[ Close ]</button>
+                <button onclick="hideModal('close-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MANUAL CALL ENTRY MODAL -->
+    <div class="modal-overlay" id="manual-call-modal">
+        <div class="modal">
+            <div class="modal-header">Manual Short Call Entry</div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label>Action:</label>
+                    <select id="manual-action" onchange="onManualActionChange()">
+                        <option value="STO">STO - Sell To Open (new call)</option>
+                        <option value="BTC">BTC - Buy To Close (buy back)</option>
+                        <option value="EXP">EXP - Expired Worthless</option>
+                        <option value="ASSIGNED">ASSIGNED - Call exercised</option>
+                        <option value="ROLL">ROLL - Close old, open new</option>
+                    </select>
+                </div>
+                <div class="form-row"><label>Date:</label><input type="date" id="manual-date"></div>
+                <div class="form-row"><label>Symbol:</label><input type="text" id="manual-symbol" value="IWM" style="width: 80px;"></div>
+                
+                <!-- For STO or closing existing -->
+                <div id="manual-strike-row">
+                    <div class="form-row"><label>Strike:</label><input type="number" id="manual-strike" step="0.01"></div>
+                </div>
+                
+                <!-- For new call -->
+                <div id="manual-new-call-rows">
+                    <div class="form-row"><label>Expiration:</label><input type="date" id="manual-expiration"></div>
+                    <div class="form-row"><label>Premium:</label><input type="number" id="manual-premium" step="0.01" placeholder="Amount received"></div>
+                    <div class="form-row"><label>Stock Price:</label><input type="number" id="manual-stock-price" step="0.01"></div>
+                </div>
+                
+                <!-- For buyback -->
+                <div id="manual-buyback-rows" style="display:none;">
+                    <div class="form-row"><label>Buyback Cost:</label><input type="number" id="manual-buyback-cost" step="0.01" placeholder="Amount paid"></div>
+                </div>
+                
+                <!-- For roll -->
+                <div id="manual-roll-rows" style="display:none;">
+                    <hr>
+                    <p style="font-size: 11px; font-weight: bold;">NEW CALL (being rolled to):</p>
+                    <div class="form-row"><label>New Strike:</label><input type="number" id="manual-new-strike" step="0.01"></div>
+                    <div class="form-row"><label>New Exp:</label><input type="date" id="manual-new-exp"></div>
+                    <div class="form-row"><label>New Premium:</label><input type="number" id="manual-new-premium" step="0.01" placeholder="Received for new"></div>
+                </div>
+                
+                <div class="form-row"><label>Notes:</label><input type="text" id="manual-notes" style="width: 250px;" placeholder="e.g., Rolled for +$50 net"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="saveManualEntry()" class="primary">[ Save Entry ]</button>
+                <button onclick="hideModal('manual-call-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- UPDATE LEAPS VALUE MODAL -->
+    <div class="modal-overlay" id="update-leaps-modal">
+        <div class="modal">
+            <div class="modal-header">Log LEAPS Value</div>
+            <div class="modal-body">
+                <div class="form-row"><label>Date:</label><input type="date" id="update-date"></div>
+                <div class="form-row"><label>IWM Price:</label><input type="number" id="update-iwm" step="0.01"></div>
+                <div class="form-row"><label>LEAPS Value:</label><input type="number" id="update-value" step="0.01"></div>
+                <div class="form-row"><label>Notes:</label><input type="text" id="update-notes" style="width: 250px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="saveLEAPSUpdate()" class="primary">[ Log ]</button>
+                <button onclick="hideModal('update-leaps-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== DATA STORE ====================
+        
+        let trades = [];
+        let leapsHistory = [];
+        let apiKey = '';
+        let currentIWM = null;
+        let nextId = 1;
+        
+        // Default API key (user provided)
+        const DEFAULT_API_KEY = 'VAD1Q74JGQ6JTG42';
+        
+        // Load data from localStorage
+        function loadData() {
+            const saved = localStorage.getItem('turtleTrades');
+            const savedHistory = localStorage.getItem('turtleHistory');
+            let savedKey = localStorage.getItem('alphaVantageKey');
+            
+            // Use default key if none saved
+            if (!savedKey && DEFAULT_API_KEY) {
+                savedKey = DEFAULT_API_KEY;
+                localStorage.setItem('alphaVantageKey', savedKey);
+            }
+            
+            if (saved) trades = JSON.parse(saved);
+            if (savedHistory) leapsHistory = JSON.parse(savedHistory);
+            if (savedKey) {
+                apiKey = savedKey;
+                document.getElementById('api-key').value = apiKey;
+                document.getElementById('api-warning').style.display = 'none';
+                document.getElementById('api-status').textContent = 'API: Ready';
+                document.getElementById('api-status').className = 'api-status api-connected';
+            }
+            
+            trades.forEach(t => {
+                const idNum = parseInt(t.id.split('_')[1]);
+                if (idNum >= nextId) nextId = idNum + 1;
+            });
+            
+            updateDisplay();
+        }
+        
+        function saveData() {
+            localStorage.setItem('turtleTrades', JSON.stringify(trades));
+            localStorage.setItem('turtleHistory', JSON.stringify(leapsHistory));
+        }
+        
+        // ==================== API FUNCTIONS ====================
+        
+        function saveApiKey() {
+            apiKey = document.getElementById('api-key').value.trim();
+            localStorage.setItem('alphaVantageKey', apiKey);
+            document.getElementById('api-warning').style.display = apiKey ? 'none' : 'block';
+            alert('API Key saved!');
+        }
+        
+        async function testApiKey() {
+            if (!apiKey) {
+                alert('Please enter an API key first');
+                return;
+            }
+            
+            document.getElementById('api-status').textContent = 'API: Testing...';
+            document.getElementById('api-status').className = 'api-status api-disconnected';
+            
+            try {
+                const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IWM&apikey=${apiKey}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data['Global Quote'] && data['Global Quote']['05. price']) {
+                    document.getElementById('api-status').textContent = 'API: Connected';
+                    document.getElementById('api-status').className = 'api-status api-connected';
+                    alert('API Connection successful!');
+                } else if (data['Note']) {
+                    alert('API limit reached: ' + data['Note']);
+                } else {
+                    alert('Unexpected response: ' + JSON.stringify(data));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function fetchIWMPrice() {
+            if (!apiKey) {
+                alert('Please set your Alpha Vantage API key first');
+                showTab('data');
+                return;
+            }
+            
+            document.getElementById('live-iwm').textContent = 'Loading...';
+            
+            try {
+                const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IWM&apikey=${apiKey}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data['Global Quote']) {
+                    const quote = data['Global Quote'];
+                    const price = parseFloat(quote['05. price']);
+                    const change = parseFloat(quote['09. change']);
+                    const changePct = quote['10. change percent'];
+                    
+                    currentIWM = price;
+                    
+                    document.getElementById('live-iwm').textContent = price.toFixed(2);
+                    document.getElementById('live-iwm').className = 'live-price ' + (change >= 0 ? 'price-up' : 'price-down');
+                    
+                    const changeEl = document.getElementById('iwm-change');
+                    changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + ' (' + changePct + ')';
+                    changeEl.className = change >= 0 ? 'pnl-positive' : 'pnl-negative';
+                    
+                    // Auto-fill IWM price in update modal
+                    document.getElementById('update-iwm').value = price.toFixed(2);
+                    
+                    updateDisplay();
+                } else if (data['Note']) {
+                    document.getElementById('live-iwm').textContent = 'Limit';
+                    alert('API call limit reached. Free tier = 25 calls/day.');
+                }
+            } catch (e) {
+                document.getElementById('live-iwm').textContent = 'Error';
+                console.error(e);
+            }
+        }
+        
+        async function fetchHistoricalIWM() {
+            if (!apiKey) {
+                alert('Please set API key first');
+                return;
+            }
+            
+            // This fetches daily prices - you could use it to backfill LEAPS values
+            try {
+                const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=IWM&apikey=${apiKey}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data['Time Series (Daily)']) {
+                    alert('Historical data fetched! Check console for data.');
+                    console.log('IWM Historical Data:', data['Time Series (Daily)']);
+                } else if (data['Note']) {
+                    alert('API limit: ' + data['Note']);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // ==================== DISPLAY UPDATES ====================
+        
+        function updateDisplay() {
+            updateDashboard();
+            updateLEAPSTab();
+            updateCallsTab();
+            updateCombinedTab();
+        }
+        
+        function updateDashboard() {
+            // Calculate metrics
+            let totalCredits = 0;
+            let totalDebits = 0;
+            let expiredCount = 0;
+            let rollCount = 0;
+            
+            const closedCalls = trades.filter(t => t.type === 'SHORT_CALL' && t.status === 'closed');
+            closedCalls.forEach(c => {
+                const pnl = c.openPremium - c.closePremium;
+                if (pnl > 0) totalCredits += pnl;
+                else totalDebits += Math.abs(pnl);
+                
+                if (c.closeReason === 'expired') expiredCount++;
+                if (c.closeReason === 'rolled') rollCount++;
+            });
+            
+            // LEAPS
+            const leaps = trades.find(t => t.type === 'LEAPS' && t.status === 'open');
+            let leapsUnrealized = 0;
+            let leapsCost = 0;
+            let leapsCurrent = 0;
+            
+            if (leaps) {
+                leapsCost = leaps.openPremium * (leaps.quantity || 1);
+                // Use latest history entry as current value
+                const sortedHistory = [...leapsHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+                const latestEntry = sortedHistory[0];
+                leapsCurrent = latestEntry ? latestEntry.value : (leaps.currentValue || leaps.openPremium);
+                leapsUnrealized = leapsCurrent - leapsCost;
+            }
+            
+            const netShort = totalCredits - totalDebits;
+            const combinedPnl = netShort + leapsUnrealized;
+            
+            // Update dashboard
+            document.getElementById('dash-short-credits').textContent = formatMoney(totalCredits);
+            document.getElementById('dash-short-debits').textContent = formatMoney(totalDebits);
+            document.getElementById('dash-net-short').textContent = formatMoney(netShort);
+            document.getElementById('dash-net-short').className = 'stat-value ' + (netShort >= 0 ? 'pnl-positive' : 'pnl-negative');
+            
+            document.getElementById('dash-leaps-unrealized').textContent = formatMoney(leapsUnrealized);
+            document.getElementById('dash-leaps-unrealized').className = 'stat-value ' + (leapsUnrealized >= 0 ? 'pnl-positive' : 'pnl-negative');
+            document.getElementById('dash-leaps-cost').textContent = formatMoney(leapsCost);
+            document.getElementById('dash-leaps-current').textContent = formatMoney(leapsCurrent);
+            
+            document.getElementById('combined-total-pnl').textContent = formatMoney(combinedPnl);
+            document.getElementById('combined-total-pnl').className = 'combined-pnl-value ' + (combinedPnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+            
+            // Stats
+            document.getElementById('dash-weeks').textContent = closedCalls.length;
+            document.getElementById('dash-rolls').textContent = rollCount;
+            document.getElementById('dash-expired').textContent = expiredCount;
+            
+            const avgCredit = closedCalls.length > 0 ? netShort / closedCalls.length : 0;
+            document.getElementById('dash-avg-credit').textContent = formatMoney(avgCredit);
+            
+            // LEAPS summary
+            const leapsDiv = document.getElementById('dash-leaps-summary');
+            if (leaps) {
+                const intrinsic = Math.max(0, (currentIWM || leaps.openStockPrice) - leaps.strike) * 100;
+                leapsDiv.innerHTML = `
+                    <div class="position-row"><span>${leaps.symbol} $${leaps.strike} ${leaps.expiration}</span></div>
+                    <div class="position-row"><span>Cost:</span><span>${formatMoney(leapsCost)}</span></div>
+                    <div class="position-row"><span>Current:</span><span>${formatMoney(leapsCurrent)}</span></div>
+                    <div class="position-row"><span>Unrealized:</span><span class="${leapsUnrealized >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(leapsUnrealized)}</span></div>
+                    <div class="position-row"><span>Est. Intrinsic:</span><span>${formatMoney(intrinsic)}</span></div>
+                `;
+            }
+            
+            // Call summary
+            const openCall = trades.find(t => t.type === 'SHORT_CALL' && t.status === 'open');
+            const callDiv = document.getElementById('dash-call-summary');
+            if (openCall) {
+                const daysLeft = Math.ceil((new Date(openCall.expiration) - new Date()) / (1000 * 60 * 60 * 24));
+                const distance = (currentIWM || openCall.openStockPrice) - openCall.strike;
+                callDiv.innerHTML = `
+                    <div class="position-row"><span>${openCall.symbol} $${openCall.strike} ${openCall.expiration}</span></div>
+                    <div class="position-row"><span>Premium:</span><span class="pnl-positive">${formatMoney(openCall.openPremium)}</span></div>
+                    <div class="position-row"><span>Days Left:</span><span>${daysLeft > 0 ? daysLeft : 'EXPIRED'}</span></div>
+                    <div class="position-row"><span>Distance:</span><span class="${distance >= 0 ? 'pnl-negative' : 'pnl-positive'}">${distance >= 0 ? 'ITM ' : 'OTM '}${Math.abs(distance).toFixed(2)}</span></div>
+                `;
+            }
+            
+            document.getElementById('btn-add-call').disabled = !leaps;
+        }
+        
+        function updateLEAPSTab() {
+            const leaps = trades.find(t => t.type === 'LEAPS' && t.status === 'open');
+            const detailPanel = document.getElementById('leaps-detail-panel');
+            
+            if (!leaps) {
+                detailPanel.innerHTML = '<p><em>No LEAPS position. Add one to start tracking.</em></p>';
+                document.getElementById('leaps-history-tbody').innerHTML = '<tr><td colspan="5"><em>No history</em></td></tr>';
+                return;
+            }
+            
+            // Use latest history entry as current value, fallback to leaps.currentValue or openPremium
+            const sortedHistory = [...leapsHistory].sort((a, b) => new Date(b.date) - new Date(a.date));
+            const latestEntry = sortedHistory[0];
+            const currentVal = latestEntry ? latestEntry.value : (leaps.currentValue || leaps.openPremium);
+            const unrealized = currentVal - leaps.openPremium;
+            
+            detailPanel.innerHTML = `
+                <div class="two-col">
+                    <div>
+                        <div class="position-row"><span><strong>Symbol:</strong></span><span>${leaps.symbol}</span></div>
+                        <div class="position-row"><span><strong>Strike:</strong></span><span>$${leaps.strike}</span></div>
+                        <div class="position-row"><span><strong>Expiration:</strong></span><span>${leaps.expiration}</span></div>
+                        <div class="position-row"><span><strong>Quantity:</strong></span><span>${leaps.quantity || 1}</span></div>
+                    </div>
+                    <div>
+                        <div class="position-row"><span><strong>Cost Basis:</strong></span><span>${formatMoney(leaps.openPremium)}</span></div>
+                        <div class="position-row"><span><strong>Current Value:</strong></span><span>${formatMoney(currentVal)}</span></div>
+                        <div class="position-row"><span><strong>Unrealized P&L:</strong></span><span class="${unrealized >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(unrealized)}</span></div>
+                        <div class="position-row"><span><strong>Opened:</strong></span><span>${leaps.openDate}</span></div>
+                    </div>
+                </div>
+            `;
+            
+            // History table
+            const historyRows = leapsHistory.map(h => {
+                const unreal = h.value - leaps.openPremium;
+                return `
+                    <tr>
+                        <td>${h.date}</td>
+                        <td>$${h.iwmPrice}</td>
+                        <td>${formatMoney(h.value)}</td>
+                        <td class="${unreal >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(unreal)}</td>
+                        <td>${h.notes || ''}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            document.getElementById('leaps-history-tbody').innerHTML = historyRows || '<tr><td colspan="5"><em>No history recorded</em></td></tr>';
+        }
+        
+        function updateCallsTab() {
+            const calls = trades.filter(t => t.type === 'SHORT_CALL').sort((a, b) => new Date(a.openDate) - new Date(b.openDate));
+            
+            if (calls.length === 0) {
+                document.getElementById('calls-tbody').innerHTML = '<tr><td colspan="9"><em>No calls recorded</em></td></tr>';
+                return;
+            }
+            
+            document.getElementById('calls-tbody').innerHTML = calls.map((c, i) => {
+                const pnl = c.status === 'closed' ? c.openPremium - c.closePremium : null;
+                const statusClass = c.status === 'open' ? 'status-open' : 'status-closed';
+                
+                return `
+                    <tr>
+                        <td>${i + 1}</td>
+                        <td>${c.openDate}</td>
+                        <td>$${c.strike}</td>
+                        <td>${c.dte || '-'}</td>
+                        <td class="pnl-positive">${formatMoney(c.openPremium)}</td>
+                        <td class="pnl-negative">${c.closePremium ? formatMoney(c.closePremium) : '-'}</td>
+                        <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl !== null ? formatMoney(pnl) : '--'}</td>
+                        <td class="${statusClass}">${c.closeReason || c.status}</td>
+                        <td>${c.status === 'open' ? `<button onclick="showCloseModal('${c.id}')">[Close]</button>` : '--'}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function updateCombinedTab() {
+            // This requires both LEAPS history and short call data
+            const tbody = document.getElementById('combined-tbody');
+            const leaps = trades.find(t => t.type === 'LEAPS');
+            const calls = trades.filter(t => t.type === 'SHORT_CALL').sort((a, b) => new Date(a.openDate) - new Date(b.openDate));
+            
+            if (!leaps || calls.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8"><em>Need both LEAPS and short calls for analysis. Log LEAPS values in the LEAPS Tracker tab.</em></td></tr>';
+                return;
+            }
+            
+            // Sort LEAPS history by date
+            const sortedHistory = [...leapsHistory].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Build a timeline of LEAPS values (interpolate between logged points)
+            function getLeapsValueAtDate(dateStr) {
+                // Find exact match first
+                const exact = sortedHistory.find(h => h.date === dateStr);
+                if (exact) return exact.value;
+                
+                // Find the closest entry before this date
+                const before = sortedHistory.filter(h => h.date <= dateStr).pop();
+                // Find the closest entry after this date
+                const after = sortedHistory.filter(h => h.date >= dateStr).shift();
+                
+                if (before && after) {
+                    // Interpolate
+                    const totalDays = (new Date(after.date) - new Date(before.date)) / (1000 * 60 * 60 * 24);
+                    const daysSinceBefore = (new Date(dateStr) - new Date(before.date)) / (1000 * 60 * 60 * 24);
+                    const ratio = daysSinceBefore / totalDays;
+                    return before.value + (after.value - before.value) * ratio;
+                } else if (before) {
+                    return before.value;
+                } else if (after) {
+                    return after.value;
+                } else {
+                    return leaps.openPremium;
+                }
+            }
+            
+            // Build week-by-week analysis
+            let html = '';
+            let runningTotal = 0;
+            let prevLeapsValue = leaps.openPremium;
+            
+            const closedCalls = calls.filter(c => c.status === 'closed');
+            
+            if (closedCalls.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8"><em>No closed short calls yet. Need closed calls to show combined P&L.</em></td></tr>';
+                return;
+            }
+            
+            closedCalls.forEach((c, i) => {
+                const week = i + 1;
+                const start = c.openDate;
+                const end = c.closeDate;
+                const callPnl = c.openPremium - c.closePremium;
+                
+                // Get LEAPS value at start and end of this period
+                const leapsAtStart = getLeapsValueAtDate(start);
+                const leapsAtEnd = getLeapsValueAtDate(end);
+                const leapsChange = leapsAtEnd - leapsAtStart;
+                
+                const strategyNet = callPnl + leapsChange;
+                runningTotal += strategyNet;
+                
+                const iwmChange = c.closeStockPrice ? (c.closeStockPrice - c.openStockPrice).toFixed(2) : '--';
+                
+                // Format LEAPS values for display
+                const leapsDisplay = leapsHistory.length > 1 
+                    ? `${formatMoney(leapsChange)} <span style="font-size:9px;color:#666">(${formatMoney(leapsAtStart)}→${formatMoney(leapsAtEnd)})</span>`
+                    : formatMoney(leapsChange);
+                
+                html += `
+                    <tr>
+                        <td>${week}</td>
+                        <td>${start.slice(5)} → ${end.slice(5)}</td>
+                        <td class="${callPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(callPnl)}</td>
+                        <td class="${leapsChange >= 0 ? 'pnl-positive' : 'pnl-negative'}">${leapsDisplay}</td>
+                        <td class="${strategyNet >= 0 ? 'pnl-positive' : 'pnl-negative'}"><strong>${formatMoney(strategyNet)}</strong></td>
+                        <td class="${runningTotal >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(runningTotal)}</td>
+                        <td>${iwmChange !== '--' ? (iwmChange > 0 ? '+' : '') + iwmChange : '--'}</td>
+                        <td>${c.closeReason || 'closed'}</td>
+                    </tr>
+                `;
+                
+                prevLeapsValue = leapsAtEnd;
+            });
+            
+            // Add current open position if any
+            const openCall = calls.find(c => c.status === 'open');
+            if (openCall) {
+                // For open positions, don't show LEAPS change (it's not realized yet)
+                // Just show the premium collected and current running total
+                html += `
+                    <tr style="background: #e6f3ff;">
+                        <td>${closedCalls.length + 1}</td>
+                        <td>${openCall.openDate.slice(5)} → OPEN</td>
+                        <td class="pnl-positive">${formatMoney(openCall.openPremium)}</td>
+                        <td>-- <span style="font-size:9px;color:#666">(not realized)</span></td>
+                        <td>--</td>
+                        <td class="${runningTotal >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(runningTotal)}</td>
+                        <td>--</td>
+                        <td>OPEN $${openCall.strike}</td>
+                    </tr>
+                `;
+            }
+            
+            tbody.innerHTML = html;
+            
+            // Update insights with proper calculation
+            const totalCallPnl = closedCalls.reduce((sum, c) => sum + (c.openPremium - c.closePremium), 0);
+            const currentLeapsValue = leaps.currentValue || leaps.openPremium;
+            const totalLeapsChange = currentLeapsValue - leaps.openPremium;
+            const totalStrategyPnl = totalCallPnl + totalLeapsChange;
+            
+            document.getElementById('current-situation').innerHTML = `
+                <table style="width: 100%; font-size: 12px; background: #fff; border: 1px solid #808080;">
+                    <tr><td>Total Short Call P&L:</td><td class="${totalCallPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="text-align: right;">${formatMoney(totalCallPnl)}</td></tr>
+                    <tr><td>LEAPS Value Change:</td><td class="${totalLeapsChange >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="text-align: right;">${formatMoney(totalLeapsChange)}</td></tr>
+                    ${openCall ? `<tr><td>Open Call (potential):</td><td class="pnl-positive" style="text-align: right;">${formatMoney(openCall.openPremium)}</td></tr>` : ''}
+                    <tr style="border-top: 2px solid #000; font-weight: bold;"><td>COMBINED STRATEGY P&L:</td><td class="${totalStrategyPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="text-align: right;">${formatMoney(totalStrategyPnl)}</td></tr>
+                </table>
+                <p style="font-size: 10px; margin-top: 10px;">
+                    ${totalStrategyPnl < 0 ? '📉 Strategy underwater - LEAPS losses exceed short call gains. Need IWM rally.' : '📈 Strategy profitable - short call premium offsetting LEAPS decay or LEAPS gaining.'}
+                </p>
+            `;
+        }
+        
+        // ==================== MODAL FUNCTIONS ====================
+        
+        function showModal(id) {
+            document.getElementById(id).style.display = 'block';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById(id).querySelectorAll('input[type="date"]').forEach(d => {
+                if (!d.value) d.value = today;
+            });
+        }
+        
+        function hideModal(id) {
+            document.getElementById(id).style.display = 'none';
+            document.getElementById(id).querySelectorAll('input:not([type="hidden"])').forEach(i => {
+                if (i.type !== 'checkbox') i.value = '';
+            });
+        }
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+        
+        // ==================== SAVE FUNCTIONS ====================
+        
+        function saveLEAPS() {
+            const leaps = {
+                id: 'LEAPS_001',
+                type: 'LEAPS',
+                symbol: document.getElementById('leaps-symbol').value.toUpperCase(),
+                strike: parseFloat(document.getElementById('leaps-strike').value),
+                expiration: document.getElementById('leaps-expiration').value,
+                openDate: document.getElementById('leaps-open-date').value,
+                openStockPrice: parseFloat(document.getElementById('leaps-stock-price').value),
+                openPremium: parseFloat(document.getElementById('leaps-cost').value),
+                currentValue: parseFloat(document.getElementById('leaps-current').value) || parseFloat(document.getElementById('leaps-cost').value),
+                quantity: parseInt(document.getElementById('leaps-quantity').value) || 1,
+                status: 'open'
+            };
+            
+            if (!leaps.strike || !leaps.expiration || !leaps.openDate || !leaps.openPremium) {
+                alert('Please fill in required fields');
+                return;
+            }
+            
+            // Remove existing LEAPS
+            trades = trades.filter(t => t.type !== 'LEAPS');
+            trades.push(leaps);
+            
+            // Add initial history entry
+            leapsHistory = [{
+                date: leaps.openDate,
+                iwmPrice: leaps.openStockPrice,
+                value: leaps.openPremium,
+                notes: 'Initial purchase'
+            }];
+            
+            saveData();
+            updateDisplay();
+            hideModal('new-leaps-modal');
+        }
+        
+        function saveShortCall() {
+            const leaps = trades.find(t => t.type === 'LEAPS' && t.status === 'open');
+            
+            const call = {
+                id: 'CALL_' + (nextId++),
+                type: 'SHORT_CALL',
+                parentLeapsId: leaps ? leaps.id : null,
+                symbol: document.getElementById('call-symbol')?.value?.toUpperCase() || (leaps ? leaps.symbol : 'IWM'),
+                strike: parseFloat(document.getElementById('call-strike').value),
+                expiration: document.getElementById('call-expiration').value,
+                dte: Math.ceil((new Date(document.getElementById('call-expiration').value) - new Date(document.getElementById('call-open-date').value)) / (1000 * 60 * 60 * 24)),
+                openDate: document.getElementById('call-open-date').value,
+                openStockPrice: parseFloat(document.getElementById('call-stock-price').value),
+                openPremium: parseFloat(document.getElementById('call-premium').value),
+                quantity: parseInt(document.getElementById('call-quantity')?.value) || 1,
+                status: 'open'
+            };
+            
+            if (!call.strike || !call.expiration || !call.openPremium) {
+                alert('Please fill in required fields');
+                return;
+            }
+            
+            trades.push(call);
+            saveData();
+            updateDisplay();
+            hideModal('new-call-modal');
+        }
+        
+        function showCloseModal(callId) {
+            document.getElementById('close-call-id').value = callId;
+            document.getElementById('close-date').value = new Date().toISOString().split('T')[0];
+            showModal('close-modal');
+        }
+        
+        function executeClose() {
+            const id = document.getElementById('close-call-id').value;
+            const call = trades.find(t => t.id === id);
+            if (!call) return;
+            
+            call.status = 'closed';
+            call.closeDate = document.getElementById('close-date').value;
+            call.closePremium = parseFloat(document.getElementById('close-cost').value) || 0;
+            call.closeStockPrice = parseFloat(document.getElementById('close-stock-price').value) || 0;
+            call.closeReason = document.getElementById('close-reason').value;
+            
+            saveData();
+            updateDisplay();
+            hideModal('close-modal');
+        }
+        
+        function saveLEAPSUpdate() {
+            const leaps = trades.find(t => t.type === 'LEAPS' && t.status === 'open');
+            if (!leaps) return;
+            
+            const entry = {
+                date: document.getElementById('update-date').value,
+                iwmPrice: parseFloat(document.getElementById('update-iwm').value),
+                value: parseFloat(document.getElementById('update-value').value),
+                notes: document.getElementById('update-notes').value
+            };
+            
+            leapsHistory.push(entry);
+            leapsHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Update current LEAPS value
+            leaps.currentValue = entry.value;
+            
+            saveData();
+            updateDisplay();
+            hideModal('update-leaps-modal');
+        }
+        
+        // ==================== DATA IMPORT/EXPORT ====================
+        
+        function exportData() {
+            const data = {
+                trades: trades,
+                leapsHistory: leapsHistory,
+                exportedAt: new Date().toISOString()
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `turtle-trades-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        }
+        
+        function exportCSV() {
+            let csv = 'Week,Type,Symbol,Strike,Exp,OpenDate,OpenPrice,Premium,CloseDate,ClosePrice,CloseCost,P&L,Reason\n';
+            const calls = trades.filter(t => t.type === 'SHORT_CALL').sort((a, b) => new Date(a.openDate) - new Date(b.openDate));
+            calls.forEach((c, i) => {
+                const pnl = c.status === 'closed' ? c.openPremium - c.closePremium : 0;
+                csv += `${i+1},${c.type},${c.symbol},${c.strike},${c.expiration},${c.openDate},${c.openStockPrice},${c.openPremium},${c.closeDate || ''},${c.closeStockPrice || ''},${c.closePremium || ''},${pnl},${c.closeReason || 'open'}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `turtle-calls-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+        }
+        
+        function importData() {
+            try {
+                const data = JSON.parse(document.getElementById('import-data').value);
+                if (data.trades && Array.isArray(data.trades)) {
+                    trades = data.trades;
+                    if (data.leapsHistory) leapsHistory = data.leapsHistory;
+                    saveData();
+                    updateDisplay();
+                    alert('Import successful!');
+                } else if (Array.isArray(data)) {
+                    // Old format - just trades array
+                    trades = data;
+                    saveData();
+                    updateDisplay();
+                    alert('Import successful!');
+                } else {
+                    alert('Invalid format');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // ==================== CSV IMPORT ====================
+        
+        function downloadCSVTemplate() {
+            const template = `Date,Action,Symbol,Strike,Expiration,StockPrice,Premium,Notes
+2025-01-09,STO,IWM,263,2025-01-16,220.0,139,Initial call sold
+2025-01-15,BTC,IWM,263,2025-01-16,222.0,230,Rolled to 269
+2025-01-15,STO,IWM,269,2025-01-23,222.0,230,Roll up
+2025-01-23,EXP,IWM,269,2025-01-23,224.0,0,Expired worthless
+2025-01-26,STO,IWM,267,2025-01-30,224.5,134,New call
+2025-01-30,BTC,IWM,267,2025-01-30,223.0,1,Bought back cheap`;
+            
+            const blob = new Blob([template], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'tastytrade_import_template.csv';
+            a.click();
+        }
+        
+        function importCSV() {
+            const csvText = document.getElementById('csv-import-data').value.trim();
+            if (!csvText) {
+                alert('Please paste CSV data first');
+                return;
+            }
+            
+            try {
+                const lines = csvText.split('\n');
+                const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+                
+                // Validate headers
+                const required = ['date', 'action', 'symbol', 'strike', 'expiration'];
+                const hasRequired = required.every(r => headers.some(h => h.includes(r)));
+                
+                if (!hasRequired) {
+                    alert('CSV must have columns: Date, Action, Symbol, Strike, Expiration, StockPrice, Premium');
+                    return;
+                }
+                
+                const newTrades = [];
+                const newHistory = [];
+                let callIdCounter = 1;
+                let leapsAdded = false;
+                
+                // Process each line
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const cols = line.split(',').map(c => c.trim());
+                    if (cols.length < 7) continue;
+                    
+                    const date = cols[0];
+                    const action = cols[1].toUpperCase();
+                    const symbol = cols[2].toUpperCase();
+                    const strike = parseFloat(cols[3]);
+                    const expiration = cols[4];
+                    const stockPrice = parseFloat(cols[5]) || 0;
+                    const premium = parseFloat(cols[6]) || 0;
+                    const notes = cols[7] || '';
+                    
+                    // Handle LEAPS (BTO - Buy To Open)
+                    if (action === 'BTO' || action === 'LEAPS') {
+                        const leaps = {
+                            id: 'LEAPS_001',
+                            type: 'LEAPS',
+                            symbol: symbol,
+                            strike: strike,
+                            expiration: expiration,
+                            openDate: formatDate(date),
+                            openStockPrice: stockPrice,
+                            openPremium: premium,
+                            currentValue: premium, // Will be updated
+                            quantity: 1,
+                            status: 'open'
+                        };
+                        newTrades.push(leaps);
+                        leapsAdded = true;
+                        
+                        // Add initial history
+                        newHistory.push({
+                            date: formatDate(date),
+                            iwmPrice: stockPrice,
+                            value: premium,
+                            notes: 'LEAPS purchased'
+                        });
+                    }
+                    // Handle STO (Sell To Open) - New short call
+                    else if (action === 'STO' || action === 'SELL') {
+                        const call = {
+                            id: 'CALL_' + callIdCounter++,
+                            type: 'SHORT_CALL',
+                            parentLeapsId: 'LEAPS_001',
+                            symbol: symbol,
+                            strike: strike,
+                            expiration: expiration,
+                            openDate: formatDate(date),
+                            openStockPrice: stockPrice,
+                            openPremium: premium,
+                            quantity: 1,
+                            status: 'open',
+                            notes: notes
+                        };
+                        newTrades.push(call);
+                    }
+                    // Handle BTC (Buy To Close) - Close a short call (can be standalone or part of roll)
+                    else if (action === 'BTC' || action === 'BUY') {
+                        // Find the matching open call
+                        const openCall = newTrades.find(t => 
+                            t.type === 'SHORT_CALL' && 
+                            t.status === 'open' && 
+                            t.symbol === symbol &&
+                            t.strike === strike
+                        );
+                        
+                        if (openCall) {
+                            openCall.status = 'closed';
+                            openCall.closeDate = formatDate(date);
+                            openCall.closeStockPrice = stockPrice;
+                            openCall.closePremium = premium; // What you paid to buy back
+                            
+                            // Determine reason
+                            const noteLower = notes.toLowerCase();
+                            if (noteLower.includes('roll')) {
+                                openCall.closeReason = 'rolled';
+                            } else if (noteLower.includes('exp')) {
+                                openCall.closeReason = 'expired';
+                            } else if (noteLower.includes('uncover') || noteLower.includes('naked')) {
+                                openCall.closeReason = 'uncovered';
+                            } else {
+                                openCall.closeReason = 'buyback';
+                            }
+                        }
+                    }
+                    // Handle NETROLL - Records a roll as single line with net credit/debit
+                    else if (action === 'NETROLL' || action === 'NR') {
+                        // Format: NETROLL,Symbol,OldStrike,NewExp,StockPrice,NetCredit,NewStrike,Notes
+                        // NetCredit: positive = collected credit, negative = paid debit
+                        const oldStrike = parseFloat(cols[3]);
+                        const newExp = cols[4];
+                        const netCredit = parseFloat(cols[6]);
+                        const newStrike = parseFloat(cols[7]);
+                        
+                        // Find and close the old call
+                        const openCall = newTrades.find(t => 
+                            t.type === 'SHORT_CALL' && 
+                            t.status === 'open' && 
+                            t.symbol === symbol &&
+                            t.strike === oldStrike
+                        );
+                        
+                        if (openCall) {
+                            // Calculate buyback cost: if netCredit is known, and we know original premium,
+                            // we can estimate new call premium. But let's track net separately.
+                            const rollEntry = {
+                                id: 'ROLL_' + callIdCounter++,
+                                type: 'ROLL_ENTRY',
+                                symbol: symbol,
+                                date: formatDate(date),
+                                stockPrice: stockPrice,
+                                oldStrike: oldStrike,
+                                newStrike: newStrike,
+                                netCredit: netCredit,
+                                notes: notes
+                            };
+                            newTrades.push(rollEntry);
+                            
+                            // Close old call (mark as rolled)
+                            openCall.status = 'closed';
+                            openCall.closeDate = formatDate(date);
+                            openCall.closeStockPrice = stockPrice;
+                            // For net rolls, we don't know exact buyback, but we know the P&L effect
+                            openCall.closePremium = openCall.openPremium; // Assume breakeven on this leg
+                            openCall.closeReason = 'rolled';
+                            openCall.rollNetCredit = netCredit;
+                            
+                            // Open new call with estimated premium (we'll track net separately)
+                            if (newStrike > 0) {
+                                const newCall = {
+                                    id: 'CALL_' + callIdCounter++,
+                                    type: 'SHORT_CALL',
+                                    parentLeapsId: 'LEAPS_001',
+                                    symbol: symbol,
+                                    strike: newStrike,
+                                    expiration: newExp,
+                                    openDate: formatDate(date),
+                                    openStockPrice: stockPrice,
+                                    openPremium: Math.abs(netCredit), // Simplified
+                                    quantity: 1,
+                                    status: 'open',
+                                    notes: `Rolled from $${oldStrike}, net ${netCredit >= 0 ? '+' : ''}$${netCredit}`
+                                };
+                                newTrades.push(newCall);
+                            }
+                        }
+                    }
+                    // Handle EXP (Expired)
+                    else if (action === 'EXP' || action === 'EXPIRED') {
+                        const openCall = newTrades.find(t => 
+                            t.type === 'SHORT_CALL' && 
+                            t.status === 'open' && 
+                            t.symbol === symbol &&
+                            t.strike === strike
+                        );
+                        
+                        if (openCall) {
+                            openCall.status = 'closed';
+                            openCall.closeDate = formatDate(date);
+                            openCall.closeStockPrice = stockPrice;
+                            openCall.closePremium = 0;
+                            openCall.closeReason = 'expired';
+                        }
+                    }
+                }
+                
+                if (newTrades.length === 0) {
+                    alert('No valid trades found in CSV');
+                    return;
+                }
+                
+                // Confirm import
+                const callCount = newTrades.filter(t => t.type === 'SHORT_CALL').length;
+                const leapsCount = newTrades.filter(t => t.type === 'LEAPS').length;
+                
+                if (confirm(`Import ${leapsCount} LEAPS and ${callCount} short calls?`)) {
+                    trades = newTrades;
+                    if (newHistory.length > 0) leapsHistory = newHistory;
+                    saveData();
+                    updateDisplay();
+                    alert('CSV Import successful!');
+                    document.getElementById('csv-import-data').value = '';
+                }
+                
+            } catch (e) {
+                alert('Error parsing CSV: ' + e.message);
+                console.error(e);
+            }
+        }
+        
+        function formatDate(dateStr) {
+            // Handle various date formats
+            // 2025-01-09 (ISO) -> keep as is
+            // 1/9/25 (US short) -> convert
+            if (dateStr.includes('-') && dateStr.length === 10) {
+                return dateStr;
+            }
+            
+            // Try parsing
+            const d = new Date(dateStr);
+            if (!isNaN(d.getTime())) {
+                return d.toISOString().split('T')[0];
+            }
+            
+            return dateStr;
+        }
+        
+        function clearAllData() {
+            if (confirm('Delete ALL data?')) {
+                trades = [];
+                leapsHistory = [];
+                saveData();
+                updateDisplay();
+            }
+        }
+        
+        // ==================== UTILITIES ====================
+        
+        function formatMoney(amount) {
+            if (amount === undefined || amount === null) return '$0.00';
+            const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+            return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        // ==================== MANUAL ENTRY FUNCTIONS ====================
+        
+        function onManualActionChange() {
+            const action = document.getElementById('manual-action').value;
+            const newCallRows = document.getElementById('manual-new-call-rows');
+            const buybackRows = document.getElementById('manual-buyback-rows');
+            const rollRows = document.getElementById('manual-roll-rows');
+            const strikeRow = document.getElementById('manual-strike-row');
+            
+            // Reset all
+            newCallRows.style.display = 'block';
+            buybackRows.style.display = 'none';
+            rollRows.style.display = 'none';
+            strikeRow.style.display = 'block';
+            
+            if (action === 'BTC') {
+                buybackRows.style.display = 'block';
+                newCallRows.style.display = 'none';
+                rollRows.style.display = 'none';
+            } else if (action === 'EXP' || action === 'ASSIGNED') {
+                newCallRows.style.display = 'none';
+                buybackRows.style.display = 'none';
+                rollRows.style.display = 'none';
+            } else if (action === 'ROLL') {
+                buybackRows.style.display = 'block';
+                rollRows.style.display = 'block';
+            }
+        }
+        
+        function saveManualEntry() {
+            const action = document.getElementById('manual-action').value;
+            const date = document.getElementById('manual-date').value;
+            const symbol = document.getElementById('manual-symbol').value.toUpperCase();
+            const strike = parseFloat(document.getElementById('manual-strike').value);
+            const notes = document.getElementById('manual-notes').value;
+            
+            const leaps = trades.find(t => t.type === 'LEAPS' && t.status === 'open');
+            
+            if (action === 'STO') {
+                // Sell new call
+                const call = {
+                    id: 'CALL_' + (nextId++),
+                    type: 'SHORT_CALL',
+                    parentLeapsId: leaps ? leaps.id : null,
+                    symbol: symbol,
+                    strike: strike,
+                    expiration: document.getElementById('manual-expiration').value,
+                    openDate: date,
+                    openStockPrice: parseFloat(document.getElementById('manual-stock-price').value) || 0,
+                    openPremium: parseFloat(document.getElementById('manual-premium').value) || 0,
+                    quantity: 1,
+                    status: 'open',
+                    notes: notes
+                };
+                trades.push(call);
+                
+            } else if (action === 'BTC') {
+                // Buy back existing call
+                const openCall = trades.find(t => 
+                    t.type === 'SHORT_CALL' && 
+                    t.status === 'open' && 
+                    t.symbol === symbol &&
+                    t.strike === strike
+                );
+                
+                if (openCall) {
+                    openCall.status = 'closed';
+                    openCall.closeDate = date;
+                    openCall.closeStockPrice = parseFloat(document.getElementById('manual-stock-price').value) || 0;
+                    openCall.closePremium = parseFloat(document.getElementById('manual-buyback-cost').value) || 0;
+                    openCall.closeReason = notes.toLowerCase().includes('uncover') ? 'uncovered' : 'buyback';
+                    openCall.notes = notes;
+                } else {
+                    alert('No open call found for ' + symbol + ' $' + strike);
+                    return;
+                }
+                
+            } else if (action === 'EXP' || action === 'ASSIGNED') {
+                // Mark as expired or assigned
+                const openCall = trades.find(t => 
+                    t.type === 'SHORT_CALL' && 
+                    t.status === 'open' && 
+                    t.symbol === symbol &&
+                    t.strike === strike
+                );
+                
+                if (openCall) {
+                    openCall.status = 'closed';
+                    openCall.closeDate = date;
+                    openCall.closeStockPrice = parseFloat(document.getElementById('manual-stock-price').value) || 0;
+                    openCall.closePremium = 0;
+                    openCall.closeReason = action === 'EXP' ? 'expired' : 'assigned';
+                    openCall.notes = notes;
+                } else {
+                    alert('No open call found for ' + symbol + ' $' + strike);
+                    return;
+                }
+                
+            } else if (action === 'ROLL') {
+                // Close old call
+                const openCall = trades.find(t => 
+                    t.type === 'SHORT_CALL' && 
+                    t.status === 'open' && 
+                    t.symbol === symbol &&
+                    t.strike === strike
+                );
+                
+                if (!openCall) {
+                    alert('No open call found for ' + symbol + ' $' + strike);
+                    return;
+                }
+                
+                const buybackCost = parseFloat(document.getElementById('manual-buyback-cost').value) || 0;
+                const newPremium = parseFloat(document.getElementById('manual-new-premium').value) || 0;
+                const netCredit = newPremium - buybackCost;
+                
+                // Close old
+                openCall.status = 'closed';
+                openCall.closeDate = date;
+                openCall.closeStockPrice = parseFloat(document.getElementById('manual-stock-price').value) || 0;
+                openCall.closePremium = buybackCost;
+                openCall.closeReason = 'rolled';
+                openCall.notes = (notes || '') + ` (Net roll: ${netCredit >= 0 ? '+' : ''}$${netCredit})`;
+                
+                // Open new
+                const newCall = {
+                    id: 'CALL_' + (nextId++),
+                    type: 'SHORT_CALL',
+                    parentLeapsId: leaps ? leaps.id : null,
+                    symbol: symbol,
+                    strike: parseFloat(document.getElementById('manual-new-strike').value),
+                    expiration: document.getElementById('manual-new-exp').value,
+                    openDate: date,
+                    openStockPrice: parseFloat(document.getElementById('manual-stock-price').value) || 0,
+                    openPremium: newPremium,
+                    quantity: 1,
+                    status: 'open',
+                    notes: `Rolled from $${strike}, net ${netCredit >= 0 ? '+' : ''}$${netCredit}`
+                };
+                trades.push(newCall);
+            }
+            
+            saveData();
+            updateDisplay();
+            hideModal('manual-call-modal');
+        }
+        
+        // ==================== INIT ====================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="date"]').forEach(d => d.value = today);
+            loadData();
+        });
+    </script>
+</body>
+</html>
