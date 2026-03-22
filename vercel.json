@@ -2,33 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "compact-game/**",
+      "src": "turtle-tracker/**",
       "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/",
-      "dest": "/compact-game/index.html"
-    },
-    {
-      "src": "/game",
-      "dest": "/compact-game/index.html"
+      "dest": "/turtle-tracker/index.html"
     },
     {
       "src": "/(.*)",
-      "dest": "/compact-game/$1"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
+      "dest": "/turtle-tracker/$1"
     }
   ]
 }

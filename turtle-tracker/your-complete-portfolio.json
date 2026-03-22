@@ -1,0 +1,68 @@
+{
+  "leaps": [
+    {
+      "id": "LEAPS_tasty_001",
+      "type": "LEAPS",
+      "accountName": "Tastytrade",
+      "symbol": "IWM",
+      "strike": 190,
+      "expiration": "2026-06-17",
+      "openDate": "2025-01-09",
+      "openStockPrice": 215.75,
+      "openPremium": 7745,
+      "currentValue": 6900,
+      "delta": 0.85,
+      "cashReserve": 5000,
+      "quantity": 1,
+      "status": "open"
+    },
+    {
+      "id": "LEAPS_ibkr_001",
+      "type": "LEAPS",
+      "accountName": "IBKR",
+      "symbol": "IWM",
+      "strike": 185,
+      "expiration": "2027-06-17",
+      "openDate": "2026-01-28",
+      "openStockPrice": 226.67,
+      "openPremium": 9011.05,
+      "currentValue": 7348.98,
+      "delta": 0.82,
+      "cashReserve": 6000,
+      "quantity": 1,
+      "status": "open"
+    }
+  ],
+  "calls": [
+    {"id": "call_tasty_001", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 263, "expiration": "2026-01-15", "openDate": "2026-01-09", "openPremium": 139, "closePremium": 382, "closeDate": "2026-01-15", "status": "closed"},
+    {"id": "call_tasty_002", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 269, "expiration": "2026-01-23", "openDate": "2026-01-15", "openPremium": 152, "closePremium": 0, "closeDate": "2026-01-23", "status": "closed"},
+    {"id": "call_tasty_003", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 267, "expiration": "2026-01-30", "openDate": "2026-01-26", "openPremium": 134, "closePremium": 1, "closeDate": "2026-01-30", "status": "closed"},
+    {"id": "call_tasty_004", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 263, "expiration": "2026-02-05", "openDate": "2026-02-02", "openPremium": 178, "closePremium": 9, "closeDate": "2026-02-05", "status": "closed"},
+    {"id": "call_tasty_005", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 260, "expiration": "2026-02-06", "openDate": "2026-02-05", "openPremium": 41, "closePremium": 421, "closeDate": "2026-02-06", "status": "closed"},
+    {"id": "call_tasty_006", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 269, "expiration": "2026-02-13", "openDate": "2026-02-06", "openPremium": 152, "closePremium": 1, "closeDate": "2026-02-13", "status": "closed"},
+    {"id": "call_tasty_007", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 269, "expiration": "2026-02-19", "openDate": "2026-02-13", "openPremium": 125, "closePremium": 13, "closeDate": "2026-02-19", "status": "closed"},
+    {"id": "call_tasty_008", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 264, "expiration": "2026-02-26", "openDate": "2026-02-19", "openPremium": 338, "closePremium": 33, "closeDate": "2026-02-26", "status": "closed"},
+    {"id": "call_tasty_009", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 263, "expiration": "2026-03-02", "openDate": "2026-02-26", "openPremium": 408, "closePremium": 198, "closeDate": "2026-03-02", "status": "closed"},
+    {"id": "call_tasty_010", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 260, "expiration": "2026-03-06", "openDate": "2026-03-02", "openPremium": 339, "closePremium": 1, "closeDate": "2026-03-06", "status": "closed"},
+    {"id": "call_tasty_011", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 251, "expiration": "2026-03-09", "openDate": "2026-03-06", "openPremium": 523, "closePremium": 257, "closeDate": "2026-03-09", "status": "closed"},
+    {"id": "call_tasty_012", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 245, "expiration": "2026-03-13", "openDate": "2026-03-09", "openPremium": 588, "closePremium": 525, "closeDate": "2026-03-13", "status": "closed"},
+    {"id": "call_tasty_013", "parentLeapsId": "LEAPS_tasty_001", "type": "short-call", "symbol": "IWM", "strike": 249, "expiration": "2026-03-20", "openDate": "2026-03-13", "openPremium": 450, "closePremium": 0, "status": "open"},
+    {"id": "call_ibkr_001", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 265, "expiration": "2026-01-30", "openDate": "2026-01-28", "openPremium": 126, "closePremium": 2, "closeDate": "2026-01-30", "status": "closed"},
+    {"id": "call_ibkr_002", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 261, "expiration": "2026-02-06", "openDate": "2026-01-30", "openPremium": 233, "closePremium": 236, "closeDate": "2026-02-06", "status": "closed"},
+    {"id": "call_ibkr_003", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 267, "expiration": "2026-02-13", "openDate": "2026-02-09", "openPremium": 181, "closePremium": 3, "closeDate": "2026-02-13", "status": "closed"},
+    {"id": "call_ibkr_004", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 268, "expiration": "2026-02-19", "openDate": "2026-02-13", "openPremium": 153, "closePremium": 21, "closeDate": "2026-02-19", "status": "closed"},
+    {"id": "call_ibkr_005", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 265, "expiration": "2026-02-27", "openDate": "2026-02-19", "openPremium": 311, "closePremium": 6, "closeDate": "2026-02-27", "status": "closed"},
+    {"id": "call_ibkr_006", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 261, "expiration": "2026-03-06", "openDate": "2026-02-27", "openPremium": 412, "closePremium": 2, "closeDate": "2026-03-06", "status": "closed"},
+    {"id": "call_ibkr_007", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 251, "expiration": "2026-03-12", "openDate": "2026-03-06", "openPremium": 514, "closePremium": 90, "closeDate": "2026-03-12", "status": "closed"},
+    {"id": "call_ibkr_008", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 247, "expiration": "2026-03-13", "openDate": "2026-03-12", "openPremium": 255, "closePremium": 261, "closeDate": "2026-03-13", "status": "closed"},
+    {"id": "call_ibkr_009", "parentLeapsId": "LEAPS_ibkr_001", "type": "short-call", "symbol": "IWM", "strike": 247, "expiration": "2026-03-20", "openDate": "2026-03-13", "openPremium": 516, "closePremium": 0, "status": "open"}
+  ],
+  "history": {
+    "LEAPS_tasty_001": [
+      {"date": "2025-01-09", "iwmPrice": 215.75, "value": 7745, "notes": "Initial entry"}
+    ],
+    "LEAPS_ibkr_001": [
+      {"date": "2026-01-28", "iwmPrice": 226.67, "value": 9011.05, "notes": "Initial entry"}
+    ]
+  }
+}
