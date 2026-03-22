@@ -2,22 +2,33 @@
   "version": 2,
   "builds": [
     {
-      "src": "turtle-game/**",
+      "src": "compact-game/**",
       "use": "@vercel/static"
     }
   ],
   "routes": [
     {
       "src": "/",
-      "dest": "/turtle-game/minimal-game-with-leaps-selector.html"
+      "dest": "/compact-game/index.html"
     },
     {
-      "src": "/minimal-game",
-      "dest": "/turtle-game/minimal-game.html"
+      "src": "/game",
+      "dest": "/compact-game/index.html"
     },
     {
-      "src": "/leaps",
-      "dest": "/turtle-game/minimal-game-with-leaps-selector.html"
+      "src": "/(.*)",
+      "dest": "/compact-game/$1"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turtle Trading - Compact</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: #eaeaea;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 260px;
+            grid-template-rows: 60px 1fr;
+            height: 100vh;
+            gap: 2px;
+            background: #0f0f1a;
+        }
+        
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: #16213e;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 2px solid #0f3460;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+        
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: #e94560;
+        }
+        
+        .account-value {
+            font-size: 18px;
+        }
+        
+        .account-value .label {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .account-value .amount {
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .weekly-pnl {
+            font-size: 18px;
+        }
+        
+        .weekly-pnl .label {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .positive { color: #00d084; }
+        .negative { color: #e94560; }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .week-badge {
+            background: #0f3460;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #e94560;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #ff6b6b;
+        }
+        
+        .btn-secondary {
+            background: #0f3460;
+            color: #eaeaea;
+        }
+        
+        .btn-secondary:hover {
+            background: #1a4a7a;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .save-indicator {
+            font-size: 11px;
+            color: #00d084;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+            margin-left: 10px;
+        }
+        
+        /* Left Panel - Options Chain */
+        .options-panel {
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            background: #0f3460;
+            padding: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .chain-header {
+            display: grid;
+            grid-template-columns: 1fr 50px 1fr;
+            background: #1a1a2e;
+            padding: 8px;
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+        }
+        
+        .chain-header span:first-child { text-align: left; }
+        .chain-header span:last-child { text-align: right; }
+        
+        .options-chain {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .option-row {
+            display: grid;
+            grid-template-columns: 1fr 50px 1fr;
+            padding: 6px 8px;
+            font-size: 12px;
+            border-bottom: 1px solid #1a1a2e;
+            cursor: pointer;
+            transition: background 0.15s;
+            align-items: center;
+        }
+        
+        .option-row:hover {
+            background: #1a4a7a;
+        }
+        
+        .option-row.selected {
+            background: #0f3460;
+            border-left: 3px solid #e94560;
+        }
+        
+        .option-row.itm {
+            background: rgba(233, 69, 96, 0.1);
+        }
+        
+        .option-row.itm:hover {
+            background: rgba(233, 69, 96, 0.2);
+        }
+        
+        .option-bid, .option-ask {
+            font-family: 'Courier New', monospace;
+        }
+        
+        .option-bid { text-align: left; color: #e94560; }
+        .option-strike { 
+            text-align: center; 
+            font-weight: bold;
+            background: #0f0f1a;
+            padding: 4px 0;
+            border-radius: 3px;
+        }
+        .option-ask { text-align: right; color: #00d084; }
+        
+        .vix-footer {
+            background: #0f3460;
+            padding: 10px;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .vix-value {
+            font-weight: bold;
+        }
+        
+        .vix-low { color: #00d084; }
+        .vix-med { color: #ffd700; }
+        .vix-high { color: #e94560; }
+        
+        /* Center Panel - Chart */
+        .chart-panel {
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #1a1a2e;
+        }
+        
+        .price-display {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .price-change {
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        
+        .chart-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chart-container {
+            flex: 1;
+            position: relative;
+            padding: 15px;
+        }
+        
+        #chart-canvas {
+            width: 100%;
+            height: 100%;
+            background: #0f0f1a;
+            border-radius: 4px;
+        }
+        
+        .setup-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #16213e;
+            padding: 30px;
+            border-radius: 8px;
+            border: 2px solid #0f3460;
+            text-align: center;
+            min-width: 300px;
+        }
+        
+        .setup-overlay h2 {
+            margin-bottom: 20px;
+            color: #e94560;
+        }
+        
+        .setup-overlay p {
+            margin: 10px 0;
+            color: #888;
+        }
+        
+        .setup-overlay .btn {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+        }
+        
+        /* Right Panel - Positions */
+        .positions-panel {
+            background: #16213e;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        
+        .position-card {
+            background: #1a1a2e;
+            margin: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .position-header {
+            background: #0f3460;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .position-type {
+            color: #eaeaea;
+        }
+        
+        .position-status {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        
+        .status-open {
+            background: #00d084;
+            color: #0f0f1a;
+        }
+        
+        .status-closed {
+            background: #666;
+            color: #eaeaea;
+        }
+        
+        .position-body {
+            padding: 12px;
+        }
+        
+        .position-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        
+        .position-row .label {
+            color: #888;
+        }
+        
+        .position-row .value {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .position-actions {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            padding-top: 0;
+        }
+        
+        .position-actions .btn {
+            flex: 1;
+            padding: 6px;
+            font-size: 11px;
+        }
+        
+        .btn-roll {
+            background: #ffd700;
+            color: #0f0f1a;
+        }
+        
+        .btn-close {
+            background: #e94560;
+            color: white;
+        }
+        
+        /* Weekly Result Section */
+        .weekly-result {
+            background: #1a1a2e;
+            margin: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 12px;
+            font-size: 12px;
+            border-bottom: 1px solid #16213e;
+        }
+        
+        .result-row:last-child {
+            border-bottom: none;
+        }
+        
+        .result-row.total {
+            background: #0f3460;
+            font-weight: bold;
+        }
+        
+        .result-label {
+            color: #888;
+        }
+        
+        .result-value {
+            font-family: 'Courier New', monospace;
+        }
+        
+        /* Empty state */
+        .empty-state {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #0f0f1a;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #0f3460;
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #1a4a7a;
+        }
+        
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .updating {
+            animation: pulse 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">🐢 TURTLE TRADER</div>
+                <div class="account-value">
+                    <div class="label">Net Account Value</div>
+                    <div class="amount" id="header-account-value">$20,000.00</div>
+                </div>
+                <div class="weekly-pnl">
+                    <div class="label">Weekly P&L</div>
+                    <div class="amount" id="header-weekly-pnl">$0.00</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="save-indicator" id="save-indicator"></span>
+                <div class="week-badge">Week <span id="week-number">1</span></div>
+                <button class="btn btn-secondary" id="rules-btn">Rules</button>
+                <button class="btn btn-secondary" id="save-btn">💾 Save</button>
+                <button class="btn btn-primary" id="action-btn" disabled>Setup Positions</button>
+            </div>
+        </div>
+        
+        <!-- Left Panel - Options Chain -->
+        <div class="options-panel">
+            <div class="panel-header">Weekly Options Chain (7 DTE)</div>
+            <div class="chain-header">
+                <span>BID</span>
+                <span>STR</span>
+                <span>ASK</span>
+            </div>
+            <div class="options-chain" id="options-chain">
+                <!-- Populated by JS -->
+            </div>
+            <div class="vix-footer">
+                <span>VIX Level:</span>
+                <span class="vix-value vix-low" id="vix-display">15.00</span>
+            </div>
+        </div>
+        
+        <!-- Center Panel - Chart -->
+        <div class="chart-panel">
+            <div class="chart-header">
+                <div>
+                    <span class="price-display" id="current-price">$590.00</span>
+                    <span class="price-change" id="price-change"></span>
+                </div>
+                <div class="chart-actions">
+                    <button class="btn btn-secondary" id="reset-btn">Reset</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="chart-canvas"></canvas>
+                <div class="setup-overlay" id="setup-overlay">
+                    <h2>Welcome to Turtle Trading</h2>
+                    <p>Starting Capital: <strong>$20,000</strong></p>
+                    <p>SPY Price: <strong>$590.00</strong></p>
+                    <p style="font-size: 11px; margin-top: 15px;">Strategy: LEAPS + Weekly Covered Calls</p>
+                    <button class="btn btn-primary" id="setup-btn">Start Trading</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel - Positions -->
+        <div class="positions-panel">
+            <!-- LEAPS Position -->
+            <div class="position-card" id="leaps-card">
+                <div class="position-header">
+                    <span class="position-type">📈 LEAPS Position</span>
+                    <span class="position-status status-closed" id="leaps-status">CLOSED</span>
+                </div>
+                <div class="position-body">
+                    <div class="empty-state" id="leaps-empty">No LEAPS position open</div>
+                    <div id="leaps-details" style="display: none;">
+                        <div class="position-row">
+                            <span class="label">Strike</span>
+                            <span class="value" id="leaps-strike">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">Delta</span>
+                            <span class="value" id="leaps-delta">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">Theta/day</span>
+                            <span class="value" id="leaps-theta">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">DTE</span>
+                            <span class="value" id="leaps-dte">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">Value</span>
+                            <span class="value" id="leaps-value">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">P&L</span>
+                            <span class="value" id="leaps-pnl">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="position-actions" id="leaps-actions" style="display: none;">
+                    <button class="btn btn-roll" id="roll-leaps-btn">Roll</button>
+                    <button class="btn btn-close" id="close-leaps-btn">Sell</button>
+                </div>
+            </div>
+            
+            <!-- Short Call Position -->
+            <div class="position-card" id="short-card">
+                <div class="position-header">
+                    <span class="position-type">📝 Short Call</span>
+                    <span class="position-status status-closed" id="short-status">CLOSED</span>
+                </div>
+                <div class="position-body">
+                    <div class="empty-state" id="short-empty">No short call open</div>
+                    <div id="short-details" style="display: none;">
+                        <div class="position-row">
+                            <span class="label">Strike</span>
+                            <span class="value" id="short-strike">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">Premium</span>
+                            <span class="value positive" id="short-premium">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">Current Value</span>
+                            <span class="value" id="short-value">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">DTE</span>
+                            <span class="value" id="short-dte">-</span>
+                        </div>
+                        <div class="position-row">
+                            <span class="label">P&L</span>
+                            <span class="value" id="short-pnl">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="position-actions" id="short-actions" style="display: none;">
+                    <button class="btn btn-close" id="buyback-btn">Buy to Close</button>
+                </div>
+            </div>
+            
+            <!-- Weekly Result -->
+            <div class="weekly-result" id="weekly-result" style="display: none;">
+                <div class="panel-header">Week Result</div>
+                <div class="result-row">
+                    <span class="result-label">Starting Value</span>
+                    <span class="result-value" id="result-start">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">LEAPS P&L</span>
+                    <span class="result-value" id="result-leaps">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Short Call P&L</span>
+                    <span class="result-value" id="result-short">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">SPY Change</span>
+                    <span class="result-value" id="result-spy">-</span>
+                </div>
+                <div class="result-row total">
+                    <span class="result-label">Net P&L</span>
+                    <span class="result-value" id="result-total">-</span>
+                </div>
+                <div style="padding: 10px;">
+                    <button class="btn btn-primary" id="next-week-btn" style="width: 100%;">Next Week →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== PRICING ENGINE ====================
+        
+        function calculateSimpleDelta(stockPrice, strike) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+            
+            if (percentITM >= 15) return 0.90;
+            else if (percentITM >= 10) return 0.85;
+            else if (percentITM >= 5) return 0.75 + ((percentITM - 5) / 5) * 0.10;
+            else if (percentITM >= 0) return 0.60 + (percentITM / 5) * 0.15;
+            else return Math.max(0.50, 0.60 + (percentITM / 5) * 0.10);
+        }
+        
+        function calculateSimpleExtrinsic(stockPrice, strike, dte) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+            let dailyExtrinsic = 2.5;
+            
+            if (percentITM >= 12) dailyExtrinsic = 2.0;
+            else if (percentITM >= 8) dailyExtrinsic = 2.5;
+            else if (percentITM >= 5) dailyExtrinsic = 3.0;
+            else dailyExtrinsic = 3.5;
+            
+            return dailyExtrinsic * dte;
+        }
+        
+        function createLEAPS(stockPrice, strike, dte) {
+            const intrinsic = Math.max(0, stockPrice - strike) * 100;
+            const delta = calculateSimpleDelta(stockPrice, strike);
+            const extrinsic = calculateSimpleExtrinsic(stockPrice, strike, dte);
+            const value = intrinsic + extrinsic;
+            const theta = dte > 0 ? -extrinsic / dte : 0;
+            
+            return {
+                strike,
+                dte,
+                value,
+                delta,
+                theta,
+                intrinsic,
+                extrinsic,
+                costBasis: value,
+                lastStockPrice: stockPrice
+            };
+        }
+        
+        function updateLEAPS(leaps, newStockPrice, days) {
+            let currentLeaps = { ...leaps };
+            
+            for (let i = 0; i < days; i++) {
+                const stockChange = i === 0 ? newStockPrice - currentLeaps.lastStockPrice : 0;
+                const stockImpact = stockChange * currentLeaps.delta * 100;
+                const thetaImpact = currentLeaps.theta;
+                
+                currentLeaps.value += stockImpact + thetaImpact;
+                currentLeaps.extrinsic = Math.max(0, currentLeaps.extrinsic + thetaImpact);
+                currentLeaps.intrinsic = Math.max(0, newStockPrice - currentLeaps.strike) * 100;
+                currentLeaps.dte -= 1;
+                
+                if (currentLeaps.dte > 0) {
+                    currentLeaps.theta = -currentLeaps.extrinsic / currentLeaps.dte;
+                } else {
+                    currentLeaps.theta = 0;
+                    currentLeaps.extrinsic = 0;
+                }
+                
+                currentLeaps.delta = calculateSimpleDelta(newStockPrice, currentLeaps.strike);
+                currentLeaps.lastStockPrice = newStockPrice;
+            }
+            
+            return currentLeaps;
+        }
+        
+        function calculateWeeklyCallPremium(stockPrice, strike, dte) {
+            const intrinsic = Math.max(0, stockPrice - strike) * 100;
+            const distanceFromStrike = stockPrice - strike;
+            const percentDiff = (distanceFromStrike / strike) * 100;
+            
+            const baseExtrinsic7DTE = 450;
+            const timeFactor = dte / 7;
+            
+            const absPercent = Math.abs(percentDiff);
+            let moneynessFactor;
+            
+            if (absPercent < 0.1) {
+                moneynessFactor = 1.0;
+            } else if (absPercent < 0.2) {
+                moneynessFactor = 1.0 - (absPercent - 0.1) * 0.4;
+            } else if (absPercent < 0.35) {
+                moneynessFactor = 0.96 - (absPercent - 0.2) * 0.8;
+            } else if (absPercent < 0.5) {
+                moneynessFactor = 0.84 - (absPercent - 0.35) * 1.2;
+            } else {
+                moneynessFactor = Math.max(0.3, 0.66 - (absPercent - 0.5) * 0.8);
+            }
+            
+            const extrinsic = baseExtrinsic7DTE * timeFactor * moneynessFactor;
+            return intrinsic + extrinsic;
+        }
+        
+        function createShortCall(stockPrice, strike, dte) {
+            const premium = calculateWeeklyCallPremium(stockPrice, strike, dte);
+            return {
+                strike,
+                dte,
+                premiumCollected: premium,
+                optionValue: premium
+            };
+        }
+        
+        function updateShortCall(shortCall, newStockPrice, days) {
+            let currentCall = { ...shortCall };
+            currentCall.dte -= days;
+            
+            if (currentCall.dte <= 0) {
+                currentCall.optionValue = Math.max(0, newStockPrice - currentCall.strike) * 100;
+            } else {
+                currentCall.optionValue = calculateWeeklyCallPremium(newStockPrice, currentCall.strike, currentCall.dte);
+            }
+            
+            return currentCall;
+        }
+        
+        function simulateWeeklyPriceMove(startPrice) {
+            const open = startPrice;
+            const weeklyChange = (Math.random() * 5 - 2) / 100;
+            const close = startPrice * (1 + weeklyChange);
+            const volatility = Math.abs(weeklyChange) + 0.01;
+            const high = Math.max(open, close) * (1 + volatility * 0.5);
+            const low = Math.min(open, close) * (1 - volatility * 0.5);
+            
+            return { open, high, low, close };
+        }
+        
+        // ==================== LOCAL STORAGE ====================
+        
+        const SAVE_KEY = 'turtleGame_save';
+        
+        function saveGame() {
+            const saveData = {
+                startingCapital: STATE.startingCapital,
+                currentBalance: STATE.currentBalance,
+                currentSPY: STATE.currentSPY,
+                weekNumber: STATE.weekNumber,
+                vix: STATE.vix,
+                leaps: STATE.leaps,
+                shortCall: STATE.shortCall,
+                weekStartingBalance: STATE.weekStartingBalance,
+                priceHistory: STATE.priceHistory,
+                selectedStrike: STATE.selectedStrike,
+                gamePhase: STATE.gamePhase,
+                historicalCandles: STATE.historicalCandles,
+                savedAt: new Date().toISOString()
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(saveData));
+            showSaveIndicator();
+        }
+        
+        function loadGame() {
+            try {
+                const saved = localStorage.getItem(SAVE_KEY);
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    // Validate save data has required fields
+                    if (data.currentBalance !== undefined) {
+                        return data;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load save:', e);
+            }
+            return null;
+        }
+        
+        function clearSave() {
+            localStorage.removeItem(SAVE_KEY);
+        }
+        
+        function showSaveIndicator() {
+            const indicator = document.getElementById('save-indicator');
+            if (indicator) {
+                indicator.textContent = '💾 Saved';
+                indicator.style.opacity = '1';
+                setTimeout(() => {
+                    indicator.style.opacity = '0.5';
+                }, 1000);
+            }
+        }
+        
+        function hasSavedGame() {
+            return localStorage.getItem(SAVE_KEY) !== null;
+        }
+        
+        // ==================== GAME STATE ====================
+        
+        const DEFAULT_STATE = {
+            startingCapital: 20000,
+            currentBalance: 20000,
+            currentSPY: 590.0,
+            weekNumber: 1,
+            vix: 15,
+            leaps: null,
+            shortCall: null,
+            weekStartingBalance: 20000,
+            priceHistory: [],
+            selectedStrike: null,
+            gamePhase: 'setup',
+            historicalCandles: 10
+        };
+        
+        // Try to load saved game, otherwise use defaults
+        const savedData = loadGame();
+        const STATE = savedData ? {
+            startingCapital: savedData.startingCapital,
+            currentBalance: savedData.currentBalance,
+            currentSPY: savedData.currentSPY,
+            weekNumber: savedData.weekNumber,
+            vix: savedData.vix,
+            leaps: savedData.leaps,
+            shortCall: savedData.shortCall,
+            weekStartingBalance: savedData.weekStartingBalance,
+            priceHistory: savedData.priceHistory || [],
+            selectedStrike: savedData.selectedStrike,
+            gamePhase: savedData.gamePhase,
+            historicalCandles: savedData.historicalCandles || 10
+        } : { ...DEFAULT_STATE };
+        
+        // ==================== UI UPDATES ====================
+        
+        function formatMoney(amount) {
+            return '$' + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        function updateHeader() {
+            document.getElementById('header-account-value').textContent = formatMoney(STATE.currentBalance);
+            document.getElementById('week-number').textContent = STATE.weekNumber;
+            
+            const weeklyPnL = STATE.currentBalance - STATE.weekStartingBalance;
+            const pnlEl = document.getElementById('header-weekly-pnl');
+            pnlEl.textContent = formatMoney(weeklyPnL);
+            pnlEl.className = 'amount ' + (weeklyPnL >= 0 ? 'positive' : 'negative');
+        }
+        
+        function updatePriceDisplay() {
+            document.getElementById('current-price').textContent = formatMoney(STATE.currentSPY);
+            
+            if (STATE.priceHistory.length > 0) {
+                const lastCandle = STATE.priceHistory[STATE.priceHistory.length - 1];
+                const change = lastCandle.close - lastCandle.open;
+                const changePct = (change / lastCandle.open) * 100;
+                const changeEl = document.getElementById('price-change');
+                changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + ' (' + changePct.toFixed(2) + '%)';
+                changeEl.className = 'price-change ' + (change >= 0 ? 'positive' : 'negative');
+            }
+        }
+        
+        function generateOptionsChain() {
+            const chain = document.getElementById('options-chain');
+            chain.innerHTML = '';
+            
+            const spy = STATE.currentSPY;
+            const atmStrike = Math.round(spy);
+            const strikes = [];
+            
+            // Generate strikes around current price
+            for (let i = -5; i <= 8; i++) {
+                strikes.push(atmStrike + i);
+            }
+            
+            strikes.forEach(strike => {
+                const isITM = strike < spy;
+                const bid = calculateWeeklyCallPremium(spy, strike, 7) * 0.95;
+                const ask = calculateWeeklyCallPremium(spy, strike, 7) * 1.05;
+                
+                const row = document.createElement('div');
+                row.className = 'option-row' + (isITM ? ' itm' : '');
+                row.dataset.strike = strike;
+                
+                row.innerHTML = `
+                    <span class="option-bid">${bid > 0.01 ? formatMoney(bid/100) : '-'}</span>
+                    <span class="option-strike">${strike}</span>
+                    <span class="option-ask">${ask > 0.01 ? formatMoney(ask/100) : '-'}</span>
+                `;
+                
+                row.addEventListener('click', () => selectStrike(strike, row));
+                chain.appendChild(row);
+            });
+        }
+        
+        function selectStrike(strike, rowElement) {
+            // Deselect previous
+            document.querySelectorAll('.option-row').forEach(r => r.classList.remove('selected'));
+            
+            if (STATE.selectedStrike === strike) {
+                STATE.selectedStrike = null;
+                updateActionButton();
+                return;
+            }
+            
+            STATE.selectedStrike = strike;
+            rowElement.classList.add('selected');
+            updateActionButton();
+        }
+        
+        function updateActionButton() {
+            const btn = document.getElementById('action-btn');
+            
+            if (STATE.gamePhase === 'setup') {
+                btn.textContent = 'Setup Positions';
+                btn.disabled = false;
+            } else if (STATE.gamePhase === 'selecting') {
+                if (!STATE.leaps) {
+                    btn.textContent = 'Open LEAPS';
+                    btn.disabled = false;
+                } else if (STATE.selectedStrike) {
+                    btn.textContent = 'Sell Call @ ' + STATE.selectedStrike;
+                    btn.disabled = false;
+                } else {
+                    btn.textContent = 'Select Strike';
+                    btn.disabled = true;
+                }
+            } else if (STATE.gamePhase === 'ready') {
+                btn.textContent = '▶ Run Week';
+                btn.disabled = false;
+            } else if (STATE.gamePhase === 'results') {
+                btn.textContent = 'Next Week →';
+                btn.disabled = false;
+            }
+        }
+        
+        function updateLEAPSCard() {
+            const leaps = STATE.leaps;
+            const emptyEl = document.getElementById('leaps-empty');
+            const detailsEl = document.getElementById('leaps-details');
+            const actionsEl = document.getElementById('leaps-actions');
+            const statusEl = document.getElementById('leaps-status');
+            
+            if (!leaps) {
+                emptyEl.style.display = 'block';
+                detailsEl.style.display = 'none';
+                actionsEl.style.display = 'none';
+                statusEl.textContent = 'CLOSED';
+                statusEl.className = 'position-status status-closed';
+                return;
+            }
+            
+            emptyEl.style.display = 'none';
+            detailsEl.style.display = 'block';
+            actionsEl.style.display = 'flex';
+            statusEl.textContent = 'OPEN';
+            statusEl.className = 'position-status status-open';
+            
+            const pnl = leaps.value - leaps.costBasis;
+            
+            document.getElementById('leaps-strike').textContent = leaps.strike;
+            document.getElementById('leaps-delta').textContent = leaps.delta.toFixed(2);
+            document.getElementById('leaps-theta').textContent = formatMoney(leaps.theta);
+            document.getElementById('leaps-dte').textContent = leaps.dte;
+            document.getElementById('leaps-value').textContent = formatMoney(leaps.value);
+            
+            const pnlEl = document.getElementById('leaps-pnl');
+            pnlEl.textContent = formatMoney(pnl);
+            pnlEl.className = 'value ' + (pnl >= 0 ? 'positive' : 'negative');
+        }
+        
+        function updateShortCard() {
+            const short = STATE.shortCall;
+            const emptyEl = document.getElementById('short-empty');
+            const detailsEl = document.getElementById('short-details');
+            const actionsEl = document.getElementById('short-actions');
+            const statusEl = document.getElementById('short-status');
+            
+            if (!short) {
+                emptyEl.style.display = 'block';
+                detailsEl.style.display = 'none';
+                actionsEl.style.display = 'none';
+                statusEl.textContent = 'CLOSED';
+                statusEl.className = 'position-status status-closed';
+                return;
+            }
+            
+            emptyEl.style.display = 'none';
+            detailsEl.style.display = 'block';
+            actionsEl.style.display = 'flex';
+            statusEl.textContent = 'OPEN';
+            statusEl.className = 'position-status status-open';
+            
+            const pnl = short.premiumCollected - short.optionValue;
+            
+            document.getElementById('short-strike').textContent = short.strike;
+            document.getElementById('short-premium').textContent = formatMoney(short.premiumCollected);
+            document.getElementById('short-value').textContent = formatMoney(short.optionValue);
+            document.getElementById('short-dte').textContent = short.dte;
+            
+            const pnlEl = document.getElementById('short-pnl');
+            pnlEl.textContent = formatMoney(pnl);
+            pnlEl.className = 'value ' + (pnl >= 0 ? 'positive' : 'negative');
+        }
+        
+        function showWeeklyResults(startBalance, leapsPnL, shortPnL, spyChange) {
+            document.getElementById('weekly-result').style.display = 'block';
+            document.getElementById('result-start').textContent = formatMoney(startBalance);
+            
+            const leapsEl = document.getElementById('result-leaps');
+            leapsEl.textContent = formatMoney(leapsPnL);
+            leapsEl.className = 'result-value ' + (leapsPnL >= 0 ? 'positive' : 'negative');
+            
+            const shortEl = document.getElementById('result-short');
+            shortEl.textContent = formatMoney(shortPnL);
+            shortEl.className = 'result-value ' + (shortPnL >= 0 ? 'positive' : 'negative');
+            
+            const spyEl = document.getElementById('result-spy');
+            const spyPct = (spyChange / (STATE.currentSPY - spyChange)) * 100;
+            spyEl.textContent = (spyChange >= 0 ? '+' : '') + spyChange.toFixed(2) + ' (' + spyPct.toFixed(2) + '%)';
+            spyEl.className = 'result-value ' + (spyChange >= 0 ? 'positive' : 'negative');
+            
+            const total = leapsPnL + shortPnL;
+            const totalEl = document.getElementById('result-total');
+            totalEl.textContent = formatMoney(total);
+            totalEl.className = 'result-value ' + (total >= 0 ? 'positive' : 'negative');
+        }
+        
+        // ==================== CHART ====================
+        
+        function drawChart() {
+            const canvas = document.getElementById('chart-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Handle high-DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            const width = rect.width;
+            const height = rect.height;
+            
+            // Clear background
+            ctx.fillStyle = '#0f0f1a';
+            ctx.fillRect(0, 0, width, height);
+            
+            if (STATE.priceHistory.length === 0) return;
+            
+            // Calculate price range
+            let minPrice = Infinity;
+            let maxPrice = -Infinity;
+            
+            STATE.priceHistory.forEach(candle => {
+                minPrice = Math.min(minPrice, candle.low);
+                maxPrice = Math.max(maxPrice, candle.high);
+            });
+            
+            const range = maxPrice - minPrice;
+            minPrice -= range * 0.05;
+            maxPrice += range * 0.05;
+            
+            const padding = 50;
+            const chartWidth = width - padding * 2;
+            const chartHeight = height - padding * 2;
+            
+            // Draw grid
+            ctx.strokeStyle = '#1a1a2e';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + (chartHeight * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw price labels
+            ctx.fillStyle = '#666';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 4; i++) {
+                const price = minPrice + (maxPrice - minPrice) * (1 - i / 4);
+                const y = padding + (chartHeight * i / 4);
+                ctx.fillText('$' + price.toFixed(2), padding - 8, y + 4);
+            }
+            
+            // Draw candlesticks
+            const candleWidth = Math.min(12, chartWidth / (STATE.priceHistory.length * 1.5));
+            const spacing = chartWidth / (STATE.priceHistory.length + 1);
+            
+            STATE.priceHistory.forEach((candle, i) => {
+                const x = padding + spacing * (i + 1);
+                
+                const openY = padding + ((maxPrice - candle.open) / (maxPrice - minPrice)) * chartHeight;
+                const closeY = padding + ((maxPrice - candle.close) / (maxPrice - minPrice)) * chartHeight;
+                const highY = padding + ((maxPrice - candle.high) / (maxPrice - minPrice)) * chartHeight;
+                const lowY = padding + ((maxPrice - candle.low) / (maxPrice - minPrice)) * chartHeight;
+                
+                const isUp = candle.close >= candle.open;
+                const isHistorical = i < STATE.historicalCandles;
+                
+                const wickColor = isHistorical ? '#444' : (isUp ? '#00d084' : '#e94560');
+                const bodyColor = isHistorical ? '#333' : (isUp ? '#00d084' : '#e94560');
+                
+                // Draw wick
+                ctx.strokeStyle = wickColor;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, highY);
+                ctx.lineTo(x, lowY);
+                ctx.stroke();
+                
+                // Draw body
+                const bodyTop = Math.min(openY, closeY);
+                const bodyHeight = Math.max(Math.abs(closeY - openY), 1);
+                
+                ctx.fillStyle = bodyColor;
+                ctx.fillRect(x - candleWidth/2, bodyTop, candleWidth, bodyHeight);
+            });
+        }
+        
+        function generateHistoricalCandles() {
+            const history = [];
+            let currentPrice = STATE.currentSPY;
+            
+            for (let i = 0; i < STATE.historicalCandles; i++) {
+                const weeklyChange = (Math.random() * 5 - 2) / 100;
+                const open = currentPrice / (1 + weeklyChange);
+                const close = currentPrice;
+                const volatility = Math.abs(weeklyChange) + 0.01;
+                const high = Math.max(open, close) * (1 + volatility * 0.5);
+                const low = Math.min(open, close) * (1 - volatility * 0.5);
+                
+                history.unshift({ open, high, low, close });
+                currentPrice = open;
+            }
+            
+            STATE.priceHistory = history;
+        }
+        
+        // ==================== GAME ACTIONS ====================
+        
+        function setupPositions() {
+            document.getElementById('setup-overlay').style.display = 'none';
+            generateHistoricalCandles();
+            STATE.gamePhase = 'selecting';
+            
+            // Auto-open LEAPS
+            const spy = STATE.currentSPY;
+            const leapsStrike = Math.round((spy - 80) / 5) * 5;
+            STATE.leaps = createLEAPS(spy, leapsStrike, 120);
+            STATE.weekStartingBalance = STATE.startingCapital;
+            
+            updateLEAPSCard();
+            generateOptionsChain();
+            drawChart();
+            updateHeader();
+            updateActionButton();
+            saveGame(); // Auto-save initial setup
+        }
+        
+        function runWeek() {
+            const spy = STATE.currentSPY;
+            const candle = simulateWeeklyPriceMove(spy);
+            const newSPY = candle.close;
+            
+            // Update LEAPS
+            const oldLeapsValue = STATE.leaps.value;
+            STATE.leaps = updateLEAPS(STATE.leaps, newSPY, 7);
+            const leapsPnL = STATE.leaps.value - oldLeapsValue;
+            
+            // Update short call
+            let shortPnL = 0;
+            if (STATE.shortCall) {
+                const oldShortValue = STATE.shortCall.optionValue;
+                STATE.shortCall = updateShortCall(STATE.shortCall, newSPY, 7);
+                shortPnL = STATE.shortCall.premiumCollected - STATE.shortCall.optionValue;
+            }
+            
+            // Update balance
+            const totalPnL = leapsPnL + shortPnL;
+            STATE.currentBalance += totalPnL;
+            STATE.currentSPY = newSPY;
+            
+            // Add to history
+            STATE.priceHistory.push(candle);
+            
+            // Show results
+            updatePriceDisplay();
+            drawChart();
+            updateLEAPSCard();
+            updateShortCard();
+            showWeeklyResults(STATE.weekStartingBalance, leapsPnL, shortPnL, newSPY - spy);
+            
+            STATE.gamePhase = 'results';
+            updateActionButton();
+            saveGame(); // Auto-save after week completes
+        }
+        
+        function nextWeek() {
+            STATE.weekNumber++;
+            STATE.weekStartingBalance = STATE.currentBalance;
+            STATE.selectedStrike = null;
+            STATE.shortCall = null;
+            
+            // Reset UI
+            document.getElementById('weekly-result').style.display = 'none';
+            document.querySelectorAll('.option-row').forEach(r => r.classList.remove('selected'));
+            
+            STATE.gamePhase = 'selecting';
+            generateOptionsChain();
+            updateLEAPSCard();
+            updateShortCard();
+            updateHeader();
+            updateActionButton();
+            saveGame(); // Auto-save when advancing to next week
+        }
+        
+        function resetGame(clearSaved = true) {
+            STATE.currentBalance = STATE.startingCapital;
+            STATE.currentSPY = 590.0;
+            STATE.weekNumber = 1;
+            STATE.leaps = null;
+            STATE.shortCall = null;
+            STATE.weekStartingBalance = STATE.startingCapital;
+            STATE.priceHistory = [];
+            STATE.selectedStrike = null;
+            STATE.gamePhase = 'setup';
+            
+            document.getElementById('setup-overlay').style.display = 'block';
+            document.getElementById('weekly-result').style.display = 'none';
+            document.querySelectorAll('.option-row').forEach(r => r.classList.remove('selected'));
+            
+            updateHeader();
+            updateLEAPSCard();
+            updateShortCard();
+            updateActionButton();
+            
+            const canvas = document.getElementById('chart-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0f0f1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            if (clearSaved) {
+                clearSave();
+                document.getElementById('save-indicator').textContent = '';
+            }
+        }
+        
+        // ==================== EVENT HANDLERS ====================
+        
+        document.getElementById('setup-btn').addEventListener('click', setupPositions);
+        
+        document.getElementById('action-btn').addEventListener('click', () => {
+            if (STATE.gamePhase === 'setup') {
+                setupPositions();
+            } else if (STATE.gamePhase === 'selecting') {
+                if (!STATE.shortCall && STATE.selectedStrike) {
+                    STATE.shortCall = createShortCall(STATE.currentSPY, STATE.selectedStrike, 7);
+                    STATE.gamePhase = 'ready';
+                    updateShortCard();
+                    updateActionButton();
+                    saveGame(); // Auto-save when opening short call
+                }
+            } else if (STATE.gamePhase === 'ready') {
+                runWeek();
+            } else if (STATE.gamePhase === 'results') {
+                nextWeek();
+            }
+        });
+        
+        document.getElementById('next-week-btn').addEventListener('click', nextWeek);
+        
+        document.getElementById('reset-btn').addEventListener('click', resetGame);
+        
+        document.getElementById('close-leaps-btn').addEventListener('click', () => {
+            if (STATE.leaps) {
+                STATE.currentBalance += STATE.leaps.value;
+                STATE.leaps = null;
+                updateLEAPSCard();
+                updateHeader();
+                saveGame(); // Auto-save when closing position
+            }
+        });
+        
+        document.getElementById('buyback-btn').addEventListener('click', () => {
+            if (STATE.shortCall) {
+                STATE.currentBalance -= STATE.shortCall.optionValue;
+                STATE.shortCall = null;
+                updateShortCard();
+                updateHeader();
+                saveGame(); // Auto-save when buying back
+            }
+        });
+        
+        document.getElementById('save-btn').addEventListener('click', () => {
+            saveGame();
+        });
+        
+        // Window resize handler
+        window.addEventListener('resize', drawChart);
+        
+        // ==================== INITIALIZATION ====================
+        
+        function restoreUI() {
+            // Hide setup overlay if game is in progress
+            if (STATE.gamePhase !== 'setup') {
+                document.getElementById('setup-overlay').style.display = 'none';
+            }
+            
+            // Show weekly result if in results phase
+            if (STATE.gamePhase === 'results') {
+                // Recalculate last week's result for display
+                const lastCandle = STATE.priceHistory[STATE.priceHistory.length - 1];
+                if (lastCandle) {
+                    const spyChange = lastCandle.close - lastCandle.open;
+                    // We don't have exact P&L breakdown in saved state, so show simplified
+                    const totalPnL = STATE.currentBalance - STATE.weekStartingBalance;
+                    showWeeklyResults(STATE.weekStartingBalance, 0, 0, spyChange);
+                    document.getElementById('result-leaps').textContent = '-';
+                    document.getElementById('result-short').textContent = '-';
+                    document.getElementById('result-total').textContent = formatMoney(totalPnL);
+                }
+            }
+            
+            // Restore UI elements
+            updateHeader();
+            updatePriceDisplay();
+            updateLEAPSCard();
+            updateShortCard();
+            updateActionButton();
+            generateOptionsChain();
+            drawChart();
+            
+            // Show saved indicator
+            if (hasSavedGame()) {
+                const savedTime = savedData?.savedAt ? new Date(savedData.savedAt).toLocaleString() : 'previously';
+                document.getElementById('save-indicator').textContent = `💾 Restored (${savedTime})`;
+            }
+        }
+        
+        // Initialize
+        if (savedData && savedData.gamePhase !== 'setup') {
+            // Restore saved game
+            restoreUI();
+        } else {
+            // Fresh start
+            updateHeader();
+            updateActionButton();
+        }
+    </script>
+</body>
+</html>
