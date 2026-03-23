@@ -2474,8 +2474,15 @@
             if (simState.vixHistory.length < 2) return;
             
             const vixs = simState.vixHistory;
-            const min = 10;
-            const max = 50;
+            
+            // Auto-scale Y-axis based on actual VIX range with padding
+            const dataMin = Math.min(...vixs);
+            const dataMax = Math.max(...vixs);
+            const dataRange = dataMax - dataMin;
+            
+            // Add 20% padding to make variations visible, minimum range of 5
+            const min = Math.max(5, dataMin - Math.max(dataRange * 0.2, 1));
+            const max = dataMax + Math.max(dataRange * 0.2, 1);
             const range = max - min;
             
             // Color based on VIX level
