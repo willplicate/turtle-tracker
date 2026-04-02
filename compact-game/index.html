@@ -386,6 +386,20 @@
             color: white;
         }
         
+        .btn-history {
+            background: #9b59b6;
+            color: white;
+        }
+        
+        .btn-history:hover {
+            background: #8e44ad;
+        }
+        
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 10px;
+        }
+        
         /* Weekly Result Section */
         .weekly-result {
             background: #1a1a2e;
@@ -454,6 +468,173 @@
         .updating {
             animation: pulse 0.5s ease-in-out;
         }
+        
+        /* Trade History Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: #1a1a2e;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow: hidden;
+            border: 2px solid #0f3460;
+        }
+        
+        .modal-header {
+            background: #0f3460;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-size: 18px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            color: #eaeaea;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 60vh;
+        }
+        
+        .trade-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .trade-item {
+            background: #16213e;
+            border-radius: 6px;
+            padding: 12px;
+            border-left: 4px solid #0f3460;
+        }
+        
+        .trade-item.corrected {
+            border-left-color: #ffd700;
+        }
+        
+        .trade-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .trade-type {
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .trade-date {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .trade-details {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .trade-detail {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .trade-detail .label {
+            color: #888;
+            font-size: 10px;
+        }
+        
+        .trade-detail .value {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .trade-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #0f3460;
+        }
+        
+        .edit-form {
+            display: none;
+            background: #0f0f1a;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .edit-form.active {
+            display: block;
+        }
+        
+        .edit-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .edit-row label {
+            font-size: 12px;
+            color: #888;
+            width: 80px;
+        }
+        
+        .edit-row input {
+            flex: 1;
+            background: #1a1a2e;
+            border: 1px solid #0f3460;
+            color: #eaeaea;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .edit-hint {
+            font-size: 11px;
+            color: #ffd700;
+            margin-top: 8px;
+            font-style: italic;
+        }
+        
+        .correction-badge {
+            background: #ffd700;
+            color: #0f0f1a;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -474,6 +655,7 @@
             <div class="header-right">
                 <span class="save-indicator" id="save-indicator"></span>
                 <div class="week-badge">Week <span id="week-number">1</span></div>
+                <button class="btn btn-history" id="history-btn">📜 History</button>
                 <button class="btn btn-secondary" id="rules-btn">Rules</button>
                 <button class="btn btn-secondary" id="save-btn">💾 Save</button>
                 <button class="btn btn-primary" id="action-btn" disabled>Setup Positions</button>
@@ -762,6 +944,190 @@
             return { open, high, low, close };
         }
         
+        // ==================== TRADE HISTORY ====================
+        
+        const TRADE_HISTORY_KEY = 'turtleGame_tradeHistory';
+        
+        // Trade types
+        const TRADE_TYPES = {
+            OPEN_LEAPS: 'OPEN_LEAPS',
+            SELL_CALL: 'SELL_CALL',
+            CLOSE_LEAPS: 'CLOSE_LEAPS',
+            BUY_BACK_CALL: 'BUY_BACK_CALL',
+            ROLL_LEAPS: 'ROLL_LEAPS',
+            WEEKLY_RESULT: 'WEEKLY_RESULT'
+        };
+        
+        // Add a trade to history
+        function recordTrade(type, data) {
+            const trade = {
+                id: Date.now() + Math.random().toString(36).substr(2, 9),
+                type,
+                weekNumber: STATE.weekNumber,
+                timestamp: new Date().toISOString(),
+                data: { ...data },
+                corrected: false,
+                originalData: null
+            };
+            
+            let history = getTradeHistory();
+            history.push(trade);
+            localStorage.setItem(TRADE_HISTORY_KEY, JSON.stringify(history));
+            return trade;
+        }
+        
+        // Get trade history
+        function getTradeHistory() {
+            try {
+                const saved = localStorage.getItem(TRADE_HISTORY_KEY);
+                return saved ? JSON.parse(saved) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        
+        // Update a trade with corrected data
+        function correctTrade(tradeId, correctedData) {
+            let history = getTradeHistory();
+            const tradeIndex = history.findIndex(t => t.id === tradeId);
+            
+            if (tradeIndex === -1) return false;
+            
+            const trade = history[tradeIndex];
+            
+            // Store original data if not already corrected
+            if (!trade.corrected) {
+                trade.originalData = { ...trade.data };
+            }
+            
+            // Update with corrected data
+            trade.data = { ...trade.data, ...correctedData };
+            trade.corrected = true;
+            trade.correctedAt = new Date().toISOString();
+            
+            localStorage.setItem(TRADE_HISTORY_KEY, JSON.stringify(history));
+            
+            // Recalculate portfolio from this point
+            recalculatePortfolioFromTrade(tradeIndex);
+            
+            return true;
+        }
+        
+        // Recalculate portfolio state from a specific trade onward
+        function recalculatePortfolioFromTrade(startIndex) {
+            const history = getTradeHistory();
+            const tradesToReprocess = history.slice(startIndex);
+            
+            // Find the last state before this trade
+            let workingState = rebuildStateUpToIndex(startIndex);
+            
+            // Reapply each trade
+            for (let i = 0; i < tradesToReprocess.length; i++) {
+                const trade = tradesToReprocess[i];
+                workingState = applyTradeToState(workingState, trade);
+            }
+            
+            // Update current state
+            STATE.currentBalance = workingState.balance;
+            STATE.leaps = workingState.leaps;
+            STATE.shortCall = workingState.shortCall;
+            STATE.weekStartingBalance = workingState.weekStartingBalance;
+            
+            // Save and refresh UI
+            saveGame();
+            updateHeader();
+            updateLEAPSCard();
+            updateShortCard();
+        }
+        
+        // Rebuild state up to (but not including) a specific trade index
+        function rebuildStateUpToIndex(targetIndex) {
+            const history = getTradeHistory();
+            const initialState = {
+                balance: STATE.startingCapital,
+                leaps: null,
+                shortCall: null,
+                weekStartingBalance: STATE.startingCapital,
+                spyPrice: 590.0
+            };
+            
+            let state = { ...initialState };
+            
+            for (let i = 0; i < targetIndex && i < history.length; i++) {
+                state = applyTradeToState(state, history[i]);
+            }
+            
+            return state;
+        }
+        
+        // Apply a single trade to a state
+        function applyTradeToState(state, trade) {
+            const newState = { ...state };
+            const data = trade.data;
+            
+            switch (trade.type) {
+                case TRADE_TYPES.OPEN_LEAPS:
+                    newState.leaps = {
+                        strike: data.strike,
+                        dte: data.dte,
+                        value: data.premium,
+                        costBasis: data.premium,
+                        delta: data.delta,
+                        theta: data.theta,
+                        intrinsic: data.intrinsic,
+                        extrinsic: data.extrinsic,
+                        lastStockPrice: data.stockPrice
+                    };
+                    newState.balance -= data.premium;
+                    break;
+                    
+                case TRADE_TYPES.SELL_CALL:
+                    newState.shortCall = {
+                        strike: data.strike,
+                        dte: data.dte,
+                        premiumCollected: data.premium,
+                        optionValue: data.premium
+                    };
+                    newState.balance += data.premium;
+                    break;
+                    
+                case TRADE_TYPES.CLOSE_LEAPS:
+                    if (newState.leaps) {
+                        newState.balance += data.closeValue || newState.leaps.value;
+                        newState.leaps = null;
+                    }
+                    break;
+                    
+                case TRADE_TYPES.BUY_BACK_CALL:
+                    if (newState.shortCall) {
+                        newState.balance -= data.buybackCost || newState.shortCall.optionValue;
+                        newState.shortCall = null;
+                    }
+                    break;
+                    
+                case TRADE_TYPES.WEEKLY_RESULT:
+                    newState.balance += data.totalPnL;
+                    newState.spyPrice = data.endPrice;
+                    if (newState.leaps) {
+                        newState.leaps.value = data.leapsEndValue;
+                        newState.leaps.dte = Math.max(0, newState.leaps.dte - 7);
+                    }
+                    if (newState.shortCall) {
+                        newState.shortCall.optionValue = data.shortEndValue || 0;
+                        newState.shortCall = null; // Short call resets each week
+                    }
+                    newState.weekStartingBalance = newState.balance;
+                    break;
+            }
+            
+            return newState;
+        }
+        
+        // Clear trade history
+        function clearTradeHistory() {
+            localStorage.removeItem(TRADE_HISTORY_KEY);
+        }
+        
         // ==================== LOCAL STORAGE ====================
         
         const SAVE_KEY = 'turtleGame_save';
@@ -804,6 +1170,7 @@
         
         function clearSave() {
             localStorage.removeItem(SAVE_KEY);
+            clearTradeHistory();
         }
         
         function showSaveIndicator() {
@@ -1177,6 +1544,18 @@
             STATE.leaps = createLEAPS(spy, leapsStrike, 120);
             STATE.weekStartingBalance = STATE.startingCapital;
             
+            // Record the trade
+            recordTrade(TRADE_TYPES.OPEN_LEAPS, {
+                strike: STATE.leaps.strike,
+                dte: STATE.leaps.dte,
+                premium: STATE.leaps.value,
+                delta: STATE.leaps.delta,
+                theta: STATE.leaps.theta,
+                intrinsic: STATE.leaps.intrinsic,
+                extrinsic: STATE.leaps.extrinsic,
+                stockPrice: spy
+            });
+            
             updateLEAPSCard();
             generateOptionsChain();
             drawChart();
@@ -1190,23 +1569,42 @@
             const candle = simulateWeeklyPriceMove(spy);
             const newSPY = candle.close;
             
-            // Update LEAPS
+            // Store values before update for trade record
             const oldLeapsValue = STATE.leaps.value;
+            const oldShortValue = STATE.shortCall ? STATE.shortCall.optionValue : 0;
+            
+            // Update LEAPS
             STATE.leaps = updateLEAPS(STATE.leaps, newSPY, 7);
             const leapsPnL = STATE.leaps.value - oldLeapsValue;
             
             // Update short call
             let shortPnL = 0;
+            let shortEndValue = 0;
             if (STATE.shortCall) {
-                const oldShortValue = STATE.shortCall.optionValue;
                 STATE.shortCall = updateShortCall(STATE.shortCall, newSPY, 7);
                 shortPnL = STATE.shortCall.premiumCollected - STATE.shortCall.optionValue;
+                shortEndValue = STATE.shortCall.optionValue;
             }
             
             // Update balance
             const totalPnL = leapsPnL + shortPnL;
             STATE.currentBalance += totalPnL;
             STATE.currentSPY = newSPY;
+            
+            // Record the weekly result
+            recordTrade(TRADE_TYPES.WEEKLY_RESULT, {
+                startPrice: spy,
+                endPrice: newSPY,
+                leapsStartValue: oldLeapsValue,
+                leapsEndValue: STATE.leaps.value,
+                leapsPnL: leapsPnL,
+                shortStartValue: oldShortValue,
+                shortEndValue: shortEndValue,
+                shortPnL: shortPnL,
+                totalPnL: totalPnL,
+                startingBalance: STATE.weekStartingBalance,
+                endingBalance: STATE.currentBalance
+            });
             
             // Add to history
             STATE.priceHistory.push(candle);
@@ -1273,6 +1671,8 @@
             }
         }
         
+
+        
         // ==================== EVENT HANDLERS ====================
         
         document.getElementById('setup-btn').addEventListener('click', setupPositions);
@@ -1283,6 +1683,15 @@
             } else if (STATE.gamePhase === 'selecting') {
                 if (!STATE.shortCall && STATE.selectedStrike) {
                     STATE.shortCall = createShortCall(STATE.currentSPY, STATE.selectedStrike, 7);
+                    
+                    // Record the trade
+                    recordTrade(TRADE_TYPES.SELL_CALL, {
+                        strike: STATE.shortCall.strike,
+                        dte: STATE.shortCall.dte,
+                        premium: STATE.shortCall.premiumCollected,
+                        stockPrice: STATE.currentSPY
+                    });
+                    
                     STATE.gamePhase = 'ready';
                     updateShortCard();
                     updateActionButton();
@@ -1301,7 +1710,18 @@
         
         document.getElementById('close-leaps-btn').addEventListener('click', () => {
             if (STATE.leaps) {
-                STATE.currentBalance += STATE.leaps.value;
+                const closeValue = STATE.leaps.value;
+                
+                // Record the trade
+                recordTrade(TRADE_TYPES.CLOSE_LEAPS, {
+                    strike: STATE.leaps.strike,
+                    closeValue: closeValue,
+                    costBasis: STATE.leaps.costBasis,
+                    pnl: closeValue - STATE.leaps.costBasis,
+                    stockPrice: STATE.currentSPY
+                });
+                
+                STATE.currentBalance += closeValue;
                 STATE.leaps = null;
                 updateLEAPSCard();
                 updateHeader();
@@ -1311,7 +1731,19 @@
         
         document.getElementById('buyback-btn').addEventListener('click', () => {
             if (STATE.shortCall) {
-                STATE.currentBalance -= STATE.shortCall.optionValue;
+                const buybackCost = STATE.shortCall.optionValue;
+                const pnl = STATE.shortCall.premiumCollected - buybackCost;
+                
+                // Record the trade
+                recordTrade(TRADE_TYPES.BUY_BACK_CALL, {
+                    strike: STATE.shortCall.strike,
+                    buybackCost: buybackCost,
+                    premiumCollected: STATE.shortCall.premiumCollected,
+                    pnl: pnl,
+                    stockPrice: STATE.currentSPY
+                });
+                
+                STATE.currentBalance -= buybackCost;
                 STATE.shortCall = null;
                 updateShortCard();
                 updateHeader();
@@ -1323,8 +1755,238 @@
             saveGame();
         });
         
+        document.getElementById('history-btn').addEventListener('click', () => {
+            showTradeHistoryModal();
+        });
+        
         // Window resize handler
         window.addEventListener('resize', drawChart);
+        
+        // ==================== TRADE HISTORY UI ====================
+        
+        function showTradeHistoryModal() {
+            // Remove existing modal if any
+            const existingModal = document.getElementById('trade-history-modal');
+            if (existingModal) existingModal.remove();
+            
+            const history = getTradeHistory();
+            
+            const modalHTML = `
+                <div id="trade-history-modal" class="modal-overlay">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h2>📜 Trade History & Corrections</h2>
+                            <button class="modal-close" onclick="closeTradeHistoryModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            ${history.length === 0 ? 
+                                '<p style="text-align: center; color: #888;">No trades recorded yet.</p>' :
+                                `<div class="trade-list">
+                                    ${history.map((trade, index) => renderTradeItem(trade, index)).join('')}
+                                </div>`
+                            }
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHTML;
+            document.body.appendChild(modalDiv);
+            
+            // Attach event listeners to edit buttons
+            history.forEach((trade, index) => {
+                const editBtn = document.getElementById(`edit-btn-${index}`);
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => toggleEditForm(index));
+                }
+                
+                const saveBtn = document.getElementById(`save-btn-${index}`);
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', () => saveTradeCorrection(index, trade.id));
+                }
+            });
+        }
+        
+        function closeTradeHistoryModal() {
+            const modal = document.getElementById('trade-history-modal');
+            if (modal) modal.remove();
+        }
+        
+        function renderTradeItem(trade, index) {
+            const isCorrected = trade.corrected;
+            
+            let typeLabel, details, editableFields;
+            
+            switch (trade.type) {
+                case TRADE_TYPES.OPEN_LEAPS:
+                    typeLabel = '📈 OPEN LEAPS';
+                    details = `
+                        <div class="trade-detail"><span class="label">Strike</span><span class="value">$${trade.data.strike}</span></div>
+                        <div class="trade-detail"><span class="label">Premium Paid</span><span class="value">${formatMoney(trade.data.premium)}</span></div>
+                        <div class="trade-detail"><span class="label">Delta</span><span class="value">${trade.data.delta?.toFixed(2) || '-'}</span></div>
+                    `;
+                    editableFields = `
+                        <div class="edit-row">
+                            <label>Premium Paid:</label>
+                            <input type="number" id="edit-premium-${index}" value="${trade.data.premium}" step="0.01">
+                        </div>
+                        <p class="edit-hint">Enter the actual premium paid (e.g., 7450 for $7,450)</p>
+                    `;
+                    break;
+                    
+                case TRADE_TYPES.SELL_CALL:
+                    typeLabel = '📝 SELL CALL';
+                    details = `
+                        <div class="trade-detail"><span class="label">Strike</span><span class="value">$${trade.data.strike}</span></div>
+                        <div class="trade-detail"><span class="label">Premium Collected</span><span class="value">+${formatMoney(trade.data.premium)}</span></div>
+                        <div class="trade-detail"><span class="label">DTE</span><span class="value">${trade.data.dte}</span></div>
+                    `;
+                    editableFields = `
+                        <div class="edit-row">
+                            <label>Premium:</label>
+                            <input type="number" id="edit-premium-${index}" value="${trade.data.premium}" step="0.01">
+                        </div>
+                        <p class="edit-hint">Enter the actual premium received (e.g., 450 for $450)</p>
+                    `;
+                    break;
+                    
+                case TRADE_TYPES.CLOSE_LEAPS:
+                    typeLabel = '📉 CLOSE LEAPS';
+                    details = `
+                        <div class="trade-detail"><span class="label">Strike</span><span class="value">$${trade.data.strike}</span></div>
+                        <div class="trade-detail"><span class="label">Close Value</span><span class="value">${formatMoney(trade.data.closeValue)}</span></div>
+                        <div class="trade-detail"><span class="label">P&L</span><span class="value ${trade.data.pnl >= 0 ? 'positive' : 'negative'}">${trade.data.pnl >= 0 ? '+' : ''}${formatMoney(trade.data.pnl)}</span></div>
+                    `;
+                    editableFields = `
+                        <div class="edit-row">
+                            <label>Close Value:</label>
+                            <input type="number" id="edit-closeValue-${index}" value="${trade.data.closeValue}" step="0.01">
+                        </div>
+                        <p class="edit-hint">Enter the actual closing value (e.g., 7450 for $7,450)</p>
+                    `;
+                    break;
+                    
+                case TRADE_TYPES.BUY_BACK_CALL:
+                    typeLabel = '🔄 BUY BACK CALL';
+                    details = `
+                        <div class="trade-detail"><span class="label">Strike</span><span class="value">$${trade.data.strike}</span></div>
+                        <div class="trade-detail"><span class="label">Buyback Cost</span><span class="value">-${formatMoney(trade.data.buybackCost)}</span></div>
+                        <div class="trade-detail"><span class="label">P&L</span><span class="value ${trade.data.pnl >= 0 ? 'positive' : 'negative'}">${trade.data.pnl >= 0 ? '+' : ''}${formatMoney(trade.data.pnl)}</span></div>
+                    `;
+                    editableFields = `
+                        <div class="edit-row">
+                            <label>Buyback Cost:</label>
+                            <input type="number" id="edit-buybackCost-${index}" value="${trade.data.buybackCost}" step="0.01">
+                        </div>
+                        <p class="edit-hint">⚠️ CRITICAL: Enter the actual buyback cost (e.g., 745 for $745, NOT 7.45)</p>
+                    `;
+                    break;
+                    
+                case TRADE_TYPES.WEEKLY_RESULT:
+                    typeLabel = '📊 WEEKLY RESULT';
+                    details = `
+                        <div class="trade-detail"><span class="label">SPY Change</span><span class="value">${trade.data.endPrice > trade.data.startPrice ? '+' : ''}${(trade.data.endPrice - trade.data.startPrice).toFixed(2)}</span></div>
+                        <div class="trade-detail"><span class="label">Total P&L</span><span class="value ${trade.data.totalPnL >= 0 ? 'positive' : 'negative'}">${trade.data.totalPnL >= 0 ? '+' : ''}${formatMoney(trade.data.totalPnL)}</span></div>
+                        <div class="trade-detail"><span class="label">Balance</span><span class="value">${formatMoney(trade.data.endingBalance)}</span></div>
+                    `;
+                    editableFields = `
+                        <div class="edit-row">
+                            <label>Ending Balance:</label>
+                            <input type="number" id="edit-endingBalance-${index}" value="${trade.data.endingBalance}" step="0.01">
+                        </div>
+                        <p class="edit-hint">Adjust the ending balance if needed (recalculates P&L)</p>
+                    `;
+                    break;
+                    
+                default:
+                    typeLabel = trade.type;
+                    details = '<div class="trade-detail"><span class="label">Details</span><span class="value">-</span></div>';
+                    editableFields = '<p class="edit-hint">This trade type cannot be edited.</p>';
+            }
+            
+            return `
+                <div class="trade-item ${isCorrected ? 'corrected' : ''}">
+                    <div class="trade-header">
+                        <span class="trade-type">${typeLabel}${isCorrected ? '<span class="correction-badge">CORRECTED</span>' : ''}</span>
+                        <span class="trade-date">Week ${trade.weekNumber} • ${new Date(trade.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div class="trade-details">
+                        ${details}
+                    </div>
+                    <div class="trade-actions">
+                        <button class="btn btn-secondary btn-small" id="edit-btn-${index}">Edit Values</button>
+                        ${isCorrected ? '<span style="color: #ffd700; font-size: 11px; margin-left: auto;">Original: ' + JSON.stringify(trade.originalData) + '</span>' : ''}
+                    </div>
+                    <div class="edit-form" id="edit-form-${index}">
+                        ${editableFields}
+                        <div style="display: flex; gap: 8px; margin-top: 10px;">
+                            <button class="btn btn-primary btn-small" id="save-btn-${index}">Save Correction</button>
+                            <button class="btn btn-secondary btn-small" onclick="toggleEditForm(${index})">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function toggleEditForm(index) {
+            const form = document.getElementById(`edit-form-${index}`);
+            if (form) {
+                form.classList.toggle('active');
+            }
+        }
+        
+        function saveTradeCorrection(index, tradeId) {
+            const history = getTradeHistory();
+            const trade = history.find(t => t.id === tradeId);
+            
+            if (!trade) return;
+            
+            let correctedData = {};
+            
+            switch (trade.type) {
+                case TRADE_TYPES.OPEN_LEAPS:
+                case TRADE_TYPES.SELL_CALL:
+                    const premiumInput = document.getElementById(`edit-premium-${index}`);
+                    if (premiumInput) {
+                        correctedData.premium = parseFloat(premiumInput.value);
+                    }
+                    break;
+                    
+                case TRADE_TYPES.CLOSE_LEAPS:
+                    const closeValueInput = document.getElementById(`edit-closeValue-${index}`);
+                    if (closeValueInput) {
+                        correctedData.closeValue = parseFloat(closeValueInput.value);
+                        correctedData.pnl = correctedData.closeValue - trade.data.costBasis;
+                    }
+                    break;
+                    
+                case TRADE_TYPES.BUY_BACK_CALL:
+                    const buybackInput = document.getElementById(`edit-buybackCost-${index}`);
+                    if (buybackInput) {
+                        correctedData.buybackCost = parseFloat(buybackInput.value);
+                        correctedData.pnl = trade.data.premiumCollected - correctedData.buybackCost;
+                    }
+                    break;
+                    
+                case TRADE_TYPES.WEEKLY_RESULT:
+                    const balanceInput = document.getElementById(`edit-endingBalance-${index}`);
+                    if (balanceInput) {
+                        correctedData.endingBalance = parseFloat(balanceInput.value);
+                        correctedData.totalPnL = correctedData.endingBalance - trade.data.startingBalance;
+                    }
+                    break;
+            }
+            
+            // Apply the correction and recalculate
+            if (correctTrade(tradeId, correctedData)) {
+                alert('Trade corrected! Portfolio has been recalculated from this point forward.');
+                closeTradeHistoryModal();
+                showTradeHistoryModal(); // Reopen to show updated values
+            } else {
+                alert('Failed to correct trade. Please try again.');
+            }
+        }
         
         // ==================== INITIALIZATION ====================
         
