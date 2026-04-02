@@ -1075,7 +1075,7 @@
                         <h4>Short Call History</h4>
                         <table>
                             <thead>
-                                <tr><th>Week</th><th>Date</th><th>Strike</th><th>Sold</th><th>Close Cost</th><th>P&L</th><th>Running Realized</th><th>If Expires</th><th>Status</th></tr>
+                                <tr><th>Week</th><th>Date</th><th>Strike</th><th>Sold</th><th>Close Cost</th><th>P&L</th><th>Running Realized</th><th>If Expires</th><th>Status</th><th>Action</th></tr>
                             </thead>
                             <tbody>
             `;
@@ -1090,6 +1090,10 @@
                 const ifExpires = c.status === 'open' ? c.openPremium : null;
                 const maxForRow = runningRealized + (ifExpires || 0);
                 
+                const editButton = c.status === 'closed' ? 
+                    `<button onclick="editShortCall('${leaps.id}', '${c.id}')" style="font-size: 10px; padding: 2px 6px;">[ Edit ]</button>` : 
+                    '--';
+                
                 html += `
                     <tr>
                         <td>${i+1}</td>
@@ -1101,6 +1105,7 @@
                         <td class="${runningRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-weight: bold;">${formatMoney(runningRealized)}</td>
                         <td style="color: #808080;">${ifExpires !== null ? '+' + formatMoney(ifExpires) : '--'}</td>
                         <td>${c.status}</td>
+                        <td>${editButton}</td>
                     </tr>
                 `;
             });
@@ -1121,9 +1126,31 @@
                 </div>
             `;
             
+            // Add LEAPS Value Chart AFTER Short Call History
+            html += `
+                <hr>
+                <!-- LEAPS Value Chart -->
+                <div style="margin: 15px 0; background: #fff; border: 2px inset #c0c0c0; padding: 10px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 12px;">📈 LEAPS Value History</div>
+                    <canvas id="leaps-value-chart" width="700" height="200" style="background: #000; width: 100%; max-width: 700px; height: 200px;"></canvas>
+                    <div style="font-size: 10px; color: #666; margin-top: 5px;">
+                        <span style="color: #0f0;">■</span> Current Value
+                        <span style="color: #666; margin-left: 10px;">--</span> Cost Basis
+                        <span id="chart-data-points" style="float: right;">0 data points</span>
+                    </div>
+                </div>
+            `;
+            
             html += '</div></div>';
             document.getElementById('position-detail').innerHTML = html;
             updateAccountCards();
+            // Draw LEAPS value chart - pass ID directly
+            (function(leapsId, costBasis) {
+                setTimeout(() => { 
+                    console.log('Drawing chart for ID:', leapsId);
+                    drawLEAPSValueChart(leapsId, costBasis); 
+                }, 10);
+            })(leaps.id, leaps.openPremium);
         }
         
         // ==================== UTILITIES ====================
@@ -1651,6 +1678,87 @@
             saveData();
             updateDisplay();
             document.getElementById('add-call-modal').remove();
+        }
+        
+        // ==================== EDIT SHORT CALL ====================
+        
+        function editShortCall(leapsId, callId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            const call = portfolio.calls.find(c => c.id === callId);
+            if (!leaps || !call) return;
+            
+            const modalId = 'edit-shortcall-modal';
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById(modalId);
+            if (existingModal) existingModal.remove();
+            
+            const modalHtml = `
+                <div class="modal-overlay" id="${modalId}" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Edit Short Call - ${leaps.accountName}</div>
+                        <div class="modal-body">
+                            <div style="background: #ffffcc; padding: 8px; margin-bottom: 10px; border: 1px solid #ff6600; font-size: 11px;">
+                                <strong>⚠️ Correction Mode:</strong> Fix data entry errors (e.g., $7.45 should be $745)
+                            </div>
+                            <div class="form-row"><label>Strike:</label><span>$${call.strike}</span></div>
+                            <div class="form-row"><label>Open Date:</label><span>${call.openDate}</span></div>
+                            <div class="form-row"><label>Sold For:</label><span style="color: #008000; font-weight: bold;">${formatMoney(call.openPremium)}</span></div>
+                            <div class="form-row"><label>Close Date:</label><span>${call.closeDate || '--'}</span></div>
+                            <hr style="margin: 10px 0;">
+                            <div class="form-row">
+                                <label>Close Cost:</label>
+                                <input type="number" id="edit-close-premium" step="0.01" value="${call.closePremium || 0}" style="width: 150px;">
+                            </div>
+                            <div style="margin-left: 120px; font-size: 10px; color: #666;">
+                                Current P&L: <span class="${call.openPremium - call.closePremium >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(call.openPremium - call.closePremium)}</span>
+                            </div>
+                            <div style="margin-left: 120px; margin-top: 5px; font-size: 10px; color: #ff6600;">
+                                <strong>Tip:</strong> Enter the actual amount paid to close (e.g., 745 for $745.00)
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveShortCallEdit('${callId}')" class="primary">[ Save Correction ]</button>
+                            <button onclick="document.getElementById('${modalId}').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+        function saveShortCallEdit(callId) {
+            const call = portfolio.calls.find(c => c.id === callId);
+            if (!call) return;
+            
+            const newClosePremium = parseFloat(document.getElementById('edit-close-premium').value);
+            
+            if (isNaN(newClosePremium) || newClosePremium < 0) {
+                alert('Please enter a valid positive number');
+                return;
+            }
+            
+            const oldPnl = call.openPremium - call.closePremium;
+            const newPnl = call.openPremium - newClosePremium;
+            
+            // Store original value for audit trail
+            if (!call.originalClosePremium) {
+                call.originalClosePremium = call.closePremium;
+            }
+            
+            // Update the close premium
+            call.closePremium = newClosePremium;
+            call.lastEdited = new Date().toISOString();
+            call.editReason = 'Manual correction';
+            
+            saveData();
+            updateDisplay();
+            document.getElementById('edit-shortcall-modal').remove();
+            
+            // Show confirmation
+            const pnlChange = newPnl - oldPnl;
+            alert(`Short Call Updated!\n\nOld P&L: ${formatMoney(oldPnl)}\nNew P&L: ${formatMoney(newPnl)}\n\nChange: ${pnlChange >= 0 ? '+' : ''}${formatMoney(pnlChange)}`);
         }
         
         // ==================== EDIT LEAPS ====================
@@ -2521,6 +2629,234 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadData();
         });
-    </script>
+    
+        // ==================== LEAPS VALUE CHART ====================
+        
+        function drawLEAPSValueChart(leapsId, costBasis) {
+            const canvas = document.getElementById('leaps-value-chart');
+            if (!canvas) {
+                console.error('Canvas not found: leaps-value-chart');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            let history = portfolio.history[leapsId] || [];
+            console.log('Drawing chart for leapsId:', leapsId, 'history count:', history.length);
+            
+            // If no history, create a minimal one with cost basis and current value
+            if (history.length === 0) {
+                const leaps = portfolio.leaps.find(l => l.id === leapsId);
+                console.log('No history, found leaps:', leaps ? 'yes' : 'no');
+                if (leaps) {
+                    const today = new Date().toISOString().split('T')[0];
+                    // Ensure we have different dates for start and end
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = yesterday.toISOString().split('T')[0];
+                    
+                    history = [
+                        { date: leaps.openDate || yesterdayStr, value: leaps.openPremium, notes: 'Cost basis' },
+                        { date: today, value: leaps.currentValue || leaps.openPremium, notes: 'Current value' }
+                    ];
+                    console.log('Created fallback history:', history);
+                }
+            }
+            
+            // Update data points counter
+            const dataPointsEl = document.getElementById('chart-data-points');
+            if (dataPointsEl) dataPointsEl.textContent = history.length + ' data points';
+            
+            if (history.length === 0) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#666';
+                ctx.font = '14px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('No value history yet. Click "Update LEAPS Value" to add data points.', canvas.width/2, canvas.height/2);
+                return;
+            }
+            
+            // Sort by date
+            const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Calculate min/max values
+            let minValue = Infinity;
+            let maxValue = -Infinity;
+            sorted.forEach(h => {
+                minValue = Math.min(minValue, h.value);
+                maxValue = Math.max(maxValue, h.value);
+            });
+            minValue = Math.min(minValue, costBasis);
+            maxValue = Math.max(maxValue, costBasis);
+            
+            // Add padding
+            const range = maxValue - minValue;
+            const padding = range * 0.1 || maxValue * 0.05;
+            minValue = Math.max(0, minValue - padding);
+            maxValue = maxValue + padding;
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const chartPadding = { top: 20, right: 60, bottom: 30, left: 60 };
+            const chartWidth = canvas.width - chartPadding.left - chartPadding.right;
+            const chartHeight = canvas.height - chartPadding.top - chartPadding.bottom;
+            
+            // Helper functions
+            const valueToY = function(value) { return chartPadding.top + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight; };
+            const indexToX = function(index) { return chartPadding.left + (index / (sorted.length - 1 || 1)) * chartWidth; };
+            
+            // Draw grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 2]);
+            for (let i = 0; i <= 4; i++) {
+                const y = chartPadding.top + (chartHeight * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(chartPadding.left, y);
+                ctx.lineTo(chartPadding.left + chartWidth, y);
+                ctx.stroke();
+                
+                const value = maxValue - (maxValue - minValue) * (i / 4);
+                ctx.fillStyle = '#0f0';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText('$' + Math.round(value).toLocaleString(), chartPadding.left - 5, y + 3);
+            }
+            ctx.setLineDash([]);
+            
+            // Draw cost basis line
+            const costY = valueToY(costBasis);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath();
+            ctx.moveTo(chartPadding.left, costY);
+            ctx.lineTo(chartPadding.left + chartWidth, costY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Cost basis label
+            ctx.fillStyle = '#666';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Cost', chartPadding.left + chartWidth + 3, costY + 3);
+            
+            // Draw value line
+            const pnl = sorted[sorted.length - 1].value - costBasis;
+            const lineColor = pnl >= 0 ? '#0f0' : '#f00';
+            console.log('Drawing line with', sorted.length, 'points, P&L:', pnl, 'color:', lineColor);
+            
+            if (sorted.length > 1) {
+                // Create gradient
+                const gradient = ctx.createLinearGradient(0, chartPadding.top, 0, canvas.height - chartPadding.bottom);
+                gradient.addColorStop(0, pnl >= 0 ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)');
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                // Draw area under line
+                ctx.beginPath();
+                ctx.moveTo(indexToX(0), valueToY(sorted[0].value));
+                for (let i = 1; i < sorted.length; i++) {
+                    ctx.lineTo(indexToX(i), valueToY(sorted[i].value));
+                }
+                ctx.lineTo(indexToX(sorted.length - 1), chartPadding.top + chartHeight);
+                ctx.lineTo(indexToX(0), chartPadding.top + chartHeight);
+                ctx.closePath();
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // Draw line
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(indexToX(0), valueToY(sorted[0].value));
+                for (let i = 1; i < sorted.length; i++) {
+                    ctx.lineTo(indexToX(i), valueToY(sorted[i].value));
+                }
+                ctx.stroke();
+            } else if (sorted.length === 1) {
+                // Single point - draw horizontal line
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(chartPadding.left, valueToY(sorted[0].value));
+                ctx.lineTo(chartPadding.left + chartWidth, valueToY(sorted[0].value));
+                ctx.stroke();
+            }
+            
+            // Draw data points
+            sorted.forEach(function(h, i) {
+                const x = indexToX(i);
+                const y = valueToY(h.value);
+                const isLast = i === sorted.length - 1;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, isLast ? 5 : 3, 0, Math.PI * 2);
+                ctx.fillStyle = isLast ? '#0f0' : '#888';
+                ctx.fill();
+                
+                if (isLast) {
+                    // Highlight last point
+                    ctx.beginPath();
+                    ctx.arc(x, y, 7, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#0f0';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // Show value
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('$' + Math.round(h.value).toLocaleString(), x, y - 10);
+                }
+            });
+            
+            // Draw X-axis labels (first, middle, last dates)
+            ctx.fillStyle = '#888';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            
+            if (sorted.length > 0) {
+                const first = sorted[0];
+                const last = sorted[sorted.length - 1];
+                const midIndex = Math.floor(sorted.length / 2);
+                const mid = sorted[midIndex];
+                
+                ctx.fillText(formatShortDate(first.date), indexToX(0), canvas.height - 10);
+                if (sorted.length > 2) {
+                    ctx.fillText(formatShortDate(mid.date), indexToX(midIndex), canvas.height - 10);
+                }
+                ctx.fillText(formatShortDate(last.date), indexToX(sorted.length - 1), canvas.height - 10);
+            }
+            
+            // Draw P&L box
+            const currentValue = sorted[sorted.length - 1].value;
+            const totalPnL = currentValue - costBasis;
+            const pnlPercent = (totalPnL / costBasis) * 100;
+            const pnlColor = totalPnL >= 0 ? '#0f0' : '#f00';
+            
+            ctx.fillStyle = 'rgba(31, 41, 55, 0.9)';
+            ctx.fillRect(canvas.width - 120, 5, 110, 24);
+            ctx.strokeStyle = pnlColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(canvas.width - 120, 5, 110, 24);
+            
+            ctx.fillStyle = pnlColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            const pnlSign = totalPnL >= 0 ? '+' : '-';
+            const pctSign = pnlPercent >= 0 ? '+' : '';
+            ctx.fillText(pnlSign + '$' + Math.abs(totalPnL).toFixed(0) + ' (' + pctSign + pnlPercent.toFixed(1) + '%)', canvas.width - 65, 22);
+            
+            console.log('Chart drawing complete. Points:', sorted.length, 'Final value:', currentValue);
+        }
+        
+        function formatShortDate(dateStr) {
+            const d = new Date(dateStr);
+            return (d.getMonth() + 1) + '/' + d.getDate();
+        }
+
+        </script>
 </body>
 </html>
