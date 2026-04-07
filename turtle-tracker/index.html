@@ -1090,9 +1090,9 @@
                 const ifExpires = c.status === 'open' ? c.openPremium : null;
                 const maxForRow = runningRealized + (ifExpires || 0);
                 
-                const editButton = c.status === 'closed' ? 
-                    `<button onclick="editShortCall('${leaps.id}', '${c.id}')" style="font-size: 10px; padding: 2px 6px;">[ Edit ]</button>` : 
-                    '--';
+                const actionButtons = c.status === 'closed' ? 
+                    `<button onclick="editShortCall('${leaps.id}', '${c.id}')" style="font-size: 10px; padding: 2px 6px;">[ Edit ]</button> <button onclick="deleteShortCall('${leaps.id}', '${c.id}')" style="font-size: 10px; padding: 2px 6px; color: #f00;">[ X ]</button>` : 
+                    `<button onclick="deleteShortCall('${leaps.id}', '${c.id}')" style="font-size: 10px; padding: 2px 6px; color: #f00;">[ X ]</button>`;
                 
                 html += `
                     <tr>
@@ -1105,7 +1105,7 @@
                         <td class="${runningRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-weight: bold;">${formatMoney(runningRealized)}</td>
                         <td style="color: #808080;">${ifExpires !== null ? '+' + formatMoney(ifExpires) : '--'}</td>
                         <td>${c.status}</td>
-                        <td>${editButton}</td>
+                        <td>${actionButtons}</td>
                     </tr>
                 `;
             });
@@ -1759,6 +1759,40 @@
             // Show confirmation
             const pnlChange = newPnl - oldPnl;
             alert(`Short Call Updated!\n\nOld P&L: ${formatMoney(oldPnl)}\nNew P&L: ${formatMoney(newPnl)}\n\nChange: ${pnlChange >= 0 ? '+' : ''}${formatMoney(pnlChange)}`);
+        }
+        
+        // ==================== DELETE SHORT CALL ====================
+        
+        function deleteShortCall(leapsId, callId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            const call = portfolio.calls.find(c => c.id === callId);
+            if (!leaps || !call) return;
+            
+            const callIndex = portfolio.calls.findIndex(c => c.id === callId);
+            if (callIndex === -1) return;
+            
+            const pnl = call.status === 'closed' ? call.openPremium - call.closePremium : 0;
+            const status = call.status === 'closed' ? `Closed (P&L: ${formatMoney(pnl)})` : 'Open';
+            
+            const confirmMsg = `⚠️ DELETE SHORT CALL?\n\n` +
+                `Account: ${leaps.accountName}\n` +
+                `Strike: $${call.strike}\n` +
+                `Opened: ${call.openDate}\n` +
+                `Sold For: ${formatMoney(call.openPremium)}\n` +
+                `Status: ${status}\n\n` +
+                `This will permanently remove this short call from history.\n` +
+                `Running totals will be recalculated.\n\n` +
+                `Are you sure?`;
+            
+            if (confirm(confirmMsg)) {
+                // Remove the call
+                portfolio.calls.splice(callIndex, 1);
+                
+                saveData();
+                updateDisplay();
+                
+                alert(`Short Call Deleted\n\nStrike $${call.strike} has been removed.`);
+            }
         }
         
         // ==================== EDIT LEAPS ====================
