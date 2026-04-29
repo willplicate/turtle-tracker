@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Turtle Trade Tracker v3.0 - Multi-Account</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         /* 1990s Web Aesthetic */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -236,7 +237,7 @@
 <body>
     <div class="header">
         <h1>🐢 TURTLE TRADE TRACKER v3.0</h1>
-        <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span></div>
+        <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span> &nbsp;|&nbsp; ☁️ <span id="sync-status" style="font-size: 10px;">Cloud: Not configured</span></div>
     </div>
     
     <div class="nav">
@@ -352,6 +353,39 @@
         
         <!-- DATA / IMPORT TAB -->
         <div id="tab-data" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">☁️ Cloud Sync (Supabase)</div>
+                <div class="panel-body">
+                    <div style="background: #e8f4e8; border: 1px solid #4a7c4e; padding: 8px; margin-bottom: 12px; font-size: 11px;">
+                        <strong>Status:</strong> <span id="sync-status-detail">Not configured</span>
+                        &nbsp;&nbsp;
+                        <button onclick="pullFromSupabase()" style="font-size: 10px; padding: 2px 8px;">[ Pull from Cloud ]</button>
+                        <button onclick="syncToSupabase()" style="font-size: 10px; padding: 2px 8px; margin-left: 4px;">[ Push to Cloud ]</button>
+                    </div>
+                    <div class="form-row">
+                        <label>Project URL:</label>
+                        <input type="text" id="sb-url" style="width: 350px;" placeholder="https://xxxxxxxxxxxx.supabase.co" value="https://unltolnayvurlwevvhoz.supabase.co">
+                    </div>
+                    <div class="form-row">
+                        <label>Anon Key:</label>
+                        <input type="password" id="sb-key" style="width: 350px;" placeholder="eyJhbGci...">
+                        <button onclick="toggleSbKey()" style="font-size: 10px; padding: 2px 6px; margin-left: 4px;">[ Show ]</button>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button onclick="saveSupabaseConfig()" class="primary">[ Save & Connect ]</button>
+                        <button onclick="disconnectSupabase()" style="margin-left: 8px; background: #800000; color: #fff;">[ Disconnect ]</button>
+                    </div>
+                    <div style="margin-top: 12px; background: #f0f0f0; border: 1px solid #808080; padding: 8px; font-size: 10px; font-family: monospace;">
+                        <strong>One-time Supabase setup — run this SQL in your Supabase project:</strong><br><br>
+                        CREATE TABLE portfolios (<br>
+                        &nbsp;&nbsp;id text PRIMARY KEY,<br>
+                        &nbsp;&nbsp;data jsonb NOT NULL,<br>
+                        &nbsp;&nbsp;updated_at timestamptz DEFAULT now()<br>
+                        );<br>
+                        ALTER TABLE portfolios DISABLE ROW LEVEL SECURITY;
+                    </div>
+                </div>
+            </div>
             <div class="panel">
                 <div class="panel-header">🔑 API Configuration</div>
                 <div class="panel-body">
@@ -801,18 +835,147 @@
         let apiKey = 'VAD1Q74JGQ6JTG42';
         let currentIWM = null;
         let selectedAccountId = null;
-        
+
+        // ==================== SUPABASE SYNC ====================
+
+        let sbClient = null;
+        const SB_ROW_ID = 'main';
+        const SB_DEFAULT_URL = 'https://unltolnayvurlwevvhoz.supabase.co';
+        const SB_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVubHRvbG5heXZ1cmx3ZXZ2aG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NTM3MjYsImV4cCI6MjA5MzAyOTcyNn0.07K60Kgv_WvLkclE0IT8rYI6yjCC50XzK_lM3hRtfTg';
+
+        function initSupabase() {
+            const url = localStorage.getItem('sbUrl') || SB_DEFAULT_URL;
+            const key = localStorage.getItem('sbKey') || SB_DEFAULT_KEY;
+            if (!url || !key || !window.supabase) return false;
+            try {
+                sbClient = window.supabase.createClient(url, key);
+                return true;
+            } catch (e) {
+                console.error('Supabase init failed:', e);
+                return false;
+            }
+        }
+
+        function setSyncStatus(status, detail) {
+            const header = document.getElementById('sync-status');
+            const detailEl = document.getElementById('sync-status-detail');
+            const messages = {
+                ok:           { h: '✓ Synced',        c: '#0f0',    d: detail || 'Data synced successfully' },
+                error:        { h: '✗ Error',          c: '#f66',    d: detail || 'Sync failed — check console' },
+                syncing:      { h: '⟳ Syncing...',    c: '#ff0',    d: 'Saving to cloud...' },
+                pulling:      { h: '⟳ Pulling...',    c: '#ff0',    d: 'Loading from cloud...' },
+                notconfigured:{ h: 'Cloud: Not configured', c: '#aaa', d: 'Enter Supabase URL + anon key below' }
+            };
+            const m = messages[status] || messages.notconfigured;
+            if (header) { header.textContent = m.h; header.style.color = m.c; }
+            if (detailEl) { detailEl.textContent = m.d; detailEl.style.color = status === 'error' ? '#cc0000' : '#000'; }
+        }
+
+        async function syncToSupabase() {
+            if (!sbClient && !initSupabase()) { setSyncStatus('notconfigured'); return; }
+            setSyncStatus('syncing');
+            try {
+                const { error } = await sbClient.from('portfolios').upsert({
+                    id: SB_ROW_ID,
+                    data: portfolio,
+                    updated_at: new Date().toISOString()
+                });
+                if (error) throw error;
+                setSyncStatus('ok', 'Saved to cloud — ' + new Date().toLocaleTimeString());
+            } catch (e) {
+                console.error('Supabase push error:', e);
+                setSyncStatus('error', e.message);
+            }
+        }
+
+        async function pullFromSupabase() {
+            if (!sbClient && !initSupabase()) { setSyncStatus('notconfigured'); return; }
+            setSyncStatus('pulling');
+            try {
+                const { data, error } = await sbClient
+                    .from('portfolios')
+                    .select('data')
+                    .eq('id', SB_ROW_ID)
+                    .single();
+
+                if (error) {
+                    if (error.code === 'PGRST116') {
+                        // Row doesn't exist yet — push current data to seed it
+                        await syncToSupabase();
+                        return;
+                    }
+                    throw error;
+                }
+
+                if (data && data.data) {
+                    portfolio = data.data;
+                    localStorage.setItem('turtlePortfolio', JSON.stringify(portfolio));
+                    updateDisplay();
+                }
+                setSyncStatus('ok', 'Pulled from cloud — ' + new Date().toLocaleTimeString());
+            } catch (e) {
+                console.error('Supabase pull error:', e);
+                setSyncStatus('error', e.message);
+            }
+        }
+
+        function saveSupabaseConfig() {
+            const url = document.getElementById('sb-url').value.trim();
+            const key = document.getElementById('sb-key').value.trim();
+            if (!url || !key) { alert('Please enter both the Project URL and Anon Key'); return; }
+            localStorage.setItem('sbUrl', url);
+            localStorage.setItem('sbKey', key);
+            sbClient = null;
+            if (initSupabase()) {
+                pullFromSupabase();
+            } else {
+                setSyncStatus('error', 'Could not initialize client — check URL/key');
+            }
+        }
+
+        function disconnectSupabase() {
+            if (!confirm('Remove Supabase credentials from this device?')) return;
+            localStorage.removeItem('sbUrl');
+            localStorage.removeItem('sbKey');
+            sbClient = null;
+            document.getElementById('sb-url').value = '';
+            document.getElementById('sb-key').value = '';
+            setSyncStatus('notconfigured');
+        }
+
+        function toggleSbKey() {
+            const el = document.getElementById('sb-key');
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        // ==================== DATA STORE ====================
+
         // Load data
-        function loadData() {
+        async function loadData() {
             const saved = localStorage.getItem('turtlePortfolio');
             if (saved) {
                 portfolio = JSON.parse(saved);
             }
             updateDisplay();
+
+            // Populate Supabase credential fields (localStorage overrides defaults)
+            const savedUrl = localStorage.getItem('sbUrl');
+            const savedKey = localStorage.getItem('sbKey');
+            if (savedUrl) { const el = document.getElementById('sb-url'); if (el) el.value = savedUrl; }
+            if (savedKey) { const el = document.getElementById('sb-key'); if (el) el.value = savedKey; }
+            // Show anon key placeholder so user knows it's set
+            const keyEl = document.getElementById('sb-key');
+            if (keyEl && !keyEl.value) keyEl.placeholder = '(using built-in key)';
+
+            // Pull from Supabase if configured (overwrites localStorage with cloud data)
+            if (initSupabase()) {
+                await pullFromSupabase();
+            }
         }
-        
+
         function saveData() {
             localStorage.setItem('turtlePortfolio', JSON.stringify(portfolio));
+            syncToSupabase();
         }
         
         // ==================== DISPLAY ====================
