@@ -1,0 +1,29 @@
+Symbol,Status,MarketOrFill,Price,TIF,Time,TimeStampAtType,Order #,Description
+IWM,Filled,4.50 cr,4.50 cr,Day,"3/13, 2:09p",Fill,#446681654,-1 Mar 20 6d 249 Call STO
+IWM,Filled,5.25 db,5.25 db,Day,"3/13, 1:55p",Fill,#446662613,1 Mar 13 Exp 245 Call BTC
+IWM,Filled,3.31 cr,3.31 cr,Day,"3/09, 3:11p",Fill,#445342318,"-1 Mar 13 Exp 245 Call STO
+1 Mar 13 Exp 251 Call BTC"
+IWM,Filled,5.22 cr,5.22 cr,Day,"3/06, 4:16p",Fill,#444926762,"1 Mar 6 Exp 260 Call BTC
+-1 Mar 13 Exp 251 Call STO"
+IWM,Filled,1.41 cr,1.41 cr,Day,"3/02, 2:39p",Fill,#443399458,"-1 Mar 6 Exp 260 Call STO
+1 Mar 6 Exp 263 Call BTC"
+IWM,Filled,3.75 cr,3.75 cr,Day,"2/26, 5:17p",Fill,#442806652,"1 Feb 26 Exp 264 Call BTC
+-1 Mar 6 Exp 263 Call STO"
+IWM,Filled,3.25 cr,3.25 cr,Day,"2/19, 7:15p",Fill,#441220186,"1 Feb 20 Exp 269 Call BTC
+-1 Feb 26 Exp 264 Call STO"
+IWM,Filled,1.24 cr,1.24 cr,Day,"2/13, 7:46p",Fill,#440233425,"1 Feb 13 Exp 269 Call BTC
+-1 Feb 20 Exp 269 Call STO"
+IWM,Filled,2.69 db,2.69 db,Day,"2/06, 6:05p",Fill,#438470525,"1 Feb 6 Exp 260 Call BTC
+-1 Feb 13 Exp 269 Call STO"
+IWM,Filled,0.32 cr,0.32 cr,Day,"2/05, 9:40p",Fill,#438195526,"-1 Feb 6 Exp 260 Call STO
+1 Feb 6 Exp 263 Call BTC"
+IWM,Filled,1.78 cr,1.78 cr,Day,"2/02, 3:36p",Fill,#436727421,-1 Feb 6 Exp 263 Call STO
+IWM,Filled,0.01 db,0.01 db,Day,"1/30, 8:59p",Fill,#436560634,1 Jan 30 Exp 267 Call BTC
+IWM,Filled,1.34 cr,1.34 cr,Day,"1/26, 6:25p",Fill,#434996794,-1 Jan 30 Exp 267 Call STO
+IWM,Filled,2.30 db,2.30 db,Day,"1/15, 5:52p",Fill,#432869717,"1 Jan 16 Exp 263 Call BTC
+-1 Jan 23 Exp 269 Call STO"
+IWM,Filled,1.39 cr,1.39 cr,Day,"1/09, 4:03p",Fill,#431415175,-1 Jan 16 Exp 263 Call STO
+IWM,Filled,77.45 db,77.45 db,GTC,"1/07, 7:59p",Fill,#430984028,1 Jun 17 460d 190 Call BTO
+IWM,Filled,31.49 cr,31.49 cr,Day,"11/20, 5:54p",Fill,#422125405,-1 Apr 17 34d 210 Call STC
+IWM,Filled,0.13 db,0.13 db,Day,"11/18, 6:47p",Fill,#421557751,1 Nov 21 Exp 244 Call BTC
+IWM,Filled,1.95 cr,1.94 cr,Day,"11/13, 4:31p",Fill,#420507700,-1 Nov 21 Exp 244 Call STO

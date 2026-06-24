@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Turtle Trade Tracker v3.0 - Multi-Account</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <style>
         /* 1990s Web Aesthetic */
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -237,7 +236,7 @@
 <body>
     <div class="header">
         <h1>🐢 TURTLE TRADE TRACKER v3.0</h1>
-        <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span> &nbsp;|&nbsp; ☁️ <span id="sync-status" style="font-size: 10px;">Cloud: Not configured</span></div>
+        <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span></div>
     </div>
     
     <div class="nav">
@@ -270,6 +269,7 @@
             <!-- Account Selector -->
             <div class="account-selector">
                 <strong>Your LEAPS Positions (Click to view details):</strong>
+                <button id="archive-toggle-btn" onclick="toggleArchive()" style="float: right; font-size: 11px; padding: 2px 8px; background: #808080; color: #fff; border: 1px solid; border-color: #c0c0c0 #404040 #404040 #c0c0c0; cursor: pointer;">[ Archive ]</button>
                 <div id="account-cards" style="margin-top: 10px;">
                     <!-- Populated by JS -->
                 </div>
@@ -323,6 +323,7 @@
                                 <th>Realized P&L</th>
                                 <th>Return %</th>
                                 <th>Ann. Return</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="breakdown-tbody">
@@ -353,39 +354,6 @@
         
         <!-- DATA / IMPORT TAB -->
         <div id="tab-data" class="tab-content">
-            <div class="panel">
-                <div class="panel-header">☁️ Cloud Sync (Supabase)</div>
-                <div class="panel-body">
-                    <div style="background: #e8f4e8; border: 1px solid #4a7c4e; padding: 8px; margin-bottom: 12px; font-size: 11px;">
-                        <strong>Status:</strong> <span id="sync-status-detail">Not configured</span>
-                        &nbsp;&nbsp;
-                        <button onclick="pullFromSupabase()" style="font-size: 10px; padding: 2px 8px;">[ Pull from Cloud ]</button>
-                        <button onclick="syncToSupabase()" style="font-size: 10px; padding: 2px 8px; margin-left: 4px;">[ Push to Cloud ]</button>
-                    </div>
-                    <div class="form-row">
-                        <label>Project URL:</label>
-                        <input type="text" id="sb-url" style="width: 350px;" placeholder="https://xxxxxxxxxxxx.supabase.co" value="https://unltolnayvurlwevvhoz.supabase.co">
-                    </div>
-                    <div class="form-row">
-                        <label>Anon Key:</label>
-                        <input type="password" id="sb-key" style="width: 350px;" placeholder="eyJhbGci...">
-                        <button onclick="toggleSbKey()" style="font-size: 10px; padding: 2px 6px; margin-left: 4px;">[ Show ]</button>
-                    </div>
-                    <div style="margin-top: 10px;">
-                        <button onclick="saveSupabaseConfig()" class="primary">[ Save & Connect ]</button>
-                        <button onclick="disconnectSupabase()" style="margin-left: 8px; background: #800000; color: #fff;">[ Disconnect ]</button>
-                    </div>
-                    <div style="margin-top: 12px; background: #f0f0f0; border: 1px solid #808080; padding: 8px; font-size: 10px; font-family: monospace;">
-                        <strong>One-time Supabase setup — run this SQL in your Supabase project:</strong><br><br>
-                        CREATE TABLE portfolios (<br>
-                        &nbsp;&nbsp;id text PRIMARY KEY,<br>
-                        &nbsp;&nbsp;data jsonb NOT NULL,<br>
-                        &nbsp;&nbsp;updated_at timestamptz DEFAULT now()<br>
-                        );<br>
-                        ALTER TABLE portfolios DISABLE ROW LEVEL SECURITY;
-                    </div>
-                </div>
-            </div>
             <div class="panel">
                 <div class="panel-header">🔑 API Configuration</div>
                 <div class="panel-body">
@@ -763,7 +731,8 @@
                 <div class="form-row"><label>Cost:</label><input type="number" id="new-cost" step="0.01"></div>
                 <div class="form-row"><label>Current Value:</label><input type="number" id="new-current" step="0.01"></div>
                 <div class="form-row"><label>Current Delta:</label><input type="number" id="new-delta" step="0.01" min="0" max="1" placeholder="0.75" style="width: 80px;"><small style="color: #666; margin-left: 10px;">LEAPS delta (0.00-1.00)</small></div>
-                <div class="form-row"><label>Cash Reserve:</label><input type="number" id="new-cash-reserve" step="0.01" placeholder="e.g., 5000"><small style="color: #666; margin-left: 10px;">Cash set aside for this position</small></div>
+                <div class="form-row"><label>Contracts:</label><input type="number" id="new-contracts" value="1" min="1" step="1" style="width: 60px;"><small style="color: #666; margin-left: 10px;">Number of contracts (cost &amp; value are <strong>per contract</strong>)</small></div>
+                <div class="form-row"><label>Cash Reserve:</label><input type="number" id="new-cash-reserve" step="0.01" placeholder="e.g., 5000"><small style="color: #666; margin-left: 10px;">Cash set aside for this position (total, not per contract)</small></div>
             </div>
             <div class="modal-footer">
                 <button onclick="saveNewLEAPS()" class="primary">[ Save ]</button>
@@ -835,147 +804,21 @@
         let apiKey = 'VAD1Q74JGQ6JTG42';
         let currentIWM = null;
         let selectedAccountId = null;
-
-        // ==================== SUPABASE SYNC ====================
-
-        let sbClient = null;
-        const SB_ROW_ID = 'main';
-        const SB_DEFAULT_URL = 'https://unltolnayvurlwevvhoz.supabase.co';
-        const SB_DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVubHRvbG5heXZ1cmx3ZXZ2aG96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NTM3MjYsImV4cCI6MjA5MzAyOTcyNn0.07K60Kgv_WvLkclE0IT8rYI6yjCC50XzK_lM3hRtfTg';
-
-        function initSupabase() {
-            const url = localStorage.getItem('sbUrl') || SB_DEFAULT_URL;
-            const key = localStorage.getItem('sbKey') || SB_DEFAULT_KEY;
-            if (!url || !key || !window.supabase) return false;
-            try {
-                sbClient = window.supabase.createClient(url, key);
-                return true;
-            } catch (e) {
-                console.error('Supabase init failed:', e);
-                return false;
-            }
-        }
-
-        function setSyncStatus(status, detail) {
-            const header = document.getElementById('sync-status');
-            const detailEl = document.getElementById('sync-status-detail');
-            const messages = {
-                ok:           { h: '✓ Synced',        c: '#0f0',    d: detail || 'Data synced successfully' },
-                error:        { h: '✗ Error',          c: '#f66',    d: detail || 'Sync failed — check console' },
-                syncing:      { h: '⟳ Syncing...',    c: '#ff0',    d: 'Saving to cloud...' },
-                pulling:      { h: '⟳ Pulling...',    c: '#ff0',    d: 'Loading from cloud...' },
-                notconfigured:{ h: 'Cloud: Not configured', c: '#aaa', d: 'Enter Supabase URL + anon key below' }
-            };
-            const m = messages[status] || messages.notconfigured;
-            if (header) { header.textContent = m.h; header.style.color = m.c; }
-            if (detailEl) { detailEl.textContent = m.d; detailEl.style.color = status === 'error' ? '#cc0000' : '#000'; }
-        }
-
-        async function syncToSupabase() {
-            if (!sbClient && !initSupabase()) { setSyncStatus('notconfigured'); return; }
-            setSyncStatus('syncing');
-            try {
-                const { error } = await sbClient.from('portfolios').upsert({
-                    id: SB_ROW_ID,
-                    data: portfolio,
-                    updated_at: new Date().toISOString()
-                });
-                if (error) throw error;
-                setSyncStatus('ok', 'Saved to cloud — ' + new Date().toLocaleTimeString());
-            } catch (e) {
-                console.error('Supabase push error:', e);
-                setSyncStatus('error', e.message);
-            }
-        }
-
-        async function pullFromSupabase() {
-            if (!sbClient && !initSupabase()) { setSyncStatus('notconfigured'); return; }
-            setSyncStatus('pulling');
-            try {
-                const { data, error } = await sbClient
-                    .from('portfolios')
-                    .select('data')
-                    .eq('id', SB_ROW_ID)
-                    .single();
-
-                if (error) {
-                    if (error.code === 'PGRST116') {
-                        // Row doesn't exist yet — push current data to seed it
-                        await syncToSupabase();
-                        return;
-                    }
-                    throw error;
-                }
-
-                if (data && data.data) {
-                    portfolio = data.data;
-                    localStorage.setItem('turtlePortfolio', JSON.stringify(portfolio));
-                    updateDisplay();
-                }
-                setSyncStatus('ok', 'Pulled from cloud — ' + new Date().toLocaleTimeString());
-            } catch (e) {
-                console.error('Supabase pull error:', e);
-                setSyncStatus('error', e.message);
-            }
-        }
-
-        function saveSupabaseConfig() {
-            const url = document.getElementById('sb-url').value.trim();
-            const key = document.getElementById('sb-key').value.trim();
-            if (!url || !key) { alert('Please enter both the Project URL and Anon Key'); return; }
-            localStorage.setItem('sbUrl', url);
-            localStorage.setItem('sbKey', key);
-            sbClient = null;
-            if (initSupabase()) {
-                pullFromSupabase();
-            } else {
-                setSyncStatus('error', 'Could not initialize client — check URL/key');
-            }
-        }
-
-        function disconnectSupabase() {
-            if (!confirm('Remove Supabase credentials from this device?')) return;
-            localStorage.removeItem('sbUrl');
-            localStorage.removeItem('sbKey');
-            sbClient = null;
-            document.getElementById('sb-url').value = '';
-            document.getElementById('sb-key').value = '';
-            setSyncStatus('notconfigured');
-        }
-
-        function toggleSbKey() {
-            const el = document.getElementById('sb-key');
-            el.type = el.type === 'password' ? 'text' : 'password';
-        }
+        let showArchive = false;
 
         // ==================== DATA STORE ====================
 
         // Load data
-        async function loadData() {
+        function loadData() {
             const saved = localStorage.getItem('turtlePortfolio');
             if (saved) {
                 portfolio = JSON.parse(saved);
             }
             updateDisplay();
-
-            // Populate Supabase credential fields (localStorage overrides defaults)
-            const savedUrl = localStorage.getItem('sbUrl');
-            const savedKey = localStorage.getItem('sbKey');
-            if (savedUrl) { const el = document.getElementById('sb-url'); if (el) el.value = savedUrl; }
-            if (savedKey) { const el = document.getElementById('sb-key'); if (el) el.value = savedKey; }
-            // Show anon key placeholder so user knows it's set
-            const keyEl = document.getElementById('sb-key');
-            if (keyEl && !keyEl.value) keyEl.placeholder = '(using built-in key)';
-
-            // Pull from Supabase if configured (overwrites localStorage with cloud data)
-            if (initSupabase()) {
-                await pullFromSupabase();
-            }
         }
 
         function saveData() {
             localStorage.setItem('turtlePortfolio', JSON.stringify(portfolio));
-            syncToSupabase();
         }
         
         // ==================== DISPLAY ====================
@@ -998,7 +841,7 @@
             
             portfolio.leaps.forEach(leaps => {
                 const currentVal = getCurrentLEAPSValue(leaps.id);
-                totalLeapsCost += leaps.openPremium;
+                totalLeapsCost += leaps.openPremium * getContracts(leaps);
                 totalLeapsValue += currentVal;
                 
                 const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
@@ -1022,7 +865,7 @@
             document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
             
             // Update stats
-            document.getElementById('total-leaps-count').textContent = portfolio.leaps.length;
+            document.getElementById('total-leaps-count').textContent = portfolio.leaps.filter(l => l.status !== 'closed').length;
             document.getElementById('total-leaps-cost').textContent = formatMoney(totalLeapsCost);
             document.getElementById('total-leaps-value').textContent = formatMoney(totalLeapsValue);
             document.getElementById('total-leaps-unrealized').textContent = formatMoney(leapsUnrealized);
@@ -1032,14 +875,16 @@
             // Update breakdown table
             const tbody = document.getElementById('breakdown-tbody');
             if (portfolio.leaps.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8"><em>No positions loaded</em></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9"><em>No positions loaded</em></td></tr>';
                 return;
             }
             
             tbody.innerHTML = portfolio.leaps.map(leaps => {
+                const n = getContracts(leaps);
                 const currentVal = getCurrentLEAPSValue(leaps.id);
-                const leapsPnl = currentVal - leaps.openPremium;
-                
+                const totalCost = leaps.openPremium * n;
+                const leapsPnl = currentVal - totalCost;
+
                 const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
                 let callsRealized = 0;
                 calls.forEach(c => {
@@ -1047,70 +892,91 @@
                         callsRealized += (c.openPremium - c.closePremium);
                     }
                 });
-                
+
                 const netRealized = leapsPnl + callsRealized;
                 const cashReserve = leaps.cashReserve || 0;
-                const totalAllocation = leaps.openPremium + cashReserve;
+                const totalAllocation = totalCost + cashReserve;
                 const returnPct = totalAllocation > 0 ? (netRealized / totalAllocation) * 100 : 0;
-                
+
                 // Annualized
                 const openDate = new Date(leaps.openDate);
                 const today = new Date();
                 const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
                 const annReturn = (returnPct / daysHeld) * 365;
-                
+                const contractsLabel = n > 1 ? ` (${n}x)` : '';
+
                 return `
                     <tr onclick="selectAccount('${leaps.id}')" style="cursor: pointer;">
                         <td><strong>${leaps.accountName || 'Account'}</strong></td>
-                        <td>${leaps.symbol} $${leaps.strike} ${leaps.expiration.slice(0,7)}</td>
-                        <td>${formatMoney(leaps.openPremium)}</td>
+                        <td>${leaps.symbol} $${leaps.strike} ${leaps.expiration.slice(0,7)}${contractsLabel}</td>
+                        <td>${formatMoney(totalCost)}</td>
                         <td>${formatMoney(cashReserve)}</td>
                         <td>${formatMoney(totalAllocation)}</td>
                         <td class="${netRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(netRealized)}</td>
                         <td class="${returnPct >= 0 ? 'pnl-positive' : 'pnl-negative'}">${returnPct.toFixed(2)}%</td>
                         <td class="${annReturn >= 0 ? 'pnl-positive' : 'pnl-negative'}">${annReturn.toFixed(1)}%</td>
+                        <td style="font-weight: bold; color: ${leaps.status === 'closed' ? '#888' : '#00cc00'};">${leaps.status === 'closed' ? 'Closed' : 'Active'}</td>
                     </tr>
                 `;
             }).join('');
         }
         
+        function toggleArchive() {
+            showArchive = !showArchive;
+            const btn = document.getElementById('archive-toggle-btn');
+            if (btn) {
+                btn.style.background = showArchive ? '#004080' : '#808080';
+                btn.textContent = showArchive ? '[ Hide Archive ]' : '[ Archive ]';
+            }
+            updateAccountCards();
+        }
+
+        function buildCard(leaps) {
+            const currentVal = getCurrentLEAPSValue(leaps.id);
+            const leapsPnl = currentVal - leaps.openPremium * getContracts(leaps);
+            const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
+            let callsRealized = 0;
+            calls.forEach(c => {
+                if (c.status === 'closed') callsRealized += (c.openPremium - c.closePremium);
+            });
+            const total = leapsPnl + callsRealized;
+            const isActive = selectedAccountId === leaps.id ? 'active' : '';
+            const statusInfo = getLEAPSStatus(leaps);
+            const statusEmoji = statusInfo.status === 'closed' ? '⬛' : (statusInfo.status === 'green' ? '🟢' : (statusInfo.status === 'orange' ? '🟠' : '🔴'));
+            const statusTitle = statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : 'LEAPS Healthy';
+            return `
+                <div class="account-card ${isActive}" onclick="selectAccount('${leaps.id}')">
+                    <div style="font-weight: bold;">
+                        ${leaps.accountName || 'Account'}
+                        <span title="${statusTitle}" style="cursor: help;">${statusEmoji}</span>
+                        <button onclick="event.stopPropagation(); editLEAPS('${leaps.id}')" style="float: right; font-size: 10px; padding: 2px 6px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Edit LEAPS">✏️</button>
+                    </div>
+                    <div style="font-size: 11px; color: #666;">${leaps.symbol} $${leaps.strike}${getContracts(leaps) > 1 ? ` ×${getContracts(leaps)}` : ''} | ${leaps.status === 'closed' ? `CLOSED ${leaps.closeDate}` : `DTE ${statusInfo.dte}d | Δ ${(statusInfo.delta * 100).toFixed(0)}%`}</div>
+                    <div style="font-size: 16px; margin-top: 5px;" class="${total >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(total)}</div>
+                </div>
+            `;
+        }
+
         function updateAccountCards() {
             const container = document.getElementById('account-cards');
             if (portfolio.leaps.length === 0) {
                 container.innerHTML = '<em>No accounts loaded. Import data or add manually.</em>';
                 return;
             }
-            
-            container.innerHTML = portfolio.leaps.map(leaps => {
-                const currentVal = getCurrentLEAPSValue(leaps.id);
-                const leapsPnl = currentVal - leaps.openPremium;
-                
-                const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
-                let callsRealized = 0;
-                calls.forEach(c => {
-                    if (c.status === 'closed') callsRealized += (c.openPremium - c.closePremium);
-                });
-                
-                const total = leapsPnl + callsRealized;
-                const isActive = selectedAccountId === leaps.id ? 'active' : '';
-                
-                // Get status for indicator
-                const statusInfo = getLEAPSStatus(leaps);
-                const statusEmoji = statusInfo.status === 'green' ? '🟢' : (statusInfo.status === 'orange' ? '🟠' : '🔴');
-                const statusTitle = statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : 'LEAPS Healthy';
-                
-                return `
-                    <div class="account-card ${isActive}" onclick="selectAccount('${leaps.id}')">
-                        <div style="font-weight: bold;">
-                            ${leaps.accountName || 'Account'} 
-                            <span title="${statusTitle}" style="cursor: help;">${statusEmoji}</span>
-                            <button onclick="event.stopPropagation(); editLEAPS('${leaps.id}')" style="float: right; font-size: 10px; padding: 2px 6px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Edit LEAPS">✏️</button>
-                        </div>
-                        <div style="font-size: 11px; color: #666;">${leaps.symbol} $${leaps.strike} | DTE ${statusInfo.dte}d | Δ ${(statusInfo.delta * 100).toFixed(0)}%</div>
-                        <div style="font-size: 16px; margin-top: 5px;" class="${total >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(total)}</div>
-                    </div>
-                `;
-            }).join('');
+
+            const openLeaps = portfolio.leaps.filter(l => l.status !== 'closed');
+            const closedLeaps = portfolio.leaps.filter(l => l.status === 'closed');
+
+            let html = openLeaps.map(buildCard).join('');
+
+            if (showArchive && closedLeaps.length > 0) {
+                html += `<div style="width: 100%; margin: 8px 0 4px; font-size: 11px; color: #888; border-top: 1px solid #999; padding-top: 6px;">— Archived (Closed) —</div>`;
+                html += closedLeaps.map(l => `<div style="opacity: 0.55;">${buildCard(l)}</div>`).join('');
+            } else if (!showArchive && closedLeaps.length > 0) {
+                html += `<div style="font-size: 11px; color: #888; margin-top: 6px;">${closedLeaps.length} closed position${closedLeaps.length > 1 ? 's' : ''} hidden — click [ Archive ] to view</div>`;
+            }
+
+            container.innerHTML = html;
         }
         
         function updatePositionSelector() {
@@ -1137,10 +1003,12 @@
             const leaps = portfolio.leaps.find(l => l.id === id);
             if (!leaps) return;
             
+            const n = getContracts(leaps);
+            const totalCost = leaps.openPremium * n;
             const currentVal = getCurrentLEAPSValue(leaps.id);
-            const leapsPnl = currentVal - leaps.openPremium;
+            const leapsPnl = currentVal - totalCost;
             const calls = portfolio.calls.filter(c => c.parentLeapsId === id).sort((a,b) => new Date(a.openDate) - new Date(b.openDate));
-            
+
             // Calculate totals
             let realizedCallsPnl = 0;
             let openPremium = 0;
@@ -1156,10 +1024,10 @@
             // MAX POTENTIAL = if all open calls expire worthless
             const maxPotentialCalls = realizedCallsPnl + openPremium;
             const maxPotentialNet = leapsPnl + maxPotentialCalls;
-            
+
             // Calculate returns
             const cashReserve = leaps.cashReserve || 0;
-            const totalAllocation = leaps.openPremium + cashReserve;
+            const totalAllocation = totalCost + cashReserve;
             const realizedReturnPct = totalAllocation > 0 ? (netRealizedPnl / totalAllocation) * 100 : 0;
             const potentialReturnPct = totalAllocation > 0 ? (maxPotentialNet / totalAllocation) * 100 : 0;
             
@@ -1172,25 +1040,30 @@
             
             // Get LEAPS health status
             const statusInfo = getLEAPSStatus(leaps);
-            const statusColor = statusInfo.status === 'green' ? '#90EE90' : (statusInfo.status === 'orange' ? '#FFB347' : '#FF6B6B');
-            const statusBorder = statusInfo.status === 'green' ? '#008000' : (statusInfo.status === 'orange' ? '#FF8C00' : '#CC0000');
+            const statusColor = statusInfo.status === 'closed' ? '#d0d0d0' : (statusInfo.status === 'green' ? '#90EE90' : (statusInfo.status === 'orange' ? '#FFB347' : '#FF6B6B'));
+            const statusBorder = statusInfo.status === 'closed' ? '#808080' : (statusInfo.status === 'green' ? '#008000' : (statusInfo.status === 'orange' ? '#FF8C00' : '#CC0000'));
             
             let html = `
                 <div class="panel">
                     <div class="panel-header">📈 ${leaps.accountName || 'Account'} - ${leaps.symbol} $${leaps.strike}</div>
                     <div class="panel-body">
+                        ${leaps.status === 'closed' ? `
+                        <div style="background: #333; border: 2px solid #888; padding: 10px; margin-bottom: 10px; font-size: 12px; color: #ccc; text-align: center;">
+                            ⬛ <strong style="color: #fff;">POSITION CLOSED</strong> — Sold ${leaps.closeDate} for ${formatMoney(leaps.closePremium)}
+                            &nbsp;&nbsp;<button onclick="reopenLEAPS('${leaps.id}')" style="font-size: 10px; padding: 2px 8px; background: #555; color: #ccc; border-color: #888 #444 #444 #888;">[ Reopen ]</button>
+                        </div>` : ''}
                         <div style="background: #ffffcc; border: 2px solid #ff8040; padding: 8px; margin-bottom: 10px; font-size: 11px;">
-                            <strong>📊 P&L Display:</strong> 
-                            <span style="color: #000080;">Realized (locked in)</span> vs 
+                            <strong>📊 P&L Display:</strong>
+                            <span style="color: #000080;">Realized (locked in)</span> vs
                             <span style="color: #808080;">Maximum Potential (if open calls expire worthless)</span>
                         </div>
                         <div class="stats-grid">
                             <div class="stat-box">
-                                <div class="stat-label">LEAPS Cost</div>
-                                <div class="stat-value">${formatMoney(leaps.openPremium)}</div>
+                                <div class="stat-label">LEAPS Cost${n > 1 ? ` (${n}× ${formatMoney(leaps.openPremium)})` : ''}</div>
+                                <div class="stat-value">${formatMoney(totalCost)}</div>
                             </div>
                             <div class="stat-box">
-                                <div class="stat-label">Current Value</div>
+                                <div class="stat-label">Current Value${n > 1 ? ` (${n}× ${formatMoney(currentVal / n)})` : ''}</div>
                                 <div class="stat-value">${formatMoney(currentVal)}</div>
                             </div>
                             <div class="stat-box">
@@ -1202,10 +1075,10 @@
                                 <div class="stat-value">${formatMoney(totalAllocation)}</div>
                             </div>
                             <div class="stat-box" style="background: ${statusColor}; border: 2px solid ${statusBorder};">
-                                <div class="stat-label">⚠️ LEAPS Status</div>
-                                <div class="stat-value" style="font-size: 14px;">DTE: ${statusInfo.dte}d | Δ: ${(statusInfo.delta * 100).toFixed(0)}%</div>
-                                <div style="font-size: 9px; margin-top: 2px; ${statusInfo.warnings.length ? 'color: #CC0000; font-weight: bold;' : 'color: #008000;'}">
-                                    ${statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : '✓ Healthy'}
+                                <div class="stat-label">${leaps.status === 'closed' ? '⬛ LEAPS Status' : '⚠️ LEAPS Status'}</div>
+                                <div class="stat-value" style="font-size: 14px;">${leaps.status === 'closed' ? 'CLOSED' : `DTE: ${statusInfo.dte}d | Δ: ${(statusInfo.delta * 100).toFixed(0)}%`}</div>
+                                <div style="font-size: 9px; margin-top: 2px; ${leaps.status === 'closed' ? 'color: #666;' : (statusInfo.warnings.length ? 'color: #CC0000; font-weight: bold;' : 'color: #008000;')}">
+                                    ${leaps.status === 'closed' ? `Sold ${leaps.closeDate}` : (statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : '✓ Healthy')}
                                 </div>
                             </div>
                             <div class="stat-box">
@@ -1231,9 +1104,15 @@
                             Position opened: ${leaps.openDate} (${daysHeld} days held)
                         </div>
                         <hr>
+                        ${leaps.status !== 'closed' ? `
                         <button onclick="showUpdateLEAPSModal('${leaps.id}')" class="primary">[ Update LEAPS Value ]</button>
                         <button onclick="showUpdateCashReserveModal('${leaps.id}')" style="margin-left: 10px;">[ Update Cash Reserve ]</button>
                         <button onclick="addShortCall('${leaps.id}')" style="margin-left: 10px;">[ Add Short Call ]</button>
+                        <button onclick="closeLEAPS('${leaps.id}')" style="margin-left: 10px; background: #800000; color: #fff; border-color: #ff4444 #440000 #440000 #ff4444;">[ Close LEAPS ]</button>
+                        ` : `
+                        <button onclick="showUpdateLEAPSModal('${leaps.id}')" style="opacity: 0.6;">[ Update Value ]</button>
+                        <button onclick="reopenLEAPS('${leaps.id}')" style="margin-left: 10px; background: #004000; color: #fff;">[ Reopen LEAPS ]</button>
+                        `}
                         <hr>
                         <h4>Short Call History</h4>
                         <table>
@@ -1299,6 +1178,7 @@
                     <div style="font-size: 10px; color: #666; margin-top: 5px;">
                         <span style="color: #0f0;">■</span> Current Value
                         <span style="color: #666; margin-left: 10px;">--</span> Cost Basis
+                        <button onclick="showHistoryModal('${leaps.id}')" style="float: right; font-size: 10px; padding: 1px 6px; background: #808080; color: #fff; border: 1px solid; border-color: #c0c0c0 #404040 #404040 #c0c0c0; cursor: pointer; margin-left: 8px;">[ Edit History ]</button>
                         <span id="chart-data-points" style="float: right;">0 data points</span>
                     </div>
                 </div>
@@ -1309,11 +1189,11 @@
             updateAccountCards();
             // Draw LEAPS value chart - pass ID directly
             (function(leapsId, costBasis) {
-                setTimeout(() => { 
+                setTimeout(() => {
                     console.log('Drawing chart for ID:', leapsId);
-                    drawLEAPSValueChart(leapsId, costBasis); 
+                    drawLEAPSValueChart(leapsId, costBasis);
                 }, 10);
-            })(leaps.id, leaps.openPremium);
+            })(leaps.id, totalCost);
         }
         
         // ==================== UTILITIES ====================
@@ -1321,16 +1201,22 @@
         function getCurrentLEAPSValue(leapsId) {
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return 0;
-            
+            const n = getContracts(leaps);
+
+            if (leaps.status === 'closed') return (leaps.closePremium || 0) * n;
+
             const history = portfolio.history[leapsId] || [];
             if (history.length > 0) {
                 const sorted = [...history].sort((a,b) => new Date(b.date) - new Date(a.date));
-                return sorted[0].value;
+                return sorted[0].value * n;
             }
-            return leaps.currentValue || leaps.openPremium;
+            return (leaps.currentValue || leaps.openPremium) * n;
         }
         
         function getLEAPSStatus(leaps) {
+            if (leaps.status === 'closed') {
+                return { status: 'closed', dte: 0, delta: leaps.delta || 0, warnings: ['Closed ' + (leaps.closeDate || '')] };
+            }
             const today = new Date();
             const expiration = new Date(leaps.expiration);
             const dte = Math.floor((expiration - today) / (1000 * 60 * 60 * 24));
@@ -1379,6 +1265,10 @@
             if (!delta || isNaN(delta)) return 0.80;
             if (delta > 1) return delta / 100;
             return delta;
+        }
+
+        function getContracts(leaps) {
+            return leaps.contracts || 1;
         }
         
         // ==================== IMPORT / EXPORT ====================
@@ -1655,7 +1545,7 @@
                         <div class="modal-body">
                             <div class="form-row"><label>Date:</label><input type="date" id="upd-date" value="${today}"></div>
                             <div class="form-row"><label>IWM Price:</label><input type="number" id="upd-iwm" step="0.01" placeholder="224.00"></div>
-                            <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}"></div>
+                            <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}"><small style="color: #666; margin-left: 8px;">${getContracts(leaps) > 1 ? `Per contract (×${getContracts(leaps)} = total)` : 'Per contract'}</small></div>
                             <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="upd-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"><small style="color: #666; margin-left: 10px;">Current: ${normalizeDelta(leaps.delta).toFixed(2)}</small></div>
                             <div class="form-row"><label>Notes:</label><input type="text" id="upd-notes" placeholder="Weekly update"></div>
                         </div>
@@ -1704,7 +1594,71 @@
             
             document.getElementById('update-leaps-modal').remove();
         }
-        
+
+        function showHistoryModal(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            const history = portfolio.history[leapsId] || [];
+            const nc = getContracts(leaps);
+            const sorted = [...history].map((h, i) => ({ ...h, _origIdx: i }))
+                                       .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            const rows = sorted.length === 0
+                ? '<tr><td colspan="5" style="text-align:center; color:#666;"><em>No history entries</em></td></tr>'
+                : sorted.map(h => `
+                    <tr>
+                        <td>${h.date}</td>
+                        <td>${h.iwmPrice ? '$' + parseFloat(h.iwmPrice).toFixed(2) : '—'}</td>
+                        <td>$${parseFloat(h.value).toFixed(2)}${nc > 1 ? ` <span style="color:#888">(×${nc} = $${(h.value * nc).toFixed(2)})</span>` : ''}</td>
+                        <td style="color:#666; font-size:10px;">${h.notes || ''}</td>
+                        <td><button onclick="deleteHistoryEntry('${leapsId}', ${h._origIdx})" style="font-size:10px; padding:1px 5px; background:#8b0000; color:#fff; border:1px solid #c00; cursor:pointer;">[ Delete ]</button></td>
+                    </tr>`).join('');
+
+            const modalHtml = `
+                <div class="modal-overlay" id="history-modal" style="display:block;">
+                    <div class="modal" style="max-width:640px;">
+                        <div class="modal-header">LEAPS Value History — ${leaps.accountName} IWM $${leaps.strike}</div>
+                        <div class="modal-body">
+                            <p style="font-size:11px; color:#666; margin-bottom:8px;">Delete erroneous entries. The most recent entry determines current value.</p>
+                            <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                                <thead>
+                                    <tr style="background:#ddd;">
+                                        <th style="text-align:left; padding:3px 6px;">Date</th>
+                                        <th style="text-align:left; padding:3px 6px;">IWM</th>
+                                        <th style="text-align:left; padding:3px 6px;">Value</th>
+                                        <th style="text-align:left; padding:3px 6px;">Notes</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>${rows}</tbody>
+                            </table>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="document.getElementById('history-modal').remove()">[ Close ]</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.getElementById('history-modal')?.remove();
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        function deleteHistoryEntry(leapsId, origIdx) {
+            if (!confirm('Delete this history entry?')) return;
+            const history = portfolio.history[leapsId];
+            if (!history || origIdx < 0 || origIdx >= history.length) return;
+            history.splice(origIdx, 1);
+            // Sync currentValue to most recent remaining entry
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (leaps && history.length > 0) {
+                const sorted = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+                leaps.currentValue = sorted[0].value;
+            }
+            saveData();
+            updateDisplay();
+            document.getElementById('history-modal').remove();
+            showHistoryModal(leapsId);
+        }
+
         function showUpdateCashReserveModal(leapsId) {
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return;
@@ -1983,8 +1937,9 @@
                         <div class="form-row"><label>Strike:</label><input type="number" id="edit-strike" step="0.01" value="${leaps.strike}"></div>
                         <div class="form-row"><label>Expiration:</label><input type="date" id="edit-expiration" value="${leaps.expiration}"></div>
                         <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="edit-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"></div>
-                        <div class="form-row"><label>Original Cost:</label><input type="number" id="edit-cost" step="0.01" value="${leaps.openPremium}"></div>
-                        <div class="form-row"><label>Current Value:</label><input type="number" id="edit-current" step="0.01" value="${leaps.currentValue}"></div>
+                        <div class="form-row"><label>Contracts:</label><input type="number" id="edit-contracts" value="${getContracts(leaps)}" min="1" step="1" style="width: 60px;"><small style="color: #666; margin-left: 10px;">Cost &amp; value are per contract</small></div>
+                        <div class="form-row"><label>Original Cost:</label><input type="number" id="edit-cost" step="0.01" value="${leaps.openPremium}"><small style="color: #666; margin-left: 10px;">Per contract</small></div>
+                        <div class="form-row"><label>Current Value:</label><input type="number" id="edit-current" step="0.01" value="${leaps.currentValue}"><small style="color: #666; margin-left: 10px;">Per contract</small></div>
                     </div>
                     <div class="modal-footer">
                         <button onclick="saveEditLEAPS('${leapsId}')" class="primary">[ Save Changes ]</button>
@@ -2019,6 +1974,7 @@
             leaps.strike = strike;
             leaps.expiration = expiration;
             leaps.delta = delta;
+            leaps.contracts = parseInt(document.getElementById('edit-contracts').value) || 1;
             leaps.openPremium = cost;
             leaps.currentValue = current;
             
@@ -2029,6 +1985,107 @@
             console.log(`LEAPS ${leapsId} updated`);
         }
         
+        // ==================== CLOSE LEAPS ====================
+
+        function closeLEAPS(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+
+            const today = new Date().toISOString().split('T')[0];
+            const n = getContracts(leaps);
+            const currentValPerContract = getCurrentLEAPSValue(leapsId) / n;
+            const totalCostDisplay = leaps.openPremium * n;
+
+            const modalHtml = `
+                <div class="modal-overlay" id="close-leaps-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header" style="background: linear-gradient(to right, #800000, #cc0000);">Close LEAPS Position — ${leaps.accountName}</div>
+                        <div class="modal-body">
+                            <div style="background: #ffeeee; border: 1px solid #cc0000; padding: 8px; margin-bottom: 12px; font-size: 11px;">
+                                <strong>⚠️ Mark this LEAPS as sold.</strong><br>
+                                The position stays in history but shows as closed and uses the sale price for P&L.
+                            </div>
+                            <div class="form-row"><label>Close Date:</label><input type="date" id="close-leaps-date" value="${today}"></div>
+                            <div class="form-row">
+                                <label>Sale Price ($):</label>
+                                <input type="number" id="close-leaps-price" step="0.01" value="${currentValPerContract.toFixed(2)}" style="width: 150px;">
+                                <small style="color: #666; margin-left: 8px;">Per contract${n > 1 ? ` (×${n} contracts)` : ''}</small>
+                            </div>
+                            <div class="form-row"><label>Notes:</label><input type="text" id="close-leaps-notes" placeholder="e.g., Sold to close, rolling to new position"></div>
+                            <div style="margin-top: 10px; padding: 8px; background: #f0f0f0; border: 1px solid #c0c0c0; font-size: 11px;">
+                                Cost Basis: <strong>${formatMoney(totalCostDisplay)}</strong>${n > 1 ? ` (${n}× ${formatMoney(leaps.openPremium)})` : ''} &nbsp;→&nbsp;
+                                Estimated P&L: <span id="close-leaps-pnl-preview" style="font-weight: bold; color: ${currentValPerContract >= leaps.openPremium ? '#008000' : '#cc0000'};">
+                                    ${formatMoney((currentValPerContract - leaps.openPremium) * n)}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveCloseLEAPS('${leapsId}')" class="primary" style="background: #800000; color: #fff; border-color: #ff4444 #440000 #440000 #ff4444;">[ Confirm Close ]</button>
+                            <button onclick="document.getElementById('close-leaps-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            // Live P&L preview as user types sale price (per-contract input → multiply by n)
+            const priceInput = document.getElementById('close-leaps-price');
+            priceInput.addEventListener('input', () => {
+                const val = parseFloat(priceInput.value) || 0;
+                const pnl = (val - leaps.openPremium) * n;
+                const el = document.getElementById('close-leaps-pnl-preview');
+                el.textContent = formatMoney(pnl);
+                el.style.color = pnl >= 0 ? '#008000' : '#cc0000';
+            });
+        }
+
+        function saveCloseLEAPS(leapsId) {
+            const closeDate = document.getElementById('close-leaps-date').value;
+            const closePremium = parseFloat(document.getElementById('close-leaps-price').value);
+            const notes = document.getElementById('close-leaps-notes').value;
+
+            if (!closeDate || isNaN(closePremium) || closePremium < 0) {
+                alert('Please enter a valid close date and sale price');
+                return;
+            }
+
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+
+            leaps.status = 'closed';
+            leaps.closeDate = closeDate;
+            leaps.closePremium = closePremium;
+
+            if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
+            portfolio.history[leapsId].push({
+                date: closeDate,
+                iwmPrice: 0,
+                value: closePremium,
+                notes: notes || 'LEAPS sold / closed'
+            });
+
+            saveData();
+            updateDisplay();
+            document.getElementById('close-leaps-modal').remove();
+
+            const nc = getContracts(leaps);
+            const pnl = (closePremium - leaps.openPremium) * nc;
+            const perLabel = nc > 1 ? ` (${nc}× ${formatMoney(closePremium)})` : '';
+            alert(`LEAPS Position Closed!\n\nSale Price: ${formatMoney(closePremium * nc)}${perLabel}\nCost Basis:  ${formatMoney(leaps.openPremium * nc)}\nLEAPS P&L:  ${pnl >= 0 ? '+' : ''}${formatMoney(pnl)}`);
+        }
+
+        function reopenLEAPS(leapsId) {
+            if (!confirm('Reopen this LEAPS position? (removes the closed status)')) return;
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            leaps.status = 'open';
+            delete leaps.closeDate;
+            delete leaps.closePremium;
+            saveData();
+            updateDisplay();
+        }
+
         function saveNewLEAPS() {
             const leapsId = 'LEAPS_' + Date.now();
             const newLeaps = {
@@ -2043,6 +2100,7 @@
                 openPremium: parseFloat(document.getElementById('new-cost').value),
                 currentValue: parseFloat(document.getElementById('new-current').value) || parseFloat(document.getElementById('new-cost').value),
                 delta: normalizeDelta(parseFloat(document.getElementById('new-delta').value)) || 0.80,
+                contracts: parseInt(document.getElementById('new-contracts').value) || 1,
                 cashReserve: parseFloat(document.getElementById('new-cash-reserve').value) || 0,
                 quantity: 1,
                 status: 'open'

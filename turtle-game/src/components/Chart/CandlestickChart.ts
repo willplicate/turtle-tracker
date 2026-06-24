@@ -1,5 +1,5 @@
 // Candlestick Chart Component
-// Displays price history using canvas rendering
+// Displays price history using canvas rendering with VIX overlay
 
 import type { Candle } from '../../lib/market/priceGenerator';
 
@@ -8,9 +8,10 @@ export class CandlestickChart {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private candles: Candle[] = [];
+  private vixCandles: Candle[] = [];
   private width: number = 0;
   private height: number = 0;
-  private padding = { top: 20, right: 50, bottom: 30, left: 10 };
+  private padding = { top: 20, right: 60, bottom: 30, left: 10 };
   
   constructor(container: HTMLElement) {
     this.container = container;
@@ -49,8 +50,11 @@ export class CandlestickChart {
     this.render();
   }
   
-  updateCandles(candles: Candle[]): void {
+  updateCandles(candles: Candle[], vixCandles?: Candle[]): void {
     this.candles = candles;
+    if (vixCandles) {
+      this.vixCandles = vixCandles;
+    }
     this.render();
   }
   
@@ -62,7 +66,7 @@ export class CandlestickChart {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Calculate price range
+    // Calculate price range for SPY
     let minPrice = Infinity;
     let maxPrice = -Infinity;
     
@@ -76,12 +80,31 @@ export class CandlestickChart {
     minPrice -= priceRange * 0.05;
     maxPrice += priceRange * 0.05;
     
+    // Calculate VIX range
+    let minVIX = Infinity;
+    let maxVIX = -Infinity;
+    
+    for (const candle of this.vixCandles) {
+      minVIX = Math.min(minVIX, candle.low);
+      maxVIX = Math.max(maxVIX, candle.high);
+    }
+    
+    // Add padding to VIX range
+    const vixRange = maxVIX - minVIX;
+    minVIX -= vixRange * 0.1;
+    maxVIX += vixRange * 0.1;
+    
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
-    // Helper functions
+    // Helper functions for SPY (left axis)
     const priceToY = (price: number): number => {
       return padding.top + chartHeight - ((price - minPrice) / (maxPrice - minPrice)) * chartHeight;
+    };
+    
+    // Helper function for VIX (right axis)
+    const vixToY = (vix: number): number => {
+      return padding.top + chartHeight - ((vix - minVIX) / (maxVIX - minVIX)) * chartHeight;
     };
     
     const indexToX = (index: number): number => {
@@ -109,13 +132,61 @@ export class CandlestickChart {
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
       
-      // Price label
-      ctx.fillText(price.toFixed(2), width - 5, y + 3);
+      // SPY Price label (left side)
+      ctx.fillText(price.toFixed(2), width - padding.right - 5, y + 3);
     }
     
     ctx.setLineDash([]);
     
-    // Draw candles
+    // Draw VIX line if we have VIX data
+    if (this.vixCandles.length > 0) {
+      ctx.strokeStyle = '#A855F7'; // Purple for VIX
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      for (let i = 0; i < this.vixCandles.length; i++) {
+        const vixCandle = this.vixCandles[i];
+        const x = indexToX(i);
+        const y = vixToY(vixCandle.close);
+        
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      
+      ctx.stroke();
+      
+      // Draw VIX dots at each data point
+      ctx.fillStyle = '#A855F7';
+      for (let i = 0; i < this.vixCandles.length; i++) {
+        const vixCandle = this.vixCandles[i];
+        const x = indexToX(i);
+        const y = vixToY(vixCandle.close);
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Draw VIX axis labels (right side)
+      ctx.fillStyle = '#A855F7';
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 10px sans-serif';
+      
+      const vixStep = (maxVIX - minVIX) / 5;
+      for (let i = 0; i <= 5; i++) {
+        const vix = minVIX + vixStep * i;
+        const y = vixToY(vix);
+        ctx.fillText(vix.toFixed(1), width - padding.right + 5, y + 3);
+      }
+      
+      // VIX label
+      ctx.fillText('VIX →', width - padding.right + 5, padding.top - 5);
+    }
+    
+    // Draw SPY candles
     const candleWidth = (chartWidth / this.candles.length) * 0.7;
 
     for (let i = 0; i < this.candles.length; i++) {
@@ -179,9 +250,28 @@ export class CandlestickChart {
       // Current price label
       ctx.fillStyle = '#3B82F6';
       ctx.font = 'bold 11px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(lastCandle.close.toFixed(2), width - padding.right + 5, currentPriceY + 3);
+      ctx.textAlign = 'right';
+      ctx.fillText(lastCandle.close.toFixed(2), width - padding.right - 5, currentPriceY - 8);
     }
+    
+    // Draw legend
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    
+    // SPY legend
+    ctx.fillStyle = '#22C55E';
+    ctx.fillRect(padding.left, 5, 12, 12);
+    ctx.fillStyle = '#9CA3AF';
+    ctx.fillText('SPY', padding.left + 16, 15);
+    
+    // VIX legend
+    ctx.fillStyle = '#A855F7';
+    ctx.fillRect(padding.left + 50, 10, 20, 3);
+    ctx.beginPath();
+    ctx.arc(padding.left + 60, 11.5, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#9CA3AF';
+    ctx.fillText('VIX', padding.left + 74, 15);
   }
   
   destroy(): void {

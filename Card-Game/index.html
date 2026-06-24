@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Market Street</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background: #8BBE6A;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── Pixel utilities ── */
+    .pixel-border {
+      border: 4px solid #8B4513;
+      box-shadow: 4px 4px 0 #5C2D0A;
+    }
+    .pixel-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      padding: 10px 16px;
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 4px 4px 0 #5C2D0A;
+      cursor: pointer;
+      color: #3D1A00;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .1s, box-shadow .1s;
+    }
+    .pixel-btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #5C2D0A; }
+    .pixel-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .pixel-btn.primary { background: #FFD700; }
+    .pixel-btn.green   { background: #228B22; color: white; border-color: #155215; box-shadow: 4px 4px 0 #0D350D; }
+    .hidden { display: none !important; }
+
+    /* ══════════════════════════════════════
+       SETUP SCREEN
+    ══════════════════════════════════════ */
+    #setup-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 16px;
+      padding: 20px;
+    }
+    .game-title {
+      font-size: clamp(16px, 3vw, 26px);
+      color: #8B4513;
+      text-shadow: 3px 3px 0 #5C2D0A;
+      text-align: center;
+    }
+    .game-subtitle {
+      font-size: 8px;
+      color: #5C2D0A;
+      text-align: center;
+      margin-top: -8px;
+    }
+    .setup-panel {
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 6px 6px 0 #5C2D0A;
+      padding: 24px;
+      width: min(560px, 95vw);
+    }
+    .setup-section-title {
+      font-size: 8px;
+      color: #8B4513;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .mode-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .mode-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      padding: 14px 18px;
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 4px 4px 0 #5C2D0A;
+      cursor: pointer;
+      color: #3D1A00;
+      text-align: center;
+      min-width: 150px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mode-btn.selected { background: #FFD700; transform: translate(2px,2px); box-shadow: 2px 2px 0 #5C2D0A; }
+    .mode-btn .mode-icon { font-size: 30px; display: block; margin-bottom: 10px; }
+    .mode-hint { font-size: 6px; color: #666; display: block; margin-top: 6px; }
+    .setup-divider { border: none; border-top: 3px solid #8B4513; margin: 18px 0; }
+    .name-inputs { display: flex; flex-direction: column; gap: 12px; }
+    .name-input-row { display: flex; align-items: center; gap: 10px; }
+    .player-icon-setup { font-size: 22px; }
+    .pixel-input {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px;
+      padding: 9px 11px;
+      background: white;
+      border: 4px solid #8B4513;
+      box-shadow: inset 2px 2px 0 #ccc;
+      color: #3D1A00;
+      flex: 1;
+      max-width: 200px;
+    }
+    .pixel-input:disabled { opacity: .4; }
+
+    /* ══════════════════════════════════════
+       GAME SCREEN
+    ══════════════════════════════════════ */
+    #game-screen {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* ── Weather Zone ── */
+    #weather-zone {
+      position: relative;
+      height: 180px;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 1.2s;
+    }
+    #weather-zone.sunny   { background: linear-gradient(180deg,#87CEEB 0%,#FFF5A0 100%); }
+    #weather-zone.cloudy  { background: linear-gradient(180deg,#9BAFC8 0%,#C8C8C8 100%); }
+    #weather-zone.storm   { background: linear-gradient(180deg,#1E2D4A 0%,#3A4A60 100%); }
+    #weather-zone.rainbow { background: linear-gradient(180deg,#87CEEB 0%,#D0F0FF 100%); }
+
+    #weather-particles {
+      position: absolute; inset: 0;
+      overflow: hidden; pointer-events: none;
+    }
+    #lightning-overlay {
+      position: absolute; inset: 0;
+      background: white; opacity: 0; pointer-events: none;
+      animation: lightning 5s infinite;
+    }
+    @keyframes lightning {
+      0%,88%,100% { opacity:0; }
+      90%,93% { opacity:.55; }
+    }
+    .weather-icon { font-size: 36px; position: relative; z-index: 2; }
+    .weather-label {
+      font-size: clamp(13px,2vw,20px);
+      color: white;
+      text-shadow: 3px 3px 0 rgba(0,0,0,.4);
+      position: relative; z-index: 2;
+    }
+    .round-bar-wrap {
+      width: min(440px,80vw); height: 16px;
+      background: rgba(0,0,0,.3); border: 2px solid rgba(0,0,0,.4);
+      position: relative; z-index: 2; overflow: hidden;
+    }
+    .round-bar-fill { height: 100%; background: #FFD700; transition: width .6s; }
+    .round-label { font-size: 7px; color: white; text-shadow: 1px 1px 0 rgba(0,0,0,.5); position:relative; z-index:2; }
+
+    /* sun rays */
+    .sun-ball {
+      position: absolute;
+      width: 70px; height: 70px;
+      background: #FFD700;
+      border-radius: 50%;
+      top: 14px; right: 90px;
+      box-shadow: 0 0 28px #FFE040;
+      animation: sun-spin 10s linear infinite;
+      z-index: 1;
+    }
+    .sun-ray {
+      position: absolute;
+      width: 6px; height: 36px;
+      background: rgba(255,220,0,.5);
+      left: 32px; top: -38px;
+      transform-origin: 50% 73px;
+    }
+    @keyframes sun-spin { to { transform: rotate(360deg); } }
+
+    /* rain */
+    .raindrop {
+      position: absolute;
+      width: 2px; height: 14px;
+      background: rgba(120,160,255,.75);
+      animation: rain-fall linear infinite;
+    }
+    @keyframes rain-fall {
+      from { transform: translateY(-20px); }
+      to   { transform: translateY(200px); }
+    }
+
+    /* clouds */
+    .cloud-shape {
+      position: absolute;
+      background: rgba(255,255,255,.82);
+      border-radius: 60px;
+      animation: cloud-drift linear infinite;
+    }
+    @keyframes cloud-drift {
+      from { transform: translateX(-250px); }
+      to   { transform: translateX(110vw); }
+    }
+
+    /* rainbow arc */
+    .rainbow-arc {
+      position: absolute;
+      border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+      border-top: 18px solid transparent;
+    }
+
+    /* ── Main area ── */
+    #main-area {
+      flex: 1;
+      display: flex;
+      gap: 8px;
+      padding: 8px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Player board ── */
+    .player-board {
+      flex: 1;
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 4px 4px 0 #5C2D0A;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      min-width: 0;
+    }
+    .player-board::-webkit-scrollbar { display: none; }
+
+    .player-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 3px solid #8B4513;
+      padding-bottom: 8px;
+    }
+    .player-avatar { font-size: 26px; }
+    .player-name { font-size: 8px; color: #3D1A00; word-break: break-all; }
+    .player-nav-block { margin-left: auto; text-align: right; }
+    .nav-label { font-size: 6px; color: #666; }
+    .nav-value { font-size: 14px; color: #228B22; }
+
+    /* deal section */
+    .deal-section {
+      background: rgba(139,69,19,.06);
+      border: 2px solid #C4A063;
+      padding: 8px;
+    }
+    .deal-section-label { font-size: 6px; color: #8B4513; margin-bottom: 6px; }
+    .deal-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+    .deal-card {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: #3D1A00;
+      background: #F5DEB3;
+      border: 3px solid #8B4513;
+      padding: 7px 4px;
+      text-align: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 56px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+    }
+    .deal-card:not(:disabled):hover { background: #FFE88A; }
+    .deal-card.selected { background: #FFD700; box-shadow: inset 2px 2px 0 rgba(0,0,0,.15); }
+    .deal-card:disabled { opacity: .5; cursor: not-allowed; }
+    .deal-card .d-icon { font-size: 20px; }
+
+    @keyframes card-flip {
+      0%   { transform: rotateY(0); }
+      45%  { transform: rotateY(90deg); opacity: .3; }
+      55%  { transform: rotateY(90deg); opacity: .3; }
+      100% { transform: rotateY(0); }
+    }
+    .flipping { animation: card-flip .55s ease; }
+
+    .confirm-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 8px 10px;
+      width: 100%;
+      margin-top: 6px;
+      background: #228B22;
+      color: white;
+      border: 3px solid #155215;
+      box-shadow: 3px 3px 0 #0D350D;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .confirm-btn:disabled { background: #888; border-color: #555; box-shadow: none; cursor: not-allowed; }
+    .confirm-btn:not(:disabled):active { transform: translate(2px,2px); box-shadow: 1px 1px 0 #0D350D; }
+
+    .deal-revealed {
+      grid-column: span 2;
+      text-align: center;
+      padding: 10px 6px;
+      background: rgba(255,215,0,.2);
+      border: 2px solid #FFD700;
+      font-size: 8px;
+      color: #3D1A00;
+    }
+    .deal-revealed .d-icon { font-size: 26px; display: block; margin-bottom: 4px; }
+
+    .computer-deal {
+      grid-column: span 2;
+      text-align: center;
+      padding: 12px 6px;
+      font-size: 7px;
+      color: #8B4513;
+      border: 2px dashed #8B4513;
+    }
+
+    /* dots animation */
+    .dots::after {
+      content: '';
+      animation: dots-anim 1.2s steps(4, end) infinite;
+    }
+    @keyframes dots-anim {
+      0%   { content: ''; }
+      25%  { content: '.'; }
+      50%  { content: '..'; }
+      75%  { content: '...'; }
+      100% { content: ''; }
+    }
+
+    /* plots */
+    .section-label { font-size: 6px; color: #8B4513; margin-bottom: 4px; }
+    .plot-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 4px; flex-wrap: wrap;
+    }
+    .plot-name { font-size: 6px; color: #5C2D0A; min-width: 48px; }
+    .token-grid { display: flex; flex-wrap: wrap; gap: 2px; }
+    .tkn {
+      width: 10px; height: 10px;
+      display: inline-block;
+    }
+    .tkn.hi  { background: #228B22; }
+    .tkn.mid { background: #B8860B; }
+    .tkn.lo  { background: #CC0000; }
+    .tkn-more { font-size: 6px; color: #8B4513; align-self: center; }
+
+    .no-plots-warning {
+      font-size: 7px; color: #CC0000;
+      border: 2px solid #CC0000;
+      padding: 6px; text-align: center;
+    }
+
+    /* coins row */
+    .coins-row { display: flex; align-items: center; gap: 6px; }
+    .coins-icon { font-size: 16px; }
+    .coins-label { font-size: 6px; color: #8B4513; }
+    .coins-amount { font-size: 13px; color: #B8860B; }
+
+    /* buy plot btn */
+    .buy-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 8px 10px;
+      width: 100%;
+      background: #F5DEB3;
+      border: 3px solid #8B4513;
+      box-shadow: 3px 3px 0 #5C2D0A;
+      cursor: pointer;
+      color: #3D1A00;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .buy-btn:not(:disabled):active { transform: translate(2px,2px); box-shadow: 1px 1px 0 #5C2D0A; }
+    .buy-btn.buyable { background: #C8F0C8; border-color: #228B22; box-shadow: 3px 3px 0 #155215; }
+    .buy-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── Centre dice area ── */
+    #dice-area {
+      width: 190px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .phase-chip {
+      background: rgba(255,255,255,.75);
+      border: 2px solid #8B4513;
+      padding: 5px 10px;
+      font-size: 7px;
+      color: #3D1A00;
+      text-align: center;
+      width: 100%;
+    }
+    .dice-wrap { position: relative; }
+    .dice {
+      width: 84px; height: 84px;
+      background: white;
+      border: 4px solid #3D1A00;
+      box-shadow: 5px 5px 0 #3D1A00;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .08s;
+    }
+    .dice:active { transform: scale(.94); }
+    @keyframes dice-spin {
+      0%   { transform: rotate(0)   scale(1);   }
+      25%  { transform: rotate(200deg) scale(1.1); }
+      50%  { transform: rotate(310deg) scale(.9);  }
+      75%  { transform: rotate(380deg) scale(1.05);}
+      100% { transform: rotate(360deg) scale(1);  }
+    }
+    .dice.rolling { animation: dice-spin .85s cubic-bezier(.36,.07,.19,.97); }
+
+    .dice-hint { font-size: 7px; color: #3D1A00; text-align: center; }
+    #action-btns { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+
+    /* ── Coin fly ── */
+    .coin-fly {
+      position: fixed;
+      font-size: 18px;
+      pointer-events: none;
+      z-index: 600;
+      animation: coin-arc .85s cubic-bezier(.25,.46,.45,.94) forwards;
+    }
+    @keyframes coin-arc {
+      0%   { opacity:1; transform: translate(0,0) scale(1); }
+      40%  { opacity:1; transform: translate(var(--cx), -70px) scale(1.3); }
+      100% { opacity:0; transform: translate(var(--cx), var(--cy)) scale(.4); }
+    }
+
+    /* ══════════════════════════════════════
+       PASS SCREEN
+    ══════════════════════════════════════ */
+    #pass-screen {
+      position: fixed; inset: 0;
+      background: #2A1000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 22px; z-index: 300;
+    }
+    .pass-icon  { font-size: 60px; }
+    .pass-title { font-size: clamp(13px,2.5vw,20px); color: #FFD700; text-shadow: 3px 3px 0 rgba(0,0,0,.5); text-align: center; padding: 0 20px; }
+    .pass-sub   { font-size: 8px; color: #F5DEB3; text-align: center; padding: 0 20px; line-height: 1.8; }
+
+    /* ══════════════════════════════════════
+       OVERLAYS / POPUPS
+    ══════════════════════════════════════ */
+    .overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.72);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200; padding: 16px;
+    }
+    .popup {
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 8px 8px 0 #5C2D0A;
+      padding: 28px 24px;
+      width: min(480px, 96vw);
+      text-align: center;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .popup::-webkit-scrollbar { display: none; }
+    .popup-title { font-size: 14px; color: #3D1A00; margin-bottom: 12px; }
+    .popup-icon  { font-size: 64px; display: block; margin: 10px 0; }
+    .popup-flavour {
+      font-size: 7px; color: #5C2D0A;
+      line-height: 1.9; margin-bottom: 14px;
+      font-style: italic;
+    }
+    .token-swing {
+      font-size: 13px; margin: 8px 0;
+    }
+    .token-swing.up   { color: #228B22; }
+    .token-swing.down { color: #CC0000; }
+
+    .payout-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    .payout-table td {
+      border: 2px solid #C4A063;
+      padding: 7px 10px;
+      font-size: 7px;
+      color: #3D1A00;
+      text-align: left;
+    }
+    .payout-table .coins-earned { color: #228B22; font-size: 11px; text-align: right; }
+
+    /* regime flash */
+    #regime-flash {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 50;
+      opacity: 0;
+    }
+    @keyframes rflash { 0%{opacity:0} 20%{opacity:.65} 100%{opacity:0} }
+    .rflash-anim { animation: rflash .6s ease forwards; }
+
+    /* ══════════════════════════════════════
+       END SCREEN
+    ══════════════════════════════════════ */
+    #end-screen {
+      position: fixed; inset: 0;
+      background: #8BBE6A;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; z-index: 400;
+      overflow: hidden;
+    }
+    #fireworks-layer {
+      position: absolute; inset: 0;
+      pointer-events: none; overflow: hidden;
+    }
+    .fw-dot {
+      position: absolute;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      animation: fw-burst 1.4s ease-out forwards;
+    }
+    @keyframes fw-burst {
+      0%   { transform: scale(0); opacity:1; }
+      100% { transform: scale(18); opacity:0; }
+    }
+    .end-title {
+      font-size: clamp(14px,2.5vw,22px);
+      color: #8B4513; text-shadow: 3px 3px 0 #5C2D0A;
+      position: relative; z-index: 2;
+    }
+    .winner-banner {
+      font-size: clamp(10px,2vw,16px);
+      color: #3D1A00; text-align: center;
+      position: relative; z-index: 2;
+    }
+    .podium {
+      display: flex; align-items: flex-end;
+      gap: 10px; position: relative; z-index: 2;
+    }
+    .podium-slot {
+      background: #F5DEB3;
+      border: 4px solid #8B4513;
+      box-shadow: 4px 4px 0 #5C2D0A;
+      padding: 14px 10px;
+      text-align: center;
+      min-width: 130px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 6px;
+    }
+    .podium-slot.p1st { height: 200px; background: #FFD700; justify-content: flex-end; }
+    .podium-slot.p2nd { height: 160px; justify-content: flex-end; }
+    .podium-rank { font-size: 22px; }
+    .podium-name { font-size: 8px; color: #3D1A00; word-break: break-all; }
+    .podium-nav  { font-size: 12px; color: #228B22; }
+    .podium-breakdown { font-size: 6px; color: #666; }
+
+    @keyframes nav-pulse { 50% { color: #FFD700; } }
+    .nav-pulse { animation: nav-pulse .5s ease; }
+
+    /* ── Weather Reference Card ── */
+    #ref-card {
+      width: 100%;
+      background: #F5DEB3;
+      border: 3px solid #8B4513;
+      box-shadow: 3px 3px 0 #5C2D0A;
+      padding: 7px 6px;
+      margin-top: 4px;
+    }
+    .ref-card-title {
+      font-size: 6px;
+      color: #8B4513;
+      text-align: center;
+      margin-bottom: 6px;
+      border-bottom: 2px solid #C4A063;
+      padding-bottom: 4px;
+    }
+    .ref-tables {
+      display: flex;
+      gap: 5px;
+    }
+    .ref-col {
+      flex: 1;
+      min-width: 0;
+    }
+    .ref-col-title {
+      font-size: 5px;
+      color: #8B4513;
+      text-align: center;
+      margin-bottom: 3px;
+    }
+    .ref-tbl {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .ref-tbl td {
+      font-size: 6px;
+      color: #3D1A00;
+      padding: 2px 3px;
+      border: 1px solid #C4A063;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .ref-tbl tr:nth-child(odd) td { background: rgba(139,69,19,.06); }
+    .ref-move-up   { color: #228B22; font-weight: bold; }
+    .ref-move-down { color: #CC0000; font-weight: bold; }
+    .ref-change    { color: #4A6FA5; }
+    .ref-stay      { color: #888; }
+
+    /* ── Settlement breakdown ── */
+    .breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 7px;
+      padding: 5px 8px;
+      border-bottom: 1px solid #C4A063;
+      color: #3D1A00;
+    }
+    .breakdown-row:last-child { border-bottom: none; }
+    .breakdown-val { font-size: 10px; }
+    .breakdown-val.positive { color: #228B22; }
+    .breakdown-val.negative { color: #CC0000; }
+    .breakdown-val.neutral  { color: #888; }
+    .breakdown-total {
+      font-size: 8px;
+      padding: 6px 8px;
+      background: rgba(34,139,34,.1);
+      border: 2px solid #228B22;
+      display: flex;
+      justify-content: space-between;
+      color: #3D1A00;
+      margin-top: 4px;
+    }
+    .breakdown-total .total-val { font-size: 11px; color: #228B22; }
+    .uncovered-bonus {
+      text-align: center;
+      font-size: 8px;
+      color: #228B22;
+      background: rgba(34,139,34,.12);
+      border: 2px solid #228B22;
+      padding: 6px;
+      margin-top: 6px;
+      animation: nav-pulse .8s ease infinite alternate;
+    }
+    .player-breakdown {
+      margin-bottom: 12px;
+      border: 2px solid #C4A063;
+    }
+    .breakdown-player-hdr {
+      font-size: 7px;
+      background: rgba(139,69,19,.1);
+      border-bottom: 2px solid #C4A063;
+      padding: 5px 8px;
+      color: #3D1A00;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN ══ -->
+<div id="setup-screen">
+  <h1 class="game-title">MARKET STREET</h1>
+  <p class="game-subtitle">THE TRADING STRATEGY GAME</p>
+
+  <div class="setup-panel">
+    <p class="setup-section-title">CHOOSE YOUR GAME</p>
+    <div class="mode-buttons">
+      <button class="mode-btn selected" id="btn-pvp" onclick="selectMode('pvp')">
+        <span class="mode-icon">👥</span>
+        2 PLAYERS
+        <span class="mode-hint">PASS &amp; PLAY</span>
+      </button>
+      <button class="mode-btn" id="btn-pvc" onclick="selectMode('pvc')">
+        <span class="mode-icon">🤖</span>
+        VS COMPUTER
+        <span class="mode-hint">YOU VS AI</span>
+      </button>
+    </div>
+
+    <hr class="setup-divider">
+
+    <p class="setup-section-title">PLAYER NAMES</p>
+    <div class="name-inputs">
+      <div class="name-input-row">
+        <span class="player-icon-setup">🧑</span>
+        <input class="pixel-input" id="inp-p1" type="text" placeholder="PLAYER 1" maxlength="10">
+      </div>
+      <div class="name-input-row" id="row-p2">
+        <span class="player-icon-setup">👤</span>
+        <input class="pixel-input" id="inp-p2" type="text" placeholder="PLAYER 2" maxlength="10">
+      </div>
+    </div>
+
+    <div style="text-align:center; margin-top:22px;">
+      <button class="pixel-btn primary" onclick="startGame()" style="font-size:11px;padding:14px 28px;">
+        ▶ START GAME
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ GAME SCREEN ══ -->
+<div id="game-screen">
+
+  <!-- Weather zone -->
+  <div id="weather-zone" class="sunny">
+    <div id="weather-particles"></div>
+    <div id="lightning-overlay"></div>
+    <span class="weather-icon" id="wx-icon">☀️</span>
+    <span class="weather-label" id="wx-label">SUNNY</span>
+    <div class="round-bar-wrap">
+      <div class="round-bar-fill" id="round-bar" style="width:0%"></div>
+    </div>
+    <span class="round-label" id="round-label">ROUND 1 / 24</span>
+  </div>
+
+  <!-- Main area -->
+  <div id="main-area">
+
+    <!-- Player 0 board -->
+    <div class="player-board" id="board-0">
+      <div class="player-header">
+        <span class="player-avatar" id="av-0">🧑</span>
+        <div>
+          <div class="player-name" id="pname-0">P1</div>
+        </div>
+        <div class="player-nav-block">
+          <div class="nav-label">NAV</div>
+          <div class="nav-value" id="nav-0">50</div>
+        </div>
+      </div>
+
+      <div class="deal-section" id="dsec-0">
+        <div class="deal-section-label" id="dlabel-0">CHOOSE YOUR DEAL:</div>
+        <div class="deal-cards" id="dcards-0"></div>
+        <button class="confirm-btn" id="cbtn-0" onclick="confirmDeal(0)" disabled>LOCK IN ✓</button>
+      </div>
+
+      <div id="plots-0"></div>
+
+      <div class="coins-row">
+        <span class="coins-icon">🪙</span>
+        <span class="coins-label">COINS:</span>
+        <span class="coins-amount" id="coins-0">20</span>
+      </div>
+
+      <button class="buy-btn" id="buybtn-0" onclick="buyPlot(0)" disabled>🏗 BUY PLOT</button>
+    </div>
+
+    <!-- Centre dice -->
+    <div id="dice-area">
+      <div class="phase-chip" id="phase-chip">DEAL PHASE</div>
+      <div class="dice-wrap">
+        <div class="dice" id="dice" onclick="onDiceClick()">🎲</div>
+      </div>
+      <div class="dice-hint" id="dice-hint">—</div>
+      <div id="action-btns"></div>
+      <div id="ref-card">
+        <div class="ref-card-title" id="ref-wx-label">☀️ SUNNY — REFERENCE</div>
+        <div class="ref-tables">
+          <div class="ref-col">
+            <div class="ref-col-title">ROLL 1</div>
+            <table class="ref-tbl" id="ref-roll1"></table>
+          </div>
+          <div class="ref-col">
+            <div class="ref-col-title">ROLL 2</div>
+            <table class="ref-tbl" id="ref-roll2"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player 1 board -->
+    <div class="player-board" id="board-1">
+      <div class="player-header">
+        <span class="player-avatar" id="av-1">👤</span>
+        <div>
+          <div class="player-name" id="pname-1">P2</div>
+        </div>
+        <div class="player-nav-block">
+          <div class="nav-label">NAV</div>
+          <div class="nav-value" id="nav-1">50</div>
+        </div>
+      </div>
+
+      <div class="deal-section" id="dsec-1">
+        <div class="deal-section-label" id="dlabel-1">CHOOSE YOUR DEAL:</div>
+        <div class="deal-cards" id="dcards-1"></div>
+        <button class="confirm-btn" id="cbtn-1" onclick="confirmDeal(1)" disabled>LOCK IN ✓</button>
+      </div>
+
+      <div id="plots-1"></div>
+
+      <div class="coins-row">
+        <span class="coins-icon">🪙</span>
+        <span class="coins-label">COINS:</span>
+        <span class="coins-amount" id="coins-1">20</span>
+      </div>
+
+      <button class="buy-btn" id="buybtn-1" onclick="buyPlot(1)" disabled>🏗 BUY PLOT</button>
+    </div>
+
+  </div><!-- /main-area -->
+</div><!-- /game-screen -->
+
+<!-- ══ PASS SCREEN ══ -->
+<div id="pass-screen" class="hidden">
+  <div class="pass-icon">📱</div>
+  <div class="pass-title" id="pass-title">PASS TO PLAYER 2</div>
+  <div class="pass-sub" id="pass-sub">Player 1 has locked in their deal. Don't peek!</div>
+  <button class="pixel-btn primary" onclick="dismissPass()" style="font-size:10px;padding:14px 26px;">
+    I'M READY ✓
+  </button>
+</div>
+
+<!-- ══ CUSTOMER POPUP ══ -->
+<div class="overlay hidden" id="customer-overlay">
+  <div class="popup">
+    <div class="popup-title" id="cust-title">CUSTOMER ARRIVES!</div>
+    <span class="popup-icon" id="cust-icon">👤</span>
+    <div class="popup-flavour" id="cust-flavour">"..."</div>
+    <div class="token-swing" id="token-swing"></div>
+    <div id="settlement-breakdown"></div>
+    <button class="pixel-btn primary" onclick="confirmSettlement()" style="margin-top:14px;width:100%;font-size:9px;">
+      COLLECT &amp; CONTINUE ✓
+    </button>
+  </div>
+</div>
+
+<!-- ══ REGIME POPUP ══ -->
+<div class="overlay hidden" id="regime-overlay">
+  <div class="popup">
+    <div class="popup-title" id="reg-title">WEATHER CHANGE!</div>
+    <span class="popup-icon" id="reg-icon">☁️</span>
+    <div class="popup-flavour" id="reg-flavour">"..."</div>
+    <button class="pixel-btn primary" onclick="dismissRegime()" style="margin-top:14px;width:100%;font-size:9px;">
+      GOT IT ✓
+    </button>
+  </div>
+</div>
+
+<!-- ══ END SCREEN ══ -->
+<div id="end-screen" class="hidden">
+  <div id="fireworks-layer"></div>
+  <div class="end-title">MARKET CLOSED!</div>
+  <div class="winner-banner" id="winner-banner"></div>
+  <div class="podium" id="podium"></div>
+  <button class="pixel-btn primary" onclick="resetToSetup()" style="position:relative;z-index:2;font-size:10px;padding:14px 28px;">
+    ▶ PLAY AGAIN
+  </button>
+</div>
+
+<!-- regime flash -->
+<div id="regime-flash"></div>
+
+<!-- ══════════════════════════════════════════════
+     GAME LOGIC
+══════════════════════════════════════════════ -->
+<script>
+// ── DATA TABLES ──────────────────────────────
+
+const WEATHER_TABLES = {
+  sunny: [
+    {move:-2,cust:'nelly'},{move:-1,cust:'nelly'},
+    {move: 1,cust:'rita' },{move: 2,cust:'harry'},
+    {move: 2,cust:'harry'},{move: 3,cust:'barry'},
+  ],
+  cloudy: [
+    {move:-2,cust:'nelly'},{move:-1,cust:'nelly'},
+    {move:-1,cust:'rita' },{move: 1,cust:'rita' },
+    {move: 1,cust:'harry'},{move: 2,cust:'harry'},
+  ],
+  storm: [
+    {move:-3,cust:'nelly'},{move:-2,cust:'nelly'},
+    {move:-2,cust:'nelly'},{move:-1,cust:'nelly'},
+    {move:-1,cust:'rita' },{move: 1,cust:'rita' },
+  ],
+  rainbow: [
+    {move: 1,cust:'harry'},{move: 2,cust:'harry'},
+    {move: 2,cust:'harry'},{move: 3,cust:'barry'},
+    {move: 3,cust:'barry'},{move: 4,cust:'barry'},
+  ],
+};
+
+const PAYOUTS = {
+  root_veg: {nelly:4, rita:3, harry:2, barry:1},
+  good_veg: {nelly:2, rita:3, harry:3, barry:2},
+  exotic:   {nelly:1, rita:2, harry:4, barry:6},
+  no_deal:  {nelly:0, rita:0, harry:0, barry:0},
+};
+
+const PLOT_COSTS = {sunny:15, cloudy:10, storm:6, rainbow:12};
+
+// Roll 2 regime change: [result of roll 1-6] → new weather or null
+function getNewRegime(current, roll) {
+  const t = {
+    sunny:   ['cloudy',  'cloudy', null,   null,    null,    null   ],
+    cloudy:  ['storm',   'storm', null,    null,    'sunny', 'sunny'],
+    storm:   [null,      null,    null,    'cloudy','cloudy','rainbow'],
+    rainbow: [null,      null,    null,    'sunny', 'sunny', 'sunny'],
+  };
+  return t[current][roll - 1];
+}
+
+const DEAL_META = {
+  root_veg: {icon:'🥕', name:'ROOT VEG', hint:'Defensive'},
+  good_veg: {icon:'🍅', name:'GOOD VEG',  hint:'Balanced'},
+  exotic:   {icon:'🍓', name:'EXOTIC',    hint:'Bold!'},
+  no_deal:  {icon:'🌙', name:'NO DEAL',   hint:'Skip it'},
+};
+
+const CUST_META = {
+  nelly: {icon:'😰', name:'NERVOUS NELLY'},
+  rita:  {icon:'👩', name:'REGULAR RITA'},
+  harry: {icon:'😄', name:'HAPPY HARRY'},
+  barry: {icon:'🤑', name:'BIG BARRY'},
+};
+
+const CUST_FLAVOUR = {
+  nelly: [
+    "She's back. She smells of cabbage and existential dread.",
+    "Nelly doesn't trust the weather. She doesn't trust anything.",
+    "Nelly brought exact change. Of course she did.",
+  ],
+  rita: [
+    "Regular Rita. Reliable Rita. Rita has a loyalty card.",
+    "Rita brought her own bag. Rita always brings her own bag.",
+    "Rita's here. Predictable as ever. Bless her.",
+  ],
+  harry: [
+    "Harry is in a great mood. Harry is always in a great mood.",
+    "Harry tipped you. Nobody tips at a market stall.",
+    "Harry bought extra. Harry always buys extra.",
+  ],
+  barry: [
+    "Barry has arrived. Barry is wearing sunglasses. It is raining.",
+    "Barry doesn't ask the price. Barry never asks the price.",
+    "Barry bought everything. Barry doesn't know what half of it is.",
+  ],
+};
+
+const REGIME_FLAVOUR = {
+  storm:   ["The weather has turned. Your neighbour who predicted this is insufferable.",
+            "It got worse. Of course it got worse.",
+            "Storm rolling in. Root veg time."],
+  rainbow: ["The sun is out. Barry is back. Your neighbour who sold everything last week is very quiet.",
+            "Rainbow! Luck of the market. Time to go exotic.",
+            "Everything's coming up roses. Sell the expensive stuff."],
+  sunny:   ["Clear skies ahead. The market is smiling.",
+            "Back to sunshine. Normal service resumed.",
+            "Sun's out. Exotic fruit weather."],
+  cloudy:  ["Clouds gathering. Could go either way. Classic.",
+            "Overcast. Cloudy with a chance of Rita.",
+            "Grey skies. Nothing dramatic. Yet."],
+};
+
+const WX_DISPLAY = {
+  sunny:   {icon:'☀️',  label:'SUNNY',   cls:'sunny'},
+  cloudy:  {icon:'☁️',  label:'CLOUDY',  cls:'cloudy'},
+  storm:   {icon:'🌧️', label:'STORM',   cls:'storm'},
+  rainbow: {icon:'🌈',  label:'RAINBOW', cls:'rainbow'},
+};
+
+const FLASH_COLORS = {
+  storm:'rgba(74,111,165,.75)', rainbow:'rgba(255,105,180,.55)',
+  sunny:'rgba(255,215,0,.5)',   cloudy:'rgba(160,160,160,.5)',
+};
+
+// ── STATE ────────────────────────────────────
+
+let G = {};
+
+function freshState(mode, p1name, p2name) {
+  G = {
+    mode,                // 'pvp' | 'pvc'
+    round: 1,
+    weather: 'sunny',
+    phase: 'deal',       // deal | passp2 | roll1 | roll2 | buy
+    players: [
+      mkPlayer(p1name || 'PLAYER 1', false),
+      mkPlayer(mode === 'pvc' ? 'THE MARKET' : (p2name || 'PLAYER 2'), mode === 'pvc'),
+    ],
+    pending: { roll1: null, cust: null, tokenMove: 0 },
+    diceActive: false,
+  };
+}
+
+function mkPlayer(name, isAI) {
+  return { name, isAI, coins: 20, plots: [{tokens:10}], deal: null, confirmed: false };
+}
+
+function nav(p) {
+  return p.coins + p.plots.reduce((s, pl) => s + pl.tokens, 0) * 3;
+}
+
+// ── SETUP ────────────────────────────────────
+
+let chosenMode = 'pvp';
+
+function selectMode(m) {
+  chosenMode = m;
+  document.getElementById('btn-pvp').classList.toggle('selected', m==='pvp');
+  document.getElementById('btn-pvc').classList.toggle('selected', m==='pvc');
+  const p2row = document.getElementById('row-p2');
+  const p2inp = document.getElementById('inp-p2');
+  if (m === 'pvc') {
+    p2row.style.opacity = '.4';
+    p2inp.disabled = true;
+    p2inp.placeholder = 'THE MARKET';
+  } else {
+    p2row.style.opacity = '1';
+    p2inp.disabled = false;
+    p2inp.placeholder = 'PLAYER 2';
+  }
+}
+
+function startGame() {
+  const p1 = (document.getElementById('inp-p1').value.trim().toUpperCase() || 'PLAYER 1').slice(0,10);
+  const p2 = (document.getElementById('inp-p2').value.trim().toUpperCase() || 'PLAYER 2').slice(0,10);
+  freshState(chosenMode, p1, p2);
+
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display  = 'flex';
+
+  refreshBoards();
+  drawWeatherZone(false);
+  beginRound();
+}
+
+// ── RENDERING ────────────────────────────────
+
+function refreshBoards() {
+  G.players.forEach((_, i) => refreshBoard(i));
+}
+
+function refreshBoard(i) {
+  const p = G.players[i];
+  document.getElementById('pname-' + i).textContent = p.name;
+  const navEl = document.getElementById('nav-' + i);
+  navEl.textContent = nav(p);
+  navEl.classList.remove('nav-pulse');
+  void navEl.offsetWidth;
+  navEl.classList.add('nav-pulse');
+  document.getElementById('coins-' + i).textContent = p.coins;
+
+  // Plots
+  const plotsEl = document.getElementById('plots-' + i);
+  plotsEl.innerHTML = '';
+  if (p.plots.length === 0) {
+    plotsEl.innerHTML = '<div class="no-plots-warning">⚠ PLOT LOST!<br>BUY A NEW ONE</div>';
+  } else {
+    const lbl = document.createElement('div');
+    lbl.className = 'section-label';
+    lbl.textContent = 'PLOTS:';
+    plotsEl.appendChild(lbl);
+
+    p.plots.forEach((pl, pi) => {
+      const row = document.createElement('div');
+      row.className = 'plot-row';
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'plot-name';
+      nameEl.textContent = `#${pi+1}: ${pl.tokens}`;
+      row.appendChild(nameEl);
+
+      const grid = document.createElement('div');
+      grid.className = 'token-grid';
+      const show = Math.min(pl.tokens, 20);
+      const cls = pl.tokens >= 15 ? 'hi' : pl.tokens >= 8 ? 'mid' : 'lo';
+      for (let t = 0; t < show; t++) {
+        const sq = document.createElement('span');
+        sq.className = 'tkn ' + cls;
+        grid.appendChild(sq);
+      }
+      if (pl.tokens > 20) {
+        const more = document.createElement('span');
+        more.className = 'tkn-more';
+        more.textContent = '+' + (pl.tokens - 20);
+        grid.appendChild(more);
+      }
+      row.appendChild(grid);
+      plotsEl.appendChild(row);
+    });
+  }
+
+  // Buy button
+  const cost = PLOT_COSTS[G.weather];
+  const btn = document.getElementById('buybtn-' + i);
+  const canBuy = G.phase === 'buy' && p.coins >= cost;
+  btn.textContent = `🏗 BUY PLOT (${cost}🪙)`;
+  btn.disabled = !canBuy;
+  btn.className = 'buy-btn' + (canBuy ? ' buyable' : '');
+}
+
+function drawDealCards(i) {
+  const p = G.players[i];
+  const cont = document.getElementById('dcards-' + i);
+  cont.innerHTML = '';
+
+  if (p.isAI) {
+    cont.innerHTML = '<div class="computer-deal">🤖 THINKING<span class="dots"></span></div>';
+    document.getElementById('cbtn-' + i).style.display = 'none';
+    return;
+  }
+
+  const deals = ['root_veg','good_veg','exotic','no_deal'];
+  deals.forEach(d => {
+    const m = DEAL_META[d];
+    const btn = document.createElement('button');
+    btn.className = 'deal-card' + (p.deal === d ? ' selected' : '');
+    btn.innerHTML = `<span class="d-icon">${m.icon}</span>${m.name}`;
+    btn.disabled = p.confirmed;
+    btn.onclick = () => { if (!p.confirmed) { p.deal = d; drawDealCards(i); drawConfirmBtn(i); } };
+    cont.appendChild(btn);
+  });
+}
+
+function drawConfirmBtn(i) {
+  const p = G.players[i];
+  const btn = document.getElementById('cbtn-' + i);
+  if (p.isAI) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  btn.disabled = !p.deal;
+  if (p.confirmed) {
+    btn.textContent = '✓ LOCKED IN';
+    btn.style.background = '#555';
+  } else {
+    btn.textContent = 'LOCK IN ✓';
+    btn.style.background = p.deal ? '#228B22' : '#888';
+  }
+}
+
+function showDealCards(i, visible) {
+  document.getElementById('dsec-' + i).style.display = visible ? '' : 'none';
+}
+
+function setPhase(txt) { document.getElementById('phase-chip').textContent = txt; }
+function setHint(txt)  { document.getElementById('dice-hint').textContent = txt; }
+function setActions(html) { document.getElementById('action-btns').innerHTML = html; }
+
+function updateRefCard() {
+  const w  = G.weather;
+  const wd = WX_DISPLAY[w];
+  document.getElementById('ref-wx-label').textContent = wd.icon + ' ' + wd.label + ' — REFERENCE';
+
+  // Roll 1 table
+  const r1 = document.getElementById('ref-roll1');
+  r1.innerHTML = '';
+  const faces = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+  WEATHER_TABLES[w].forEach((e, i) => {
+    const moveStr = e.move > 0 ? '+' + e.move : String(e.move);
+    const moveCls = e.move > 0 ? 'ref-move-up' : 'ref-move-down';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${faces[i]}</td><td class="${moveCls}">${moveStr}</td><td>${CUST_META[e.cust].icon}</td>`;
+    r1.appendChild(tr);
+  });
+
+  // Roll 2 table
+  const regimeTbl = {
+    sunny:   ['cloudy',  'cloudy', null,    null,    null,    null   ],
+    cloudy:  ['storm',   'storm',  null,    null,    'sunny', 'sunny'],
+    storm:   [null,      null,     null,    'cloudy','cloudy','rainbow'],
+    rainbow: [null,      null,     null,    'sunny', 'sunny', 'sunny'],
+  };
+  const r2 = document.getElementById('ref-roll2');
+  r2.innerHTML = '';
+  regimeTbl[w].forEach((result, i) => {
+    const face = ['⚀','⚁','⚂','⚃','⚄','⚅'][i];
+    const label = result ? WX_DISPLAY[result].icon + ' ' + WX_DISPLAY[result].label : '— STAY';
+    const cls   = result ? 'ref-change' : 'ref-stay';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${face}</td><td class="${cls}">${label}</td>`;
+    r2.appendChild(tr);
+  });
+}
+
+function setDiceEnabled(on) {
+  const d = document.getElementById('dice');
+  d.style.cursor  = on ? 'pointer' : 'default';
+  d.style.opacity = on ? '1' : '.4';
+}
+
+function drawWeatherZone(animate) {
+  const wd = WX_DISPLAY[G.weather];
+  const zone = document.getElementById('weather-zone');
+  zone.className = wd.cls;
+  document.getElementById('wx-icon').textContent  = wd.icon;
+  document.getElementById('wx-label').textContent = wd.label;
+
+  // Lightning overlay only for storm
+  document.getElementById('lightning-overlay').style.display = G.weather === 'storm' ? '' : 'none';
+
+  const pct = ((G.round - 1) / 24) * 100;
+  document.getElementById('round-bar').style.width = pct + '%';
+  document.getElementById('round-label').textContent = 'ROUND ' + G.round + ' / 24';
+
+  buildParticles(G.weather);
+  updateRefCard();
+
+  if (animate) {
+    const fl = document.getElementById('regime-flash');
+    fl.style.background = FLASH_COLORS[G.weather] || 'white';
+    fl.classList.remove('rflash-anim');
+    void fl.offsetWidth;
+    fl.classList.add('rflash-anim');
+  }
+}
+
+function buildParticles(w) {
+  const cont = document.getElementById('weather-particles');
+  cont.innerHTML = '';
+
+  if (w === 'sunny') {
+    const sun = document.createElement('div');
+    sun.className = 'sun-ball';
+    // 8 rays
+    for (let r = 0; r < 8; r++) {
+      const ray = document.createElement('div');
+      ray.className = 'sun-ray';
+      ray.style.transform = `rotate(${r*45}deg)`;
+      sun.appendChild(ray);
+    }
+    cont.appendChild(sun);
+    ['🐦','🐦','🐦'].forEach((b,i) => {
+      const bird = document.createElement('span');
+      bird.style.cssText = `position:absolute;font-size:13px;top:${22+i*22}px;animation:cloud-drift ${8+i*2.5}s linear infinite;animation-delay:${-i*3}s;`;
+      bird.textContent = b;
+      cont.appendChild(bird);
+    });
+
+  } else if (w === 'storm') {
+    for (let r = 0; r < 30; r++) {
+      const drop = document.createElement('div');
+      drop.className = 'raindrop';
+      drop.style.left = Math.random()*100 + '%';
+      drop.style.top  = Math.random()*100 + '%';
+      drop.style.animationDuration  = (.3 + Math.random()*.35) + 's';
+      drop.style.animationDelay     = (Math.random()*.4) + 's';
+      cont.appendChild(drop);
+    }
+
+  } else if (w === 'cloudy') {
+    for (let c = 0; c < 5; c++) {
+      const cl = document.createElement('div');
+      cl.className = 'cloud-shape';
+      cl.style.cssText = `width:${80+c*25}px;height:${28+c*8}px;top:${10+c*30}px;animation-duration:${14+c*4}s;animation-delay:${-c*3.5}s;`;
+      cont.appendChild(cl);
+    }
+
+  } else if (w === 'rainbow') {
+    const colors = ['rgba(255,0,0,.25)','rgba(255,165,0,.25)','rgba(255,255,0,.22)',
+                    'rgba(0,200,0,.2)','rgba(0,0,255,.15)'];
+    colors.forEach((col, ci) => {
+      const arc = document.createElement('div');
+      const sz = 520 - ci*30;
+      arc.className = 'rainbow-arc';
+      arc.style.cssText = `width:${sz}px;height:${sz/2}px;border-top-color:${col};top:${30+ci*10}px;left:50%;transform:translateX(-50%);z-index:1;`;
+      cont.appendChild(arc);
+    });
+    const sun = document.createElement('span');
+    sun.style.cssText = 'position:absolute;font-size:36px;top:10px;right:70px;z-index:2;animation:sun-spin 10s linear infinite;';
+    sun.textContent = '☀️';
+    cont.appendChild(sun);
+  }
+}
+
+// ── ROUND FLOW ────────────────────────────────
+
+function beginRound() {
+  G.phase = 'deal';
+  G.players.forEach(p => { p.deal = null; p.confirmed = false; });
+  G.pending = { roll1: null, cust: null, tokenMove: 0 };
+  G.diceActive = false;
+
+  drawWeatherZone(false);
+  setPhase('DEAL PHASE');
+  setHint('PICK YOUR DEALS');
+  setActions('');
+  setDiceEnabled(false);
+  document.getElementById('dice').textContent = '🎲';
+
+  // Show deal sections
+  showDealCards(0, true);
+  showDealCards(1, true);
+
+  if (G.mode === 'pvp') {
+    // P2 section hidden until pass
+    document.getElementById('dlabel-1').textContent = 'WAITING FOR ' + G.players[0].name + '...';
+    document.getElementById('dcards-1').innerHTML = '<div class="computer-deal">🤖 WAITING...</div>';
+    document.getElementById('cbtn-1').style.display = 'none';
+    drawDealCards(0);
+    drawConfirmBtn(0);
+  } else {
+    // PvC
+    drawDealCards(0); drawConfirmBtn(0);
+    drawDealCards(1); drawConfirmBtn(1);
+    triggerAI();
+  }
+
+  refreshBoards();
+}
+
+function confirmDeal(i) {
+  const p = G.players[i];
+  if (!p.deal || p.confirmed) return;
+  p.confirmed = true;
+  drawDealCards(i);
+  drawConfirmBtn(i);
+
+  if (G.mode === 'pvp' && i === 0 && !G.players[1].confirmed) {
+    // Show pass screen so P2 can pick secretly
+    setTimeout(() => {
+      document.getElementById('pass-title').textContent = 'PASS TO ' + G.players[1].name + '!';
+      document.getElementById('pass-sub').textContent   = G.players[0].name + ' has locked in. Don\'t peek!';
+      document.getElementById('pass-screen').classList.remove('hidden');
+    }, 280);
+    return;
+  }
+
+  checkAllConfirmed();
+}
+
+function dismissPass() {
+  document.getElementById('pass-screen').classList.add('hidden');
+  // Now let P2 pick
+  document.getElementById('dlabel-1').textContent = 'CHOOSE YOUR DEAL:';
+  drawDealCards(1);
+  drawConfirmBtn(1);
+}
+
+function checkAllConfirmed() {
+  if (G.players.every(p => p.confirmed)) revealDeals();
+}
+
+function revealDeals() {
+  // Flip both deal cards revealed
+  [0,1].forEach(i => {
+    const p = G.players[i];
+    const m = DEAL_META[p.deal];
+    const cont = document.getElementById('dcards-' + i);
+    cont.innerHTML = `<div class="deal-revealed flipping">
+      <span class="d-icon">${m.icon}</span>${m.name}
+    </div>`;
+    document.getElementById('cbtn-' + i).style.display = 'none';
+  });
+
+  G.phase = 'roll1';
+  setPhase('ROLL THE DICE!');
+  setHint('TAP TO ROLL');
+  setDiceEnabled(true);
+  G.diceActive = true;
+}
+
+function onDiceClick() {
+  if (!G.diceActive) return;
+  if (G.phase !== 'roll1' && G.phase !== 'roll2') return;
+
+  G.diceActive = false;
+  setDiceEnabled(false);
+
+  const dice   = document.getElementById('dice');
+  const faces  = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+  let ticks = 0;
+  dice.classList.remove('rolling');
+  void dice.offsetWidth;
+  dice.classList.add('rolling');
+
+  const flicker = setInterval(() => {
+    dice.textContent = faces[Math.floor(Math.random()*6)];
+    if (++ticks > 12) clearInterval(flicker);
+  }, 55);
+
+  const result = Math.floor(Math.random()*6) + 1;
+  setTimeout(() => {
+    dice.textContent = faces[result-1];
+    dice.classList.remove('rolling');
+    if (G.phase === 'roll1') resolveRoll1(result);
+    else                      resolveRoll2(result);
+  }, 920);
+}
+
+function resolveRoll1(roll) {
+  const entry = WEATHER_TABLES[G.weather][roll-1];
+  G.pending.cust      = entry.cust;
+  G.pending.tokenMove = entry.move;
+
+  const cm = CUST_META[entry.cust];
+  const fl = rnd(CUST_FLAVOUR[entry.cust]);
+
+  document.getElementById('cust-title').textContent   = cm.name + ' ARRIVES!';
+  document.getElementById('cust-icon').textContent    = cm.icon;
+  document.getElementById('cust-flavour').textContent = '"' + fl + '"';
+
+  // Summary token swing line (above breakdown)
+  const sw = document.getElementById('token-swing');
+  if (entry.move > 0) {
+    sw.className = 'token-swing up';
+    sw.textContent = '▲ ALL PLOTS +' + entry.move + ' TOKENS';
+  } else if (entry.move < 0) {
+    sw.className = 'token-swing down';
+    sw.textContent = '▼ ALL PLOTS ' + entry.move + ' TOKENS';
+  } else {
+    sw.className = 'token-swing';
+    sw.textContent = '— TOKENS UNCHANGED';
+  }
+
+  // Per-player settlement breakdown
+  const container = document.getElementById('settlement-breakdown');
+  container.innerHTML = '';
+
+  G.players.forEach(p => {
+    const dm          = DEAL_META[p.deal];
+    const dealCoins   = PAYOUTS[p.deal][entry.cust];
+    const numPlots    = p.plots.length;
+    const tokenGain   = entry.move * numPlots;   // total tokens gained across all plots
+    const tokenValue  = tokenGain * 3;           // coin-equivalent
+    const netNav      = tokenValue + dealCoins;
+    const isNoDeal    = p.deal === 'no_deal';
+    const uncovered   = isNoDeal && tokenGain > 3;
+
+    const block = document.createElement('div');
+    block.className = 'player-breakdown';
+
+    // Header
+    const hdr = document.createElement('div');
+    hdr.className = 'breakdown-player-hdr';
+    hdr.textContent = p.name + ' — ' + dm.icon + ' ' + dm.name;
+    block.appendChild(hdr);
+
+    // Plot move row
+    const plotRow = document.createElement('div');
+    plotRow.className = 'breakdown-row';
+    const tokenCls = tokenGain > 0 ? 'positive' : tokenGain < 0 ? 'negative' : 'neutral';
+    const tokenSign = tokenGain > 0 ? '+' : '';
+    plotRow.innerHTML = `<span>📈 Plot move (${numPlots} plot${numPlots>1?'s':''})</span>
+      <span class="breakdown-val ${tokenCls}">${tokenSign}${tokenGain} tkn = ${tokenSign}${tokenValue}🪙</span>`;
+    block.appendChild(plotRow);
+
+    // Deal income row
+    const dealRow = document.createElement('div');
+    dealRow.className = 'breakdown-row';
+    const dealCls = dealCoins > 0 ? 'positive' : isNoDeal ? 'neutral' : 'neutral';
+    dealRow.innerHTML = `<span>💰 Deal income</span>
+      <span class="breakdown-val ${dealCls}">${dealCoins > 0 ? '+' : ''}${dealCoins}🪙</span>`;
+    block.appendChild(dealRow);
+
+    // Total row
+    const totalDiv = document.createElement('div');
+    totalDiv.className = 'breakdown-total';
+    const netCls = netNav > 0 ? '' : netNav < 0 ? 'color:#CC0000' : 'color:#888';
+    totalDiv.innerHTML = `<span>🧮 Total this round</span>
+      <span class="total-val" style="${netCls}">${netNav >= 0 ? '+' : ''}${netNav}</span>`;
+    block.appendChild(totalDiv);
+
+    // Uncovered bonus badge
+    if (uncovered) {
+      const badge = document.createElement('div');
+      badge.className = 'uncovered-bonus';
+      badge.textContent = '⭐ UNCOVERED BONUS! +' + tokenGain + ' FREE TOKENS';
+      block.appendChild(badge);
+    }
+
+    container.appendChild(block);
+  });
+
+  document.getElementById('customer-overlay').classList.remove('hidden');
+}
+
+function confirmSettlement() {
+  document.getElementById('customer-overlay').classList.add('hidden');
+
+  const { cust, tokenMove } = G.pending;
+
+  G.players.forEach(p => {
+    // Move tokens
+    p.plots.forEach(pl => { pl.tokens = Math.max(0, pl.tokens + tokenMove); });
+    // Remove abandoned plots
+    p.plots = p.plots.filter(pl => pl.tokens > 0);
+    // Coins from deal
+    p.coins += PAYOUTS[p.deal][cust];
+  });
+
+  flyCoins();
+  refreshBoards();
+
+  G.phase = 'roll2';
+  G.diceActive = true;
+  setPhase('REGIME ROLL');
+  setHint('ROLL FOR WEATHER');
+  setDiceEnabled(true);
+  document.getElementById('dice').textContent = '🎲';
+}
+
+function flyCoins() {
+  const diceRect = document.getElementById('dice').getBoundingClientRect();
+  for (let i = 0; i < 6; i++) {
+    setTimeout(() => {
+      const coin = document.createElement('div');
+      coin.className = 'coin-fly';
+      const dx = (Math.random()-0.5)*160;
+      const dy = (Math.random()-0.5)*120;
+      coin.style.setProperty('--cx', dx+'px');
+      coin.style.setProperty('--cy', dy+'px');
+      coin.style.left = (diceRect.left + diceRect.width/2)  + 'px';
+      coin.style.top  = (diceRect.top  + diceRect.height/2) + 'px';
+      coin.textContent = '🪙';
+      document.body.appendChild(coin);
+      setTimeout(() => coin.remove(), 900);
+    }, i * 100);
+  }
+}
+
+function resolveRoll2(roll) {
+  const newWx = getNewRegime(G.weather, roll);
+
+  if (newWx) {
+    G.weather = newWx;
+    const wd  = WX_DISPLAY[newWx];
+    const fl  = rnd(REGIME_FLAVOUR[newWx]);
+    document.getElementById('reg-title').textContent   = wd.label + ' IS COMING!';
+    document.getElementById('reg-icon').textContent    = wd.icon;
+    document.getElementById('reg-flavour').textContent = '"' + fl + '"';
+    document.getElementById('regime-overlay').classList.remove('hidden');
+  } else {
+    enterBuyPhase();
+  }
+}
+
+function dismissRegime() {
+  document.getElementById('regime-overlay').classList.add('hidden');
+  drawWeatherZone(true);
+  enterBuyPhase();
+}
+
+function enterBuyPhase() {
+  G.phase = 'buy';
+  refreshBoards(); // enables buy buttons if enough coins
+
+  setPhase('BUY PLOTS?');
+  setHint('OR SKIP TO NEXT');
+  setDiceEnabled(false);
+  document.getElementById('dice').textContent = '🏪';
+  setActions(`<button class="pixel-btn primary" onclick="endBuyPhase()" style="font-size:8px;width:100%;">
+    NEXT ROUND ▶
+  </button>`);
+}
+
+function buyPlot(i) {
+  if (G.phase !== 'buy') return;
+  const p = G.players[i];
+  const cost = PLOT_COSTS[G.weather];
+  if (p.coins < cost) return;
+  p.coins -= cost;
+  p.plots.push({tokens:10});
+  refreshBoard(i);
+}
+
+function endBuyPhase() {
+  if (G.round >= 24) { showEndScreen(); return; }
+  G.round++;
+  beginRound();
+}
+
+// ── AI LOGIC ─────────────────────────────────
+
+function triggerAI() {
+  const ai = G.players[1];
+  if (!ai.isAI) return;
+  const delay = 900 + Math.random()*1400;
+  setTimeout(() => {
+    ai.deal      = aiChooseDeal();
+    ai.confirmed = true;
+    const m = DEAL_META[ai.deal];
+    document.getElementById('dcards-1').innerHTML =
+      `<div class="computer-deal">🤖 LOCKED IN<br><span style="font-size:22px;display:block;margin-top:6px">${m.icon}</span></div>`;
+    document.getElementById('cbtn-1').style.display = 'none';
+    checkAllConfirmed();
+  }, delay);
+}
+
+function aiChooseDeal() {
+  // 72% optimal (EV-based), 28% random deviation
+  if (Math.random() < 0.28) {
+    const picks = ['root_veg','good_veg','exotic'];
+    return picks[Math.floor(Math.random()*picks.length)];
+  }
+
+  const table = WEATHER_TABLES[G.weather];
+  const count = {nelly:0,rita:0,harry:0,barry:0};
+  table.forEach(e => count[e.cust]++);
+
+  const deals = ['root_veg','good_veg','exotic'];
+  let best = 'good_veg', bestEV = -1;
+
+  deals.forEach(d => {
+    const ev = Object.keys(count).reduce((s,c) => s + (count[c]/6)*PAYOUTS[d][c], 0);
+    if (ev > bestEV) { bestEV = ev; best = d; }
+  });
+
+  // 15% chance to pick second-best (keeps it beatable)
+  if (Math.random() < 0.15) {
+    const others = deals.filter(d => d !== best);
+    return others[Math.floor(Math.random()*others.length)];
+  }
+
+  return best;
+}
+
+// ── END GAME ─────────────────────────────────
+
+function showEndScreen() {
+  const ranked = G.players
+    .map(p => ({...p, totalTokens: p.plots.reduce((s,pl)=>s+pl.tokens,0), finalNav: nav(p)}))
+    .sort((a,b) => b.finalNav - a.finalNav);
+
+  document.getElementById('winner-banner').textContent =
+    '🏆 ' + ranked[0].name + ' WINS WITH ' + ranked[0].finalNav + '!';
+
+  const podium = document.getElementById('podium');
+  podium.innerHTML = '';
+
+  // For 2-player: display 2nd on left, 1st on right (classic podium)
+  const slots = ranked.length >= 2 ? [ranked[1], ranked[0]] : [ranked[0]];
+  const clss  = ranked.length >= 2 ? ['p2nd','p1st'] : ['p1st'];
+  const medals = ranked.length >= 2 ? ['🥈','🥇'] : ['🥇'];
+
+  slots.forEach((p, si) => {
+    const slot = document.createElement('div');
+    slot.className = 'podium-slot ' + clss[si];
+    slot.innerHTML = `
+      <div class="podium-rank">${medals[si]}</div>
+      <div class="podium-name">${p.name}</div>
+      <div class="podium-nav">${p.finalNav}</div>
+      <div class="podium-breakdown">${p.coins}🪙 + ${p.totalTokens*3}📦</div>
+    `;
+    podium.appendChild(slot);
+  });
+
+  document.getElementById('end-screen').classList.remove('hidden');
+
+  // Fireworks
+  const fw = document.getElementById('fireworks-layer');
+  const cols = ['#FFD700','#FF69B4','#00CED1','#FF4500','#7B68EE','#32CD32'];
+  for (let i = 0; i < 18; i++) {
+    setTimeout(() => {
+      const dot = document.createElement('div');
+      dot.className = 'fw-dot';
+      dot.style.left = (8 + Math.random()*84) + '%';
+      dot.style.top  = (8 + Math.random()*84) + '%';
+      dot.style.background = cols[Math.floor(Math.random()*cols.length)];
+      dot.style.animationDelay = Math.random()*.4 + 's';
+      fw.appendChild(dot);
+    }, i*180);
+  }
+}
+
+function resetToSetup() {
+  document.getElementById('end-screen').classList.add('hidden');
+  document.getElementById('game-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('fireworks-layer').innerHTML = '';
+}
+
+// ── UTILS ─────────────────────────────────────
+
+function rnd(arr) { return arr[Math.floor(Math.random()*arr.length)]; }
+
+// Init
+selectMode('pvp');
+</script>
+</body>
+</html>

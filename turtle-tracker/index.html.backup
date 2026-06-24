@@ -1,0 +1,2731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turtle Trade Tracker v3.0 - Multi-Account</title>
+    <style>
+        /* 1990s Web Aesthetic */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #c0c0c0;
+            color: #000;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .header {
+            background: linear-gradient(to bottom, #000080, #0000cd);
+            color: #fff;
+            padding: 10px;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            text-shadow: 2px 2px #000;
+            margin-bottom: 5px;
+        }
+        
+        .api-status {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 10px;
+            margin-left: 10px;
+        }
+        .api-connected { background: #0f0; color: #000; }
+        .api-disconnected { background: #f00; color: #fff; }
+        
+        .nav {
+            background: #d3d3d3;
+            padding: 5px 10px;
+        }
+        
+        .nav a {
+            color: #000080;
+            text-decoration: none;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+        
+        .nav a:hover { color: #f00; text-decoration: underline; }
+        
+        .container {
+            max-width: 1400px;
+            margin: 10px auto;
+            padding: 0 10px;
+        }
+        
+        .panel {
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            margin-bottom: 15px;
+        }
+        
+        .panel-header {
+            background: linear-gradient(to right, #000080, #1084d0);
+            color: #fff;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .panel-body { padding: 10px; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            font-size: 12px;
+        }
+        
+        th {
+            background: #d3d3d3;
+            border: 1px solid #808080;
+            padding: 5px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        td {
+            border: 1px solid #c0c0c0;
+            padding: 4px 6px;
+        }
+        
+        tr:nth-child(even) { background: #f0f0f0; }
+        tr:hover { background: #ffffcc; }
+        
+        .pnl-positive { color: #008000; font-weight: bold; }
+        .pnl-negative { color: #f00; font-weight: bold; }
+        
+        button {
+            font-family: "Courier New", monospace;
+            font-size: 12px;
+            padding: 4px 12px;
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            cursor: pointer;
+            margin: 2px;
+        }
+        
+        button:hover { background: #c0c0c0; }
+        button:active { border-color: #808080 #fff #fff #808080; }
+        
+        button.primary {
+            background: #000080;
+            color: #fff;
+            border-color: #4040ff #000040 #000040 #4040ff;
+        }
+        
+        /* Account/LEAPS Selector */
+        .account-selector {
+            background: #ffffcc;
+            border: 2px solid #ff6600;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .account-card {
+            background: #fff;
+            border: 2px solid #808080;
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+            display: inline-block;
+            min-width: 200px;
+        }
+        
+        .account-card:hover { background: #e6f3ff; }
+        .account-card.active {
+            background: #000080;
+            color: #fff;
+            border-color: #4040ff;
+        }
+        
+        .account-card.active .pnl-positive { color: #0f0; }
+        .account-card.active .pnl-negative { color: #ff6666; }
+        
+        /* Combined Summary Box */
+        .combined-box {
+            background: linear-gradient(to bottom, #000040, #000080);
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            border: 3px solid #ffd700;
+        }
+        
+        .combined-amount {
+            font-size: 36px;
+            font-weight: bold;
+            text-shadow: 2px 2px #000;
+        }
+        
+        /* Stat boxes */
+        .stats-grid {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-box {
+            background: #fff;
+            border: 2px inset #c0c0c0;
+            padding: 10px;
+            min-width: 150px;
+            text-align: center;
+        }
+        
+        .stat-label { font-size: 10px; color: #808080; text-transform: uppercase; }
+        .stat-value { font-size: 18px; font-weight: bold; }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #d3d3d3;
+            border: 2px solid;
+            border-color: #fff #808080 #808080 #fff;
+            min-width: 400px;
+            z-index: 1001;
+        }
+        
+        .modal-header {
+            background: linear-gradient(to right, #000080, #1084d0);
+            color: #fff;
+            padding: 6px 10px;
+            font-weight: bold;
+        }
+        
+        .modal-body { padding: 15px; }
+        .modal-footer { padding: 10px 15px; text-align: right; border-top: 1px solid #808080; }
+        
+        input, select {
+            font-family: "Courier New", monospace;
+            font-size: 12px;
+            padding: 3px;
+            border: 2px inset #c0c0c0;
+        }
+        
+        label { display: inline-block; width: 120px; font-weight: bold; }
+        .form-row { margin-bottom: 8px; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .live-price {
+            background: #000;
+            color: #0f0;
+            padding: 8px 15px;
+            font-family: "Courier New", monospace;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🐢 TURTLE TRADE TRACKER v3.0</h1>
+        <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span></div>
+    </div>
+    
+    <div class="nav">
+        <a href="#" onclick="showTab('combined')">[ 📊 Combined Dashboard ]</a>
+        <a href="#" onclick="showTab('positions')">[ 📈 Individual Positions ]</a>
+        <a href="#" onclick="showTab('data')">[ 💾 Data / Import ]</a>
+        <a href="#" onclick="showTab('simulator')">[ 🎮 Simulator ]</a>
+        <a href="#" onclick="showRulesCheatsheet()">[ 📋 Rules Cheatsheet ]</a>
+        <span style="float: right;">
+            IWM: <span id="live-iwm" class="live-price">--.--</span>
+            <button onclick="fetchIWMPrice()" style="margin-left: 3px; font-family: 'Courier New', monospace; font-size: 11px; padding: 3px 6px; background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Fetch from API">🔄</button>
+            <input type="number" id="manual-iwm" placeholder="$" style="width: 55px; margin-left: 3px; font-family: 'Courier New', monospace; font-size: 12px; padding: 2px; border: 2px inset #c0c0c0;" title="Enter current price from your broker">
+            <button onclick="setManualIWM()" style="font-family: 'Courier New', monospace; font-size: 11px; padding: 3px 6px; background: #c0c0c0; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Set manual price">Set</button>
+        </span>
+    </div>
+    
+    <div class="container">
+        <!-- COMBINED DASHBOARD TAB -->
+        <div id="tab-combined" class="tab-content active">
+            <div class="combined-box">
+                <div style="font-size: 12px; margin-bottom: 10px;">TOTAL PORTFOLIO P&L (All Accounts)</div>
+                <div class="combined-amount" id="combined-total-pnl">$0.00</div>
+                <div style="font-size: 11px; margin-top: 10px; color: #ccc;">
+                    <span id="combined-leaps-pnl">LEAPS: $0</span> | 
+                    <span id="combined-calls-pnl">Short Calls: $0</span> | 
+                    <span id="combined-open-premium">Open: $0</span>
+                </div>
+            </div>
+            
+            <!-- Account Selector -->
+            <div class="account-selector">
+                <strong>Your LEAPS Positions (Click to view details):</strong>
+                <div id="account-cards" style="margin-top: 10px;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <!-- Summary Stats -->
+            <div class="panel">
+                <div class="panel-header">📊 Portfolio Summary</div>
+                <div class="panel-body">
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Active LEAPS</div>
+                            <div class="stat-value" id="total-leaps-count">0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Total LEAPS Cost</div>
+                            <div class="stat-value" id="total-leaps-cost">$0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Total LEAPS Value</div>
+                            <div class="stat-value" id="total-leaps-value">$0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">LEAPS Unrealized</div>
+                            <div class="stat-value" id="total-leaps-unrealized">$0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Short Calls Realized</div>
+                            <div class="stat-value" id="total-calls-realized">$0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Open Call Premium</div>
+                            <div class="stat-value" id="total-open-premium">$0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Breakdown Table -->
+            <div class="panel">
+                <div class="panel-header">📋 Account Breakdown</div>
+                <div class="panel-body">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Account</th>
+                                <th>LEAPS</th>
+                                <th>Cost</th>
+                                <th>Reserve</th>
+                                <th>Allocation</th>
+                                <th>Realized P&L</th>
+                                <th>Return %</th>
+                                <th>Ann. Return</th>
+                            </tr>
+                        </thead>
+                        <tbody id="breakdown-tbody">
+                            <tr><td colspan="8"><em>No positions loaded</em></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- INDIVIDUAL POSITIONS TAB -->
+        <div id="tab-positions" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">Select Account to View</div>
+                <div class="panel-body">
+                    <select id="position-selector" onchange="showPositionDetail()">
+                        <option value="">-- Select Account --</option>
+                    </select>
+                    <button onclick="showModal('new-leaps-modal')" class="primary" style="margin-left: 10px;">[+ Add New LEAPS]</button>
+                </div>
+            </div>
+            
+            <div id="position-detail">
+                <!-- Populated when account selected -->
+                <p><em>Select an account above to view detailed breakdown</em></p>
+            </div>
+        </div>
+        
+        <!-- DATA / IMPORT TAB -->
+        <div id="tab-data" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">🔑 API Configuration</div>
+                <div class="panel-body">
+                    <div class="form-row">
+                        <label>Alpha Vantage Key:</label>
+                        <input type="text" id="api-key" style="width: 300px;" value="VAD1Q74JGQ6JTG42">
+                        <button onclick="saveApiKey()">[ Save ]</button>
+                        <button onclick="testApiKey()">[ Test ]</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">📥 Import Data</div>
+                <div class="panel-body">
+                    <p><strong>Option 1: Upload File</strong></p>
+                    <input type="file" id="file-import" accept=".csv,.json" style="margin-bottom: 10px;">
+                    <select id="import-format-file">
+                        <option value="auto">Auto-detect format</option>
+                        <option value="json">JSON (Portfolio Backup)</option>
+                        <option value="tastytrade">Tastytrade CSV</option>
+                        <option value="ibkr">Interactive Brokers CSV</option>
+                    </select>
+                    <br><br>
+                    <button onclick="importFile()">[ Import File ]</button>
+                    
+                    <hr>
+                    <p><strong>Option 2: Paste Content</strong></p>
+                    <select id="import-format">
+                        <option value="tastytrade">Tastytrade Format</option>
+                        <option value="ibkr">Interactive Brokers Format</option>
+                    </select>
+                    <br><br>
+                    <textarea id="csv-import" rows="8" style="width: 100%; font-family: monospace; font-size: 11px;" placeholder="Paste CSV or JSON data here..."></textarea>
+                    <br><br>
+                    <button onclick="importCSV()">[ Import from Text ]</button>
+                    <button onclick="downloadTemplate()">[ Download Template ]</button>
+                    
+                    <hr>
+                    <p><strong>Export All Data:</strong></p>
+                    <button onclick="exportData()">[ Download JSON Backup ]</button>
+                    <button onclick="clearAllData()" style="background: #800000; color: #fff;">[ Clear All ]</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SIMULATOR TAB -->
+        <div id="tab-simulator" class="tab-content">
+            <style>
+                /* Simulator Windows 95 Style - COMPACT LAYOUT */
+                .sim-container {
+                    display: flex;
+                    flex-direction: column;
+                    background: #c0c0c0;
+                    padding: 6px;
+                    height: calc(100vh - 120px);
+                    overflow: hidden;
+                }
+                /* TOP: P&L Summary Bar */
+                .sim-pnl-bar {
+                    display: grid;
+                    grid-template-columns: repeat(4, 1fr);
+                    gap: 6px;
+                    background: #000080;
+                    border: 2px solid;
+                    border-color: #fff #808080 #808080 #fff;
+                    padding: 6px 10px;
+                    margin-bottom: 6px;
+                }
+                .sim-pnl-item {
+                    text-align: center;
+                }
+                .sim-pnl-label {
+                    color: #ccc;
+                    font-size: 9px;
+                    text-transform: uppercase;
+                }
+                .sim-pnl-value {
+                    color: #fff;
+                    font-weight: bold;
+                    font-size: 16px;
+                    font-family: 'Courier New', monospace;
+                }
+                /* MAIN CONTENT: 3 columns */
+                .sim-main {
+                    display: grid;
+                    grid-template-columns: 20% 42% 38%;
+                    gap: 6px;
+                    flex: 1;
+                    min-height: 0;
+                }
+                .sim-panel {
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #fff #808080 #808080 #fff;
+                    padding: 6px;
+                    overflow: auto;
+                }
+                .sim-panel-header {
+                    background: #000080;
+                    color: #fff;
+                    padding: 3px 6px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    margin: -6px -6px 6px -6px;
+                }
+                .sim-panel-header-inactive {
+                    background: #808080;
+                    color: #fff;
+                    padding: 3px 6px;
+                    font-weight: bold;
+                    font-size: 11px;
+                    margin: -6px -6px 6px -6px;
+                }
+                .sim-stat {
+                    margin: 4px 0;
+                    font-size: 10px;
+                }
+                .sim-stat-label {
+                    color: #000;
+                    font-size: 9px;
+                }
+                .sim-stat-value {
+                    font-weight: bold;
+                    font-size: 12px;
+                    font-family: 'Courier New', monospace;
+                }
+                .sim-chart-container {
+                    background: #000;
+                    border: 2px inset #c0c0c0;
+                    margin: 2px 0;
+                }
+                .sim-btn {
+                    font-family: 'MS Sans Serif', sans-serif;
+                    font-size: 10px;
+                    padding: 3px 8px;
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #fff #808080 #808080 #fff;
+                    cursor: pointer;
+                    margin: 2px;
+                }
+                .sim-btn:active {
+                    border-color: #808080 #fff #fff #808080;
+                }
+                .sim-btn-primary {
+                    background: #000080;
+                    color: #fff;
+                }
+                .sim-option-btn {
+                    display: block;
+                    width: 100%;
+                    text-align: left;
+                    padding: 3px 6px;
+                    margin: 1px 0;
+                    font-size: 10px;
+                    background: #c0c0c0;
+                    border: 2px solid;
+                    border-color: #fff #808080 #808080 #fff;
+                    cursor: pointer;
+                }
+                .sim-option-btn:hover {
+                    background: #d4d0c8;
+                }
+                .sim-option-btn.selected {
+                    background: #000080;
+                    color: #fff;
+                }
+                .sim-pnl-positive { color: #00ff00; }
+                .sim-pnl-negative { color: #ff6666; }
+                .sim-pnl-positive-dark { color: #008000; }
+                .sim-pnl-negative-dark { color: #cc0000; }
+                .sim-vix-normal { background: #e8f5e9; }
+                .sim-vix-elevated { background: #fff3cd; }
+                .sim-vix-high { background: #ffe0b2; }
+                .sim-vix-panic { background: #ffebee; }
+                .sim-results {
+                    background: #ffffcc;
+                    border: 2px solid #000;
+                    padding: 8px;
+                    margin-top: 6px;
+                }
+            </style>
+            
+            <div class="sim-container">
+                <!-- TOP: P&L Summary Bar (Always Visible) -->
+                <div class="sim-pnl-bar">
+                    <div class="sim-pnl-item">
+                        <div class="sim-pnl-label">Total Weeks</div>
+                        <div class="sim-pnl-value" id="sim-total-weeks">0</div>
+                    </div>
+                    <div class="sim-pnl-item">
+                        <div class="sim-pnl-label">Total P&L</div>
+                        <div class="sim-pnl-value" id="sim-cumulative-pnl">$0.00</div>
+                    </div>
+                    <div class="sim-pnl-item">
+                        <div class="sim-pnl-label">Avg Per Week</div>
+                        <div class="sim-pnl-value" id="sim-avg-pnl">$0.00</div>
+                    </div>
+                    <div class="sim-pnl-item">
+                        <div class="sim-pnl-label">Current Week</div>
+                        <div class="sim-pnl-value" id="sim-week">1</div>
+                    </div>
+                </div>
+                
+                <!-- MAIN: 3 Columns -->
+                <div class="sim-main">
+                    <!-- LEFT COLUMN: LEAPS & Market (Compact) -->
+                    <div>
+                        <!-- LEAPS Position -->
+                        <div class="sim-panel" style="margin-bottom: 6px;">
+                            <div class="sim-panel-header">📈 LEAPS Position</div>
+                            <div id="sim-leaps-empty">
+                                <p style="font-size: 10px; color: #666; margin: 4px 0;">No position loaded</p>
+                                <button class="sim-btn" onclick="loadFromTracker()">[ Load ]</button>
+                                <button class="sim-btn" onclick="createNewSimulation()">[ New ]</button>
+                            </div>
+                            <div id="sim-leaps-details" style="display: none;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                                    <div class="sim-stat">
+                                        <div class="sim-stat-label">Symbol</div>
+                                        <div class="sim-stat-value" id="sim-leaps-symbol">-</div>
+                                    </div>
+                                    <div class="sim-stat">
+                                        <div class="sim-stat-label">Strike</div>
+                                        <div class="sim-stat-value" id="sim-leaps-strike">-</div>
+                                    </div>
+                                    <div class="sim-stat">
+                                        <div class="sim-stat-label">Delta</div>
+                                        <div class="sim-stat-value" id="sim-leaps-delta">-</div>
+                                    </div>
+                                    <div class="sim-stat">
+                                        <div class="sim-stat-label">DTE</div>
+                                        <div class="sim-stat-value" id="sim-leaps-dte">-</div>
+                                    </div>
+                                </div>
+                                <div class="sim-stat" style="margin-top: 4px; border-top: 1px solid #808080; padding-top: 4px;">
+                                    <div class="sim-stat-label">Cost Basis</div>
+                                    <div class="sim-stat-value" id="sim-leaps-cost">-</div>
+                                </div>
+                                <div class="sim-stat">
+                                    <div class="sim-stat-label">Current Value</div>
+                                    <div class="sim-stat-value" id="sim-leaps-value">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Market Status (Compact) -->
+                        <div class="sim-panel" style="margin-bottom: 6px;">
+                            <div class="sim-panel-header">📊 Market</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                                <div class="sim-stat">
+                                    <div class="sim-stat-label">SPY</div>
+                                    <div class="sim-stat-value" id="sim-spy">$590.00</div>
+                                </div>
+                                <div class="sim-stat">
+                                    <div class="sim-stat-label">VIX</div>
+                                    <div class="sim-stat-value" id="sim-vix">15.0</div>
+                                </div>
+                            </div>
+                            <div class="sim-stat" style="margin-top: 4px;">
+                                <div class="sim-stat-label">Scenario</div>
+                                <select id="sim-scenario" style="width: 100%; font-size: 10px; margin-top: 2px;" onchange="changeScenario()">
+                                    <option value="normal">Normal Market</option>
+                                    <option value="bull">Bull Run</option>
+                                    <option value="bear">Bear Market</option>
+                                    <option value="crash">Crash Mode</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div style="text-align: center; padding: 4px;">
+                            <button class="sim-btn sim-btn-primary" onclick="runWeek()" id="sim-run-btn">[ ▶ Run ]</button>
+                            <button class="sim-btn" onclick="resetSimulation()">[ ↺ ]</button>
+                        </div>
+                    </div>
+                    
+                    <!-- CENTER COLUMN: Charts -->
+                    <div>
+                        <!-- Price Chart -->
+                        <div class="sim-panel" style="margin-bottom: 6px; height: 55%;">
+                            <div class="sim-panel-header">📉 SPY Price Action</div>
+                            <div class="sim-chart-container" style="height: calc(100% - 22px);">
+                                <canvas id="sim-price-chart" width="400" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- VIX Chart -->
+                        <div class="sim-panel" style="height: calc(45% - 6px);">
+                            <div class="sim-panel-header">📊 VIX</div>
+                            <div class="sim-chart-container" style="height: calc(100% - 22px);">
+                                <canvas id="sim-vix-chart" width="400" height="80"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- RIGHT COLUMN: Options Chain & Positions -->
+                    <div>
+                        <!-- Options Chain (Scrollable) -->
+                        <div class="sim-panel" style="margin-bottom: 6px; max-height: 55%; overflow: auto;">
+                            <div class="sim-panel-header">🔗 Sell Weekly Call</div>
+                            <div id="sim-options-list" style="font-size: 10px;">
+                                <p style="color: #666; font-size: 9px; margin: 4px 0;">Click a strike to sell:</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Short Call Position -->
+                        <div class="sim-panel" style="margin-bottom: 6px;">
+                            <div class="sim-panel-header-inactive" id="sim-call-header">📉 Short Call</div>
+                            <div id="sim-call-empty" style="font-size: 10px; color: #666; padding: 4px;">
+                                No call sold this week
+                            </div>
+                            <div id="sim-call-details" style="display: none; padding: 4px;">
+                                <div class="sim-stat">
+                                    <div class="sim-stat-label">Strike</div>
+                                    <div class="sim-stat-value" id="sim-call-strike">-</div>
+                                </div>
+                                <div class="sim-stat">
+                                    <div class="sim-stat-label">Premium</div>
+                                    <div class="sim-stat-value" id="sim-call-premium">-</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Week Results (Hidden initially) -->
+                        <div id="sim-results" class="sim-results" style="display: none;">
+                            <div style="font-weight: bold; margin-bottom: 6px; font-size: 11px;">Week <span id="sim-result-week">1</span> Results</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px;">
+                                <div>LEAPS: <span id="sim-leaps-pnl" class="sim-stat-value" style="font-size: 11px;">-</span></div>
+                                <div>Call: <span id="sim-call-pnl" class="sim-stat-value" style="font-size: 11px;">-</span></div>
+                            </div>
+                            <div style="border-top: 1px solid #000; padding-top: 4px; margin-top: 4px; font-size: 10px;">
+                                Total: <span id="sim-total-pnl" class="sim-stat-value" style="font-size: 12px;">-</span>
+                            </div>
+                            <div style="margin-top: 6px; text-align: center;">
+                                <button class="sim-btn sim-btn-primary" onclick="continueToNextWeek()">[ Continue → ]</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                        </div>
+                        <div id="sim-call-details" style="display: none;">
+                            <div class="sim-stat">
+                                <div class="sim-stat-label">Strike</div>
+                                <div class="sim-stat-value" id="sim-call-strike">-</div>
+                            </div>
+                            <div class="sim-stat">
+                                <div class="sim-stat-label">Premium</div>
+                                <div class="sim-stat-value" id="sim-call-premium">-</div>
+                            </div>
+                            <div class="sim-stat">
+                                <div class="sim-stat-label">Status</div>
+                                <div class="sim-stat-value" id="sim-call-status">Open</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW LEAPS MODAL -->
+    <div class="modal-overlay" id="new-leaps-modal">
+        <div class="modal">
+            <div class="modal-header">Add New LEAPS Position</div>
+            <div class="modal-body">
+                <div class="form-row"><label>Account Name:</label><input type="text" id="new-account-name" placeholder="e.g., Tastytrade, IBKR"></div>
+                <div class="form-row"><label>Symbol:</label><input type="text" id="new-symbol" value="IWM" style="width: 80px;"></div>
+                <div class="form-row"><label>Strike:</label><input type="number" id="new-strike" step="0.01"></div>
+                <div class="form-row"><label>Expiration:</label><input type="date" id="new-expiration"></div>
+                <div class="form-row"><label>Open Date:</label><input type="date" id="new-open-date"></div>
+                <div class="form-row"><label>Stock Price:</label><input type="number" id="new-stock-price" step="0.01"></div>
+                <div class="form-row"><label>Cost:</label><input type="number" id="new-cost" step="0.01"></div>
+                <div class="form-row"><label>Current Value:</label><input type="number" id="new-current" step="0.01"></div>
+                <div class="form-row"><label>Current Delta:</label><input type="number" id="new-delta" step="0.01" min="0" max="1" placeholder="0.75" style="width: 80px;"><small style="color: #666; margin-left: 10px;">LEAPS delta (0.00-1.00)</small></div>
+                <div class="form-row"><label>Cash Reserve:</label><input type="number" id="new-cash-reserve" step="0.01" placeholder="e.g., 5000"><small style="color: #666; margin-left: 10px;">Cash set aside for this position</small></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="saveNewLEAPS()" class="primary">[ Save ]</button>
+                <button onclick="hideModal('new-leaps-modal')">[ Cancel ]</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RULES CHEATSHEET MODAL -->
+    <div class="modal-overlay" id="rules-modal" style="display: none;">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">📋 Trading Rules Cheatsheet</div>
+            <div class="modal-body" style="font-size: 12px; line-height: 1.6;">
+                
+                <div style="background: #e8f4e8; border: 2px solid #4a7c4e; padding: 12px; margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 10px 0; color: #2d5a30; font-size: 14px;">🎯 LEAPS Selection Rules</h3>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li><strong>Minimum DTE:</strong> Always buy LEAPS with at least <strong>365 days</strong> to expiration</li>
+                        <li><strong>Roll Trigger:</strong> Roll position if DTE drops below <strong>180 days</strong></li>
+                        <li><strong>Delta Threshold:</strong> Roll if delta dips below <strong>75%</strong> (0.75)</li>
+                    </ul>
+                </div>
+
+                <div style="background: #fff8e1; border: 2px solid #f9a825; padding: 12px; margin-bottom: 15px;">
+                    <h3 style="margin: 0 0 10px 0; color: #f57f17; font-size: 14px;">📉 Short Call Strategy (Volatility-Based)</h3>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <tr style="background: #f5f5f5;">
+                            <td style="padding: 6px; border: 1px solid #ccc; width: 30%;"><strong>Low Volatility</strong><br>(VIX &lt; 20)</td>
+                            <td style="padding: 6px; border: 1px solid #ccc;">Sell <strong>OTM</strong> calls for premium<br>OR leave uncovered if in <strong>recovery mode</strong></td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 6px; border: 1px solid #ccc;"><strong>Medium Volatility</strong><br>(VIX 20-30)</td>
+                            <td style="padding: 6px; border: 1px solid #ccc;">Sell <strong>ATM</strong> calls for balanced risk/reward</td>
+                        </tr>
+                        <tr style="background: #f5f5f5;">
+                            <td style="padding: 6px; border: 1px solid #ccc;"><strong>High Volatility</strong><br>(VIX &gt; 30)</td>
+                            <td style="padding: 6px; border: 1px solid #ccc;">Sell <strong>ITM</strong> calls for protection<br>Consider wider strikes if VIX spikes</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="background: #e3f2fd; border: 2px solid #1976d2; padding: 12px;">
+                    <h3 style="margin: 0 0 10px 0; color: #1565c0; font-size: 14px;">💡 Quick Reminders</h3>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>Check VIX before selling any call</li>
+                        <li>LEAPS = Long-term exposure with less capital</li>
+                        <li>Roll short calls before expiration if ITM and you want to keep the LEAPS</li>
+                        <li>Keep cash reserve for defensive moves</li>
+                    </ul>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button onclick="hideModal('rules-modal')" class="primary">[ Close ]</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== DATA STORE ====================
+        
+        // Structure: { leaps: [], calls: [], history: {} }
+        // Each LEAPS has an ID, calls reference their parent LEAPS ID
+        let portfolio = {
+            leaps: [],
+            calls: [],
+            history: {}  // keyed by leapsId
+        };
+        let apiKey = 'VAD1Q74JGQ6JTG42';
+        let currentIWM = null;
+        let selectedAccountId = null;
+        
+        // Load data
+        function loadData() {
+            const saved = localStorage.getItem('turtlePortfolio');
+            if (saved) {
+                portfolio = JSON.parse(saved);
+            }
+            updateDisplay();
+        }
+        
+        function saveData() {
+            localStorage.setItem('turtlePortfolio', JSON.stringify(portfolio));
+        }
+        
+        // ==================== DISPLAY ====================
+        
+        function updateDisplay() {
+            updateCombinedDashboard();
+            updateAccountCards();
+            updatePositionSelector();
+            if (selectedAccountId) {
+                showPositionDetail();
+            }
+        }
+        
+        function updateCombinedDashboard() {
+            // Calculate totals across all accounts
+            let totalLeapsCost = 0;
+            let totalLeapsValue = 0;
+            let totalCallsRealized = 0;
+            let totalOpenPremium = 0;
+            
+            portfolio.leaps.forEach(leaps => {
+                const currentVal = getCurrentLEAPSValue(leaps.id);
+                totalLeapsCost += leaps.openPremium;
+                totalLeapsValue += currentVal;
+                
+                const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
+                calls.forEach(c => {
+                    if (c.status === 'closed') {
+                        totalCallsRealized += (c.openPremium - c.closePremium);
+                    } else {
+                        totalOpenPremium += c.openPremium;
+                    }
+                });
+            });
+            
+            const leapsUnrealized = totalLeapsValue - totalLeapsCost;
+            const combinedPnl = leapsUnrealized + totalCallsRealized;
+            
+            // Update combined box
+            document.getElementById('combined-total-pnl').textContent = formatMoney(combinedPnl);
+            document.getElementById('combined-total-pnl').className = 'combined-amount ' + (combinedPnl >= 0 ? 'pnl-positive' : 'pnl-negative');
+            document.getElementById('combined-leaps-pnl').textContent = `LEAPS: ${formatMoney(leapsUnrealized)}`;
+            document.getElementById('combined-calls-pnl').textContent = `Calls: ${formatMoney(totalCallsRealized)}`;
+            document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
+            
+            // Update stats
+            document.getElementById('total-leaps-count').textContent = portfolio.leaps.length;
+            document.getElementById('total-leaps-cost').textContent = formatMoney(totalLeapsCost);
+            document.getElementById('total-leaps-value').textContent = formatMoney(totalLeapsValue);
+            document.getElementById('total-leaps-unrealized').textContent = formatMoney(leapsUnrealized);
+            document.getElementById('total-calls-realized').textContent = formatMoney(totalCallsRealized);
+            document.getElementById('total-open-premium').textContent = formatMoney(totalOpenPremium);
+            
+            // Update breakdown table
+            const tbody = document.getElementById('breakdown-tbody');
+            if (portfolio.leaps.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8"><em>No positions loaded</em></td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = portfolio.leaps.map(leaps => {
+                const currentVal = getCurrentLEAPSValue(leaps.id);
+                const leapsPnl = currentVal - leaps.openPremium;
+                
+                const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
+                let callsRealized = 0;
+                calls.forEach(c => {
+                    if (c.status === 'closed') {
+                        callsRealized += (c.openPremium - c.closePremium);
+                    }
+                });
+                
+                const netRealized = leapsPnl + callsRealized;
+                const cashReserve = leaps.cashReserve || 0;
+                const totalAllocation = leaps.openPremium + cashReserve;
+                const returnPct = totalAllocation > 0 ? (netRealized / totalAllocation) * 100 : 0;
+                
+                // Annualized
+                const openDate = new Date(leaps.openDate);
+                const today = new Date();
+                const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
+                const annReturn = (returnPct / daysHeld) * 365;
+                
+                return `
+                    <tr onclick="selectAccount('${leaps.id}')" style="cursor: pointer;">
+                        <td><strong>${leaps.accountName || 'Account'}</strong></td>
+                        <td>${leaps.symbol} $${leaps.strike} ${leaps.expiration.slice(0,7)}</td>
+                        <td>${formatMoney(leaps.openPremium)}</td>
+                        <td>${formatMoney(cashReserve)}</td>
+                        <td>${formatMoney(totalAllocation)}</td>
+                        <td class="${netRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(netRealized)}</td>
+                        <td class="${returnPct >= 0 ? 'pnl-positive' : 'pnl-negative'}">${returnPct.toFixed(2)}%</td>
+                        <td class="${annReturn >= 0 ? 'pnl-positive' : 'pnl-negative'}">${annReturn.toFixed(1)}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function updateAccountCards() {
+            const container = document.getElementById('account-cards');
+            if (portfolio.leaps.length === 0) {
+                container.innerHTML = '<em>No accounts loaded. Import data or add manually.</em>';
+                return;
+            }
+            
+            container.innerHTML = portfolio.leaps.map(leaps => {
+                const currentVal = getCurrentLEAPSValue(leaps.id);
+                const leapsPnl = currentVal - leaps.openPremium;
+                
+                const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
+                let callsRealized = 0;
+                calls.forEach(c => {
+                    if (c.status === 'closed') callsRealized += (c.openPremium - c.closePremium);
+                });
+                
+                const total = leapsPnl + callsRealized;
+                const isActive = selectedAccountId === leaps.id ? 'active' : '';
+                
+                // Get status for indicator
+                const statusInfo = getLEAPSStatus(leaps);
+                const statusEmoji = statusInfo.status === 'green' ? '🟢' : (statusInfo.status === 'orange' ? '🟠' : '🔴');
+                const statusTitle = statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : 'LEAPS Healthy';
+                
+                return `
+                    <div class="account-card ${isActive}" onclick="selectAccount('${leaps.id}')">
+                        <div style="font-weight: bold;">
+                            ${leaps.accountName || 'Account'} 
+                            <span title="${statusTitle}" style="cursor: help;">${statusEmoji}</span>
+                            <button onclick="event.stopPropagation(); editLEAPS('${leaps.id}')" style="float: right; font-size: 10px; padding: 2px 6px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Edit LEAPS">✏️</button>
+                        </div>
+                        <div style="font-size: 11px; color: #666;">${leaps.symbol} $${leaps.strike} | DTE ${statusInfo.dte}d | Δ ${(statusInfo.delta * 100).toFixed(0)}%</div>
+                        <div style="font-size: 16px; margin-top: 5px;" class="${total >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(total)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function updatePositionSelector() {
+            const select = document.getElementById('position-selector');
+            select.innerHTML = '<option value="">-- Select Account --</option>' +
+                portfolio.leaps.map(l => `<option value="${l.id}">${l.accountName || 'Account'} - ${l.symbol} $${l.strike}</option>`).join('');
+            if (selectedAccountId) {
+                select.value = selectedAccountId;
+            }
+        }
+        
+        function selectAccount(id) {
+            selectedAccountId = id;
+            showTab('positions');
+            document.getElementById('position-selector').value = id;
+            showPositionDetail();
+        }
+        
+        function showPositionDetail() {
+            const id = document.getElementById('position-selector').value || selectedAccountId;
+            if (!id) return;
+            
+            selectedAccountId = id;
+            const leaps = portfolio.leaps.find(l => l.id === id);
+            if (!leaps) return;
+            
+            const currentVal = getCurrentLEAPSValue(leaps.id);
+            const leapsPnl = currentVal - leaps.openPremium;
+            const calls = portfolio.calls.filter(c => c.parentLeapsId === id).sort((a,b) => new Date(a.openDate) - new Date(b.openDate));
+            
+            // Calculate totals
+            let realizedCallsPnl = 0;
+            let openPremium = 0;
+            calls.forEach(c => {
+                if (c.status === 'closed') {
+                    realizedCallsPnl += (c.openPremium - c.closePremium);
+                } else {
+                    openPremium += c.openPremium;
+                }
+            });
+            // REALIZED = what matches dashboard (closed calls only)
+            const netRealizedPnl = leapsPnl + realizedCallsPnl;
+            // MAX POTENTIAL = if all open calls expire worthless
+            const maxPotentialCalls = realizedCallsPnl + openPremium;
+            const maxPotentialNet = leapsPnl + maxPotentialCalls;
+            
+            // Calculate returns
+            const cashReserve = leaps.cashReserve || 0;
+            const totalAllocation = leaps.openPremium + cashReserve;
+            const realizedReturnPct = totalAllocation > 0 ? (netRealizedPnl / totalAllocation) * 100 : 0;
+            const potentialReturnPct = totalAllocation > 0 ? (maxPotentialNet / totalAllocation) * 100 : 0;
+            
+            // Calculate annualized return (days since openDate)
+            const openDate = new Date(leaps.openDate);
+            const today = new Date();
+            const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
+            const annualizedRealized = (realizedReturnPct / daysHeld) * 365;
+            const annualizedPotential = (potentialReturnPct / daysHeld) * 365;
+            
+            // Get LEAPS health status
+            const statusInfo = getLEAPSStatus(leaps);
+            const statusColor = statusInfo.status === 'green' ? '#90EE90' : (statusInfo.status === 'orange' ? '#FFB347' : '#FF6B6B');
+            const statusBorder = statusInfo.status === 'green' ? '#008000' : (statusInfo.status === 'orange' ? '#FF8C00' : '#CC0000');
+            
+            let html = `
+                <div class="panel">
+                    <div class="panel-header">📈 ${leaps.accountName || 'Account'} - ${leaps.symbol} $${leaps.strike}</div>
+                    <div class="panel-body">
+                        <div style="background: #ffffcc; border: 2px solid #ff8040; padding: 8px; margin-bottom: 10px; font-size: 11px;">
+                            <strong>📊 P&L Display:</strong> 
+                            <span style="color: #000080;">Realized (locked in)</span> vs 
+                            <span style="color: #808080;">Maximum Potential (if open calls expire worthless)</span>
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-label">LEAPS Cost</div>
+                                <div class="stat-value">${formatMoney(leaps.openPremium)}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Current Value</div>
+                                <div class="stat-value">${formatMoney(currentVal)}</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Cash Reserve</div>
+                                <div class="stat-value">${formatMoney(cashReserve)}</div>
+                            </div>
+                            <div class="stat-box" style="background: #e6f3ff;">
+                                <div class="stat-label">Total Allocation</div>
+                                <div class="stat-value">${formatMoney(totalAllocation)}</div>
+                            </div>
+                            <div class="stat-box" style="background: ${statusColor}; border: 2px solid ${statusBorder};">
+                                <div class="stat-label">⚠️ LEAPS Status</div>
+                                <div class="stat-value" style="font-size: 14px;">DTE: ${statusInfo.dte}d | Δ: ${(statusInfo.delta * 100).toFixed(0)}%</div>
+                                <div style="font-size: 9px; margin-top: 2px; ${statusInfo.warnings.length ? 'color: #CC0000; font-weight: bold;' : 'color: #008000;'}">
+                                    ${statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : '✓ Healthy'}
+                                </div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">LEAPS P&L</div>
+                                <div class="stat-value ${leapsPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(leapsPnl)}</div>
+                            </div>
+                            <div class="stat-box" style="background: #e0ffe0;">
+                                <div class="stat-label">Calls Realized ✓</div>
+                                <div class="stat-value ${realizedCallsPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(realizedCallsPnl)}</div>
+                            </div>
+                            <div class="stat-box" style="background: #ffffcc; border: 2px solid #008000;">
+                                <div class="stat-label">NET REALIZED P&L</div>
+                                <div class="stat-value ${netRealizedPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 16px;">${formatMoney(netRealizedPnl)}</div>
+                                <div style="font-size: 10px; margin-top: 2px;">${realizedReturnPct.toFixed(2)}% | ${annualizedRealized.toFixed(1)}% ann.</div>
+                            </div>
+                            <div class="stat-box" style="background: #f0f0f0; border: 1px dashed #808080;">
+                                <div class="stat-label" style="color: #666;">Max Potential ※</div>
+                                <div class="stat-value ${maxPotentialNet >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="color: #666;">${formatMoney(maxPotentialNet)}</div>
+                                <div style="font-size: 10px; margin-top: 2px; color: #666;">${potentialReturnPct.toFixed(2)}% | ${annualizedPotential.toFixed(1)}% ann.</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 10px; color: #666; text-align: right;">
+                            Position opened: ${leaps.openDate} (${daysHeld} days held)
+                        </div>
+                        <hr>
+                        <button onclick="showUpdateLEAPSModal('${leaps.id}')" class="primary">[ Update LEAPS Value ]</button>
+                        <button onclick="showUpdateCashReserveModal('${leaps.id}')" style="margin-left: 10px;">[ Update Cash Reserve ]</button>
+                        <button onclick="addShortCall('${leaps.id}')" style="margin-left: 10px;">[ Add Short Call ]</button>
+                        <hr>
+                        <h4>Short Call History</h4>
+                        <table>
+                            <thead>
+                                <tr><th>Week</th><th>Date</th><th>Strike</th><th>Sold</th><th>Close Cost</th><th>P&L</th><th>Running Realized</th><th>If Expires</th><th>Status</th></tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            let runningRealized = 0;
+            calls.forEach((c, i) => {
+                const pnl = c.status === 'closed' ? c.openPremium - c.closePremium : null;
+                // Running total only includes REALIZED (closed) calls
+                if (c.status === 'closed') {
+                    runningRealized += pnl;
+                }
+                const ifExpires = c.status === 'open' ? c.openPremium : null;
+                const maxForRow = runningRealized + (ifExpires || 0);
+                
+                html += `
+                    <tr>
+                        <td>${i+1}</td>
+                        <td>${c.openDate}${c.closeDate ? ' → ' + c.closeDate : ''}</td>
+                        <td>$${c.strike}</td>
+                        <td>${formatMoney(c.openPremium)}</td>
+                        <td>${c.closePremium !== undefined ? formatMoney(c.closePremium) : '--'}</td>
+                        <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl !== null ? formatMoney(pnl) : '--'}</td>
+                        <td class="${runningRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-weight: bold;">${formatMoney(runningRealized)}</td>
+                        <td style="color: #808080;">${ifExpires !== null ? '+' + formatMoney(ifExpires) : '--'}</td>
+                        <td>${c.status}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            
+            // Add summary row after table
+            html += `
+                <div style="margin-top: 10px; padding: 10px; background: #e8e8e8; border: 1px solid #808080;">
+                    <strong>Summary:</strong> 
+                    <span style="color: #008000;">Realized: ${formatMoney(realizedCallsPnl)}</span> | 
+                    <span style="color: #808080;">Open Premium: ${formatMoney(openPremium)}</span> | 
+                    <span style="color: #666; font-style: italic;">Max Potential: ${formatMoney(maxPotentialCalls)}</span>
+                    <div style="margin-top: 5px; font-size: 11px; color: #666;">
+                        ※ <strong>NET REALIZED</strong> (${formatMoney(netRealizedPnl)}) = locked in profits/losses (matches dashboard)<br>
+                        ※ <strong>MAX POTENTIAL</strong> (${formatMoney(maxPotentialNet)}) = assumes all open short calls expire worthless (best case)
+                    </div>
+                </div>
+            `;
+            
+            html += '</div></div>';
+            document.getElementById('position-detail').innerHTML = html;
+            updateAccountCards();
+            // Draw LEAPS value chart
+            setTimeout(() => { 
+                const leapsForChart = portfolio.leaps.find(l => l.id === ''' + id + ''');
+                if (leapsForChart) drawLEAPSValueChart(leapsForChart.id, leapsForChart.openPremium); 
+            }, 10);
+        }
+        
+        // ==================== UTILITIES ====================
+        
+        function getCurrentLEAPSValue(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return 0;
+            
+            const history = portfolio.history[leapsId] || [];
+            if (history.length > 0) {
+                const sorted = [...history].sort((a,b) => new Date(b.date) - new Date(a.date));
+                return sorted[0].value;
+            }
+            return leaps.currentValue || leaps.openPremium;
+        }
+        
+        function getLEAPSStatus(leaps) {
+            const today = new Date();
+            const expiration = new Date(leaps.expiration);
+            const dte = Math.floor((expiration - today) / (1000 * 60 * 60 * 24));
+            
+            // Normalize delta - handle both decimal (0.81) and percentage (81) inputs
+            let delta = leaps.delta || 0.80;
+            if (delta > 1) {
+                delta = delta / 100; // Convert 81 to 0.81
+            }
+            
+            // Status codes: 'green' = OK, 'orange' = warning (near 180 DTE), 'red' = danger
+            const dteWarningThreshold = 180;
+            const dteCriticalThreshold = 166; // 180 - 14 = 166 (14 days before warning)
+            const deltaThreshold = 0.75; // 75% as decimal
+            
+            let status = 'green';
+            let warnings = [];
+            
+            if (dte <= dteCriticalThreshold || delta < deltaThreshold) {
+                status = 'red';
+                if (dte <= dteCriticalThreshold) warnings.push(`DTE ${dte} days - ROLL NOW!`);
+                if (delta < deltaThreshold) warnings.push(`Delta ${(delta * 100).toFixed(0)}% - below 75% threshold`);
+            } else if (dte <= dteWarningThreshold) {
+                status = 'orange';
+                warnings.push(`DTE ${dte} days - roll soon (${dte - dteCriticalThreshold} days to decide)`);
+                if (delta < deltaThreshold) {
+                    status = 'red';
+                    warnings.push(`Delta ${(delta * 100).toFixed(0)}% - below 75% threshold`);
+                }
+            } else if (delta < deltaThreshold) {
+                status = 'red';
+                warnings.push(`Delta ${(delta * 100).toFixed(0)}% - below 75% threshold`);
+            }
+            
+            return { status, dte, delta, warnings };
+        }
+        
+        function formatMoney(amount) {
+            if (amount === undefined || amount === null) return '$0.00';
+            const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+            return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        // Normalize delta - convert percentage (81) to decimal (0.81) if needed
+        function normalizeDelta(delta) {
+            if (!delta || isNaN(delta)) return 0.80;
+            if (delta > 1) return delta / 100;
+            return delta;
+        }
+        
+        // ==================== IMPORT / EXPORT ====================
+        
+        function importFile() {
+            const fileInput = document.getElementById('file-import');
+            const format = document.getElementById('import-format-file').value;
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a file');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                
+                // Auto-detect format
+                let detectedFormat = format;
+                if (format === 'auto') {
+                    if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+                        detectedFormat = 'json';
+                    } else if (content.includes('Transaction History,Header')) {
+                        detectedFormat = 'ibkr';
+                    } else if (content.includes('Symbol,Status')) {
+                        detectedFormat = 'tastytrade';
+                    } else {
+                        alert('Could not auto-detect format. Please select format manually.');
+                        return;
+                    }
+                }
+                
+                if (detectedFormat === 'json') {
+                    importJSON(content);
+                } else if (detectedFormat === 'ibkr') {
+                    importIBKRCSV(content);
+                } else if (detectedFormat === 'tastytrade') {
+                    importTastytradeCSV(content);
+                }
+                
+                // Clear file input
+                fileInput.value = '';
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function importJSON(jsonText) {
+            try {
+                const data = JSON.parse(jsonText);
+                
+                if (data.leaps && Array.isArray(data.leaps)) {
+                    if (confirm(`Import ${data.leaps.length} LEAPS position(s) and ${data.calls?.length || 0} short call(s)?`)) {
+                        portfolio = data;
+                        saveData();
+                        updateDisplay();
+                        alert('Portfolio imported successfully!');
+                    }
+                } else {
+                    alert('Invalid JSON format. Expected { leaps: [], calls: [], history: {} }');
+                }
+            } catch (e) {
+                alert('Error parsing JSON: ' + e.message);
+            }
+        }
+        
+        function importCSV() {
+            const format = document.getElementById('import-format').value;
+            const csvText = document.getElementById('csv-import').value.trim();
+            
+            if (!csvText) {
+                alert('Please paste CSV data');
+                return;
+            }
+            
+            if (format === 'tastytrade') {
+                importTastytradeCSV(csvText);
+            } else if (format === 'ibkr') {
+                importIBKRCSV(csvText);
+            }
+        }
+        
+        function importTastytradeCSV(csvText) {
+            // Parse tastytrade format
+            alert('Tastytrade import - please use the existing tracker data or provide sample');
+        }
+        
+        function importIBKRCSV(csvText) {
+            const lines = csvText.split('\n');
+            const transactions = [];
+            
+            // Extract account from first data row
+            let accountName = 'IBKR Account';
+            
+            lines.forEach(line => {
+                if (line.startsWith('Transaction History,Data')) {
+                    const parts = line.split(',');
+                    if (parts.length >= 13 && parts[6].includes('IWM')) {
+                        // Parse option symbol to get expiry info
+                        const symbol = parts[6].replace(/\s/g, '');
+                        const match = symbol.match(/IWM(\d{2})(\d{2})(\d{2})([CP])(\d+)/);
+                        
+                        if (match) {
+                            const year = '20' + match[1];
+                            const month = match[2];
+                            const day = match[3];
+                            const expiration = `${year}-${month}-${day}`;
+                            const dte = Math.floor((new Date(expiration) - new Date()) / (1000 * 60 * 60 * 24));
+                            const isCall = match[4] === 'C';
+                            const strike = parseInt(match[5]) / 1000;
+                            
+                            transactions.push({
+                                date: parts[2],
+                                desc: parts[4],
+                                type: parts[5],  // Buy or Sell
+                                symbol: symbol,
+                                qty: parseFloat(parts[7]),
+                                price: parseFloat(parts[8]),
+                                net: parseFloat(parts[12]),
+                                expiryYear: year,
+                                expiration: expiration,
+                                strike: strike,
+                                dte: dte,
+                                isCall: isCall,
+                                used: false  // Track if we've processed this
+                            });
+                            accountName = parts[3];
+                        }
+                    }
+                }
+            });
+            
+            if (transactions.length === 0) {
+                alert('No IWM transactions found');
+                return;
+            }
+            
+            // Find LEAPS (longest-dated call option with > 180 DTE)
+            const callBuys = transactions.filter(t => t.isCall && t.type === 'Buy');
+            callBuys.sort((a, b) => b.dte - a.dte); // Sort by DTE descending
+            const leapsMatch = callBuys.find(t => t.dte > 180);
+            
+            if (!leapsMatch) {
+                alert('Could not find LEAPS position in IBKR data. Looking for call option with > 180 days to expiration.');
+                return;
+            }
+            
+            leapsMatch.used = true;
+            
+            // Create LEAPS entry
+            const leapsId = 'LEAPS_' + Date.now();
+            const newLeaps = {
+                id: leapsId,
+                type: 'LEAPS',
+                accountName: accountName,
+                symbol: 'IWM',
+                strike: leapsMatch.strike,
+                expiration: leapsMatch.expiration,
+                openDate: leapsMatch.date,
+                openStockPrice: 0,
+                openPremium: Math.abs(leapsMatch.net),
+                currentValue: Math.abs(leapsMatch.net),
+                quantity: 1,
+                status: 'open'
+            };
+            
+            portfolio.leaps.push(newLeaps);
+            portfolio.history[leapsId] = [{
+                date: leapsMatch.date,
+                iwmPrice: 0,
+                value: Math.abs(leapsMatch.net),
+                notes: 'LEAPS purchased (IBKR import)'
+            }];
+            
+            // Process short calls - match sells with buys by strike+expiry
+            const shortCalls = [];
+            
+            // Get non-LEAPS transactions sorted by date
+            const shortTrans = transactions
+                .filter(t => !t.isLeaps)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Track open positions by key "strike-expiration"
+            const openPositions = {};
+            
+            shortTrans.forEach((t, idx) => {
+                const key = `${t.strike}-${t.expiration}`;
+                
+                if (t.type === 'Sell') {
+                    // Check if there's already an open position for this strike/expiry
+                    if (openPositions[key]) {
+                        // This shouldn't happen normally, but handle it
+                        // Close the old one first
+                        const oldCall = openPositions[key];
+                        oldCall.closeDate = t.date;
+                        oldCall.closePremium = 0;  // Unknown
+                        oldCall.status = 'closed';
+                        oldCall.notes = 'Auto-closed on new sell';
+                        shortCalls.push(oldCall);
+                    }
+                    
+                    // Open new position
+                    openPositions[key] = {
+                        id: 'CALL_' + Date.now() + '_' + idx,
+                        type: 'SHORT_CALL',
+                        parentLeapsId: leapsId,
+                        symbol: 'IWM',
+                        strike: t.strike,
+                        expiration: t.expiration,
+                        openDate: t.date,
+                        openStockPrice: 0,
+                        openPremium: Math.abs(t.net),
+                        status: 'open'
+                    };
+                    
+                } else if (t.type === 'Buy' && openPositions[key]) {
+                    // Close the open position
+                    const call = openPositions[key];
+                    call.closeDate = t.date;
+                    call.closePremium = Math.abs(t.net);
+                    call.status = 'closed';
+                    shortCalls.push(call);
+                    delete openPositions[key];
+                }
+            });
+            
+            // Add any remaining open positions
+            Object.values(openPositions).forEach(call => {
+                shortCalls.push(call);
+            });
+            
+            portfolio.calls.push(...shortCalls);
+            saveData();
+            updateDisplay();
+            
+            const closedCalls = shortCalls.filter(c => c.status === 'closed').length;
+            const openCalls = shortCalls.filter(c => c.status === 'open').length;
+            const totalPnl = shortCalls.reduce((sum, c) => {
+                return sum + (c.status === 'closed' ? c.openPremium - c.closePremium : 0);
+            }, 0);
+            
+            alert(`Imported Successfully!\n\nLEAPS: IWM $${leapsMatch.strike} ${leapsMatch.expiration}\nCost: $${Math.abs(leapsMatch.net).toFixed(2)}\n\nShort Calls: ${shortCalls.length} total\n- ${closedCalls} closed\n- ${openCalls} open\n\nRealized P&L: $${totalPnl.toFixed(2)}`);
+            
+            // Prompt to update LEAPS current value
+            setTimeout(() => {
+                const currentVal = prompt(`Enter current LEAPS value (cost was $${Math.abs(leapsMatch.net).toFixed(2)}):`, '');
+                if (currentVal && !isNaN(parseFloat(currentVal))) {
+                    newLeaps.currentValue = parseFloat(currentVal);
+                    portfolio.history[leapsId].push({
+                        date: new Date().toISOString().split('T')[0],
+                        iwmPrice: 0,
+                        value: parseFloat(currentVal),
+                        notes: 'Current value (import)'
+                    });
+                    saveData();
+                    updateDisplay();
+                }
+            }, 100);
+        }
+        
+        function showUpdateLEAPSModal(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Create modal dynamically
+            const modalHtml = `
+                <div class="modal-overlay" id="update-leaps-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Update LEAPS Value - ${leaps.accountName}</div>
+                        <div class="modal-body">
+                            <div class="form-row"><label>Date:</label><input type="date" id="upd-date" value="${today}"></div>
+                            <div class="form-row"><label>IWM Price:</label><input type="number" id="upd-iwm" step="0.01" placeholder="224.00"></div>
+                            <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}"></div>
+                            <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="upd-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"><small style="color: #666; margin-left: 10px;">Current: ${normalizeDelta(leaps.delta).toFixed(2)}</small></div>
+                            <div class="form-row"><label>Notes:</label><input type="text" id="upd-notes" placeholder="Weekly update"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveLEAPSUpdate('${leapsId}')" class="primary">[ Save ]</button>
+                            <button onclick="document.getElementById('update-leaps-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+        function saveLEAPSUpdate(leapsId) {
+            const date = document.getElementById('upd-date').value;
+            const iwmPrice = parseFloat(document.getElementById('upd-iwm').value) || 0;
+            const value = parseFloat(document.getElementById('upd-value').value);
+            const delta = normalizeDelta(parseFloat(document.getElementById('upd-delta').value));
+            const notes = document.getElementById('upd-notes').value;
+            
+            if (!value || isNaN(value)) {
+                alert('Please enter a valid LEAPS value');
+                return;
+            }
+            
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (leaps) {
+                leaps.currentValue = value;
+                if (!isNaN(delta)) {
+                    leaps.delta = delta;
+                }
+                
+                if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
+                portfolio.history[leapsId].push({
+                    date: date,
+                    iwmPrice: iwmPrice,
+                    value: value,
+                    delta: !isNaN(delta) ? delta : leaps.delta,
+                    notes: notes || 'Manual update'
+                });
+                
+                saveData();
+                updateDisplay();
+            }
+            
+            document.getElementById('update-leaps-modal').remove();
+        }
+        
+        function showUpdateCashReserveModal(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            
+            const modalHtml = `
+                <div class="modal-overlay" id="update-reserve-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Update Cash Reserve - ${leaps.accountName}</div>
+                        <div class="modal-body">
+                            <p style="margin-bottom: 10px; font-size: 11px; color: #666;">
+                                Cash reserve is money set aside for this position (e.g., for buying back calls if needed).
+                            </p>
+                            <div class="form-row">
+                                <label>Current Reserve:</label>
+                                <span style="font-weight: bold;">${formatMoney(leaps.cashReserve || 0)}</span>
+                            </div>
+                            <div class="form-row">
+                                <label>New Reserve:</label>
+                                <input type="number" id="reserve-amount" step="0.01" value="${leaps.cashReserve || 0}">
+                            </div>
+                            <div class="form-row">
+                                <label>Notes:</label>
+                                <input type="text" id="reserve-notes" placeholder="e.g., Added $1000 for margin">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveCashReserve('${leapsId}')" class="primary">[ Save ]</button>
+                            <button onclick="document.getElementById('update-reserve-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+        function saveCashReserve(leapsId) {
+            const amount = parseFloat(document.getElementById('reserve-amount').value) || 0;
+            const notes = document.getElementById('reserve-notes').value;
+            
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (leaps) {
+                const oldReserve = leaps.cashReserve || 0;
+                leaps.cashReserve = amount;
+                
+                // Log to history
+                if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
+                portfolio.history[leapsId].push({
+                    date: new Date().toISOString().split('T')[0],
+                    iwmPrice: 0,
+                    value: leaps.currentValue || leaps.openPremium,
+                    notes: `Cash reserve: ${formatMoney(oldReserve)} → ${formatMoney(amount)}${notes ? ' - ' + notes : ''}`
+                });
+                
+                saveData();
+                updateDisplay();
+            }
+            
+            document.getElementById('update-reserve-modal').remove();
+        }
+        
+        function addShortCall(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            
+            const today = new Date().toISOString().split('T')[0];
+            
+            const modalHtml = `
+                <div class="modal-overlay" id="add-call-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Add Short Call - ${leaps.accountName}</div>
+                        <div class="modal-body">
+                            <div class="form-row"><label>Action:</label>
+                                <select id="call-action">
+                                    <option value="open">Sell to Open (New Call)</option>
+                                    <option value="close">Buy to Close</option>
+                                </select>
+                            </div>
+                            <div class="form-row"><label>Date:</label><input type="date" id="call-date" value="${today}"></div>
+                            <div class="form-row"><label>Strike:</label><input type="number" id="call-strike" step="0.01"></div>
+                            <div class="form-row"><label>Expiration:</label><input type="date" id="call-exp"></div>
+                            <div class="form-row"><label>Premium:</label><input type="number" id="call-premium" step="0.01"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveNewCall('${leapsId}')" class="primary">[ Save ]</button>
+                            <button onclick="document.getElementById('add-call-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+        
+        function saveNewCall(leapsId) {
+            const action = document.getElementById('call-action').value;
+            const date = document.getElementById('call-date').value;
+            const strike = parseFloat(document.getElementById('call-strike').value);
+            const expiration = document.getElementById('call-exp').value;
+            const premium = parseFloat(document.getElementById('call-premium').value);
+            
+            if (action === 'open') {
+                // New short call
+                portfolio.calls.push({
+                    id: 'CALL_' + Date.now(),
+                    type: 'SHORT_CALL',
+                    parentLeapsId: leapsId,
+                    symbol: 'IWM',
+                    strike: strike,
+                    expiration: expiration,
+                    openDate: date,
+                    openStockPrice: 0,
+                    openPremium: premium,
+                    status: 'open'
+                });
+            } else {
+                // Close existing
+                const openCall = portfolio.calls.find(c => 
+                    c.parentLeapsId === leapsId && 
+                    c.status === 'open' && 
+                    c.strike === strike
+                );
+                
+                if (openCall) {
+                    openCall.closeDate = date;
+                    openCall.closePremium = premium;
+                    openCall.status = 'closed';
+                } else {
+                    alert('No open call found for that strike');
+                    return;
+                }
+            }
+            
+            saveData();
+            updateDisplay();
+            document.getElementById('add-call-modal').remove();
+        }
+        
+        // ==================== EDIT LEAPS ====================
+        
+        function editLEAPS(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            
+            const modalId = 'edit-leaps-modal';
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById(modalId);
+            if (existingModal) existingModal.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = modalId;
+            modal.className = 'modal';
+            modal.style.display = 'block';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-width: 400px;">
+                    <div class="modal-header">✏️ Edit LEAPS Position</div>
+                    <div class="modal-body">
+                        <div class="form-row"><label>Account Name:</label><input type="text" id="edit-account" value="${leaps.accountName || ''}"></div>
+                        <div class="form-row"><label>Symbol:</label><input type="text" id="edit-symbol" value="${leaps.symbol}" style="text-transform: uppercase;"></div>
+                        <div class="form-row"><label>Strike:</label><input type="number" id="edit-strike" step="0.01" value="${leaps.strike}"></div>
+                        <div class="form-row"><label>Expiration:</label><input type="date" id="edit-expiration" value="${leaps.expiration}"></div>
+                        <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="edit-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"></div>
+                        <div class="form-row"><label>Original Cost:</label><input type="number" id="edit-cost" step="0.01" value="${leaps.openPremium}"></div>
+                        <div class="form-row"><label>Current Value:</label><input type="number" id="edit-current" step="0.01" value="${leaps.currentValue}"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button onclick="saveEditLEAPS('${leapsId}')" class="primary">[ Save Changes ]</button>
+                        <button onclick="document.getElementById('${modalId}').remove()">[ Cancel ]</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+        
+        function saveEditLEAPS(leapsId) {
+            const leaps = portfolio.leaps.find(l => l.id === leapsId);
+            if (!leaps) return;
+            
+            const accountName = document.getElementById('edit-account').value;
+            const symbol = document.getElementById('edit-symbol').value.toUpperCase();
+            const strike = parseFloat(document.getElementById('edit-strike').value);
+            const expiration = document.getElementById('edit-expiration').value;
+            const delta = normalizeDelta(parseFloat(document.getElementById('edit-delta').value));
+            const cost = parseFloat(document.getElementById('edit-cost').value);
+            const current = parseFloat(document.getElementById('edit-current').value);
+            
+            if (!symbol || !strike || !expiration) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Update the LEAPS
+            leaps.accountName = accountName;
+            leaps.symbol = symbol;
+            leaps.strike = strike;
+            leaps.expiration = expiration;
+            leaps.delta = delta;
+            leaps.openPremium = cost;
+            leaps.currentValue = current;
+            
+            saveData();
+            updateDisplay();
+            document.getElementById('edit-leaps-modal').remove();
+            
+            console.log(`LEAPS ${leapsId} updated`);
+        }
+        
+        function saveNewLEAPS() {
+            const leapsId = 'LEAPS_' + Date.now();
+            const newLeaps = {
+                id: leapsId,
+                type: 'LEAPS',
+                accountName: document.getElementById('new-account-name').value || 'Manual Entry',
+                symbol: document.getElementById('new-symbol').value.toUpperCase(),
+                strike: parseFloat(document.getElementById('new-strike').value),
+                expiration: document.getElementById('new-expiration').value,
+                openDate: document.getElementById('new-open-date').value,
+                openStockPrice: parseFloat(document.getElementById('new-stock-price').value) || 0,
+                openPremium: parseFloat(document.getElementById('new-cost').value),
+                currentValue: parseFloat(document.getElementById('new-current').value) || parseFloat(document.getElementById('new-cost').value),
+                delta: normalizeDelta(parseFloat(document.getElementById('new-delta').value)) || 0.80,
+                cashReserve: parseFloat(document.getElementById('new-cash-reserve').value) || 0,
+                quantity: 1,
+                status: 'open'
+            };
+            
+            portfolio.leaps.push(newLeaps);
+            portfolio.history[leapsId] = [{
+                date: newLeaps.openDate,
+                iwmPrice: newLeaps.openStockPrice,
+                value: newLeaps.openPremium,
+                notes: 'Initial entry'
+            }];
+            
+            saveData();
+            updateDisplay();
+            hideModal('new-leaps-modal');
+        }
+        
+        function exportData() {
+            const data = JSON.stringify(portfolio, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `turtle-portfolio-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+        }
+        
+        function clearAllData() {
+            if (confirm('Delete ALL data?')) {
+                portfolio = { leaps: [], calls: [], history: {} };
+                saveData();
+                updateDisplay();
+            }
+        }
+        
+        // ==================== MODALS & UI ====================
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+        }
+        
+        function showModal(id) {
+            document.getElementById(id).style.display = 'block';
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('#' + id + ' input[type="date"]').forEach(d => {
+                if (!d.value) d.value = today;
+            });
+        }
+        
+        function hideModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+        
+        function showRulesCheatsheet() {
+            showModal('rules-modal');
+        }
+        
+        function saveApiKey() {
+            apiKey = document.getElementById('api-key').value;
+            localStorage.setItem('alphaVantageKey', apiKey);
+            alert('API Key saved');
+        }
+        
+        function testApiKey() {
+            // Test API
+            fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IWM&apikey=${apiKey}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data['Global Quote']) {
+                        document.getElementById('api-status').textContent = 'API: Connected';
+                        document.getElementById('api-status').className = 'api-status api-connected';
+                        alert('Connected!');
+                    }
+                });
+        }
+        
+        // ==================== FETCH IWM PRICE ====================
+        
+        async function fetchIWMPrice() {
+            const apiKey = document.getElementById('api-key')?.value || localStorage.getItem('alphaVantageKey');
+            const priceEl = document.getElementById('live-iwm');
+            
+            if (!apiKey) {
+                alert('Please enter your Alpha Vantage API key in the Data / Import tab first.\n\nGet a free key at: https://www.alphavantage.co/support/#api-key');
+                showTab('data');
+                return;
+            }
+            
+            // Show loading state
+            priceEl.textContent = '...';
+            priceEl.style.color = '#ffff00';
+            
+            try {
+                const response = await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IWM&apikey=${apiKey}`);
+                const data = await response.json();
+                
+                if (data['Global Quote']) {
+                    const quote = data['Global Quote'];
+                    const price = parseFloat(quote['05. price']);
+                    const change = parseFloat(quote['09. change']);
+                    const changePercent = quote['10. change percent'];
+                    
+                    // Update display and store for calculations
+                    priceEl.textContent = price.toFixed(2);
+                    priceEl.style.color = change >= 0 ? '#0f0' : '#f00';
+                    currentIWM = price;
+                    
+                    // Update API status
+                    document.getElementById('api-status').textContent = 'API: Connected';
+                    document.getElementById('api-status').className = 'api-status api-connected';
+                    
+                    console.log(`IWM Price updated: $${price.toFixed(2)} (${change >= 0 ? '+' : ''}${changePercent})`);
+                } else if (data['Note']) {
+                    // API limit reached
+                    priceEl.textContent = '--.--';
+                    priceEl.style.color = '#0f0';
+                    alert('API rate limit reached. Alpha Vantage allows 25 requests per day on free tier.\n\nPlease wait a minute and try again, or upgrade your API key.');
+                } else {
+                    throw new Error('Invalid response format');
+                }
+            } catch (error) {
+                priceEl.textContent = '--.--';
+                priceEl.style.color = '#0f0';
+                console.error('Error fetching IWM price:', error);
+                alert('Failed to fetch IWM price. Please check your API key and internet connection.');
+            }
+        }
+        
+        // ==================== MANUAL PRICE OVERRIDE ====================
+        
+        function setManualIWM() {
+            const inputEl = document.getElementById('manual-iwm');
+            const priceEl = document.getElementById('live-iwm');
+            const price = parseFloat(inputEl.value);
+            
+            if (isNaN(price) || price <= 0) {
+                alert('Please enter a valid price');
+                return;
+            }
+            
+            // Update display
+            priceEl.textContent = price.toFixed(2);
+            priceEl.style.color = '#0ff'; // Cyan color to indicate manual entry
+            
+            // Store for calculations
+            currentIWM = price;
+            window.manualIWMPrice = price;
+            
+            console.log(`Manual IWM price set: $${price.toFixed(2)}`);
+            
+            // Clear input
+            inputEl.value = '';
+        }
+        
+        // ==================== SIMULATOR ====================
+        
+        // Simulator State
+        let simState = {
+            active: false,
+            week: 1,
+            spyPrice: 590,
+            vix: 15,
+            scenario: 'normal',
+            priceHistory: [590],
+            vixHistory: [15],
+            candles: [], // OHLC candles for chart
+            historicalCandles: [], // Generated context candles (gray)
+            leaps: null,
+            shortCall: null,
+            weeklyResults: [],
+            cumulativePnl: 0
+        };
+        
+        // Scenario configs
+        const SCENARIOS = {
+            normal: { name: 'Normal', drift: 0.0002, volFactor: 1.0 },
+            bull: { name: 'Bull Run', drift: 0.001, volFactor: 0.8 },
+            bear: { name: 'Bear Market', drift: -0.0005, volFactor: 1.3 },
+            crash: { name: 'Crash Mode', drift: -0.002, volFactor: 2.0 }
+        };
+        
+        // LEAPS pricing functions from minimal-game-with-leaps-selector
+        function calculateSimpleDelta(stockPrice, strike, dte) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+
+            let baseDelta;
+            if (percentITM >= 17) {
+                baseDelta = 0.92;
+            } else if (percentITM >= 13) {
+                baseDelta = 0.85 + (percentITM - 13) / 4 * 0.07;
+            } else if (percentITM >= 9) {
+                baseDelta = 0.80 + (percentITM - 9) / 4 * 0.05;
+            } else if (percentITM >= 5) {
+                baseDelta = 0.70 + (percentITM - 5) / 4 * 0.10;
+            } else if (percentITM >= 1) {
+                baseDelta = 0.55 + (percentITM - 1) / 4 * 0.15;
+            } else if (percentITM >= 0) {
+                baseDelta = 0.52 + percentITM * 0.03;
+            } else if (percentITM >= -1) {
+                baseDelta = 0.52 + percentITM * 0.03;
+            } else if (percentITM >= -5) {
+                baseDelta = 0.49 + (percentITM + 1) / 4 * 0.14;
+            } else {
+                baseDelta = Math.max(0.15, 0.35 + (percentITM + 5) / 5 * 0.20);
+            }
+
+            // DTE adjustment
+            if (percentITM > 0) {
+                const dteDiffFrom200 = (dte - 200) / 100;
+                const itmStrength = Math.min(1.0, percentITM / 15);
+                const deltaAdjustment = dteDiffFrom200 * 0.008 * itmStrength;
+                return Math.max(0.50, Math.min(0.95, baseDelta - deltaAdjustment));
+            } else {
+                const dteDiffFrom200 = (dte - 200) / 100;
+                const otmStrength = Math.min(1.0, Math.abs(percentITM) / 15);
+                const deltaAdjustment = dteDiffFrom200 * 0.008 * otmStrength;
+                return Math.max(0.05, Math.min(0.50, baseDelta + deltaAdjustment));
+            }
+        }
+
+        function calculateSimpleExtrinsic(stockPrice, strike, dte) {
+            const percentITM = ((stockPrice - strike) / stockPrice) * 100;
+            const SPY_BASE_PRICE = 590.0;
+            const baseATM_7DTE_SPY = 1350;
+            const priceScaleFactor = Math.sqrt(stockPrice / SPY_BASE_PRICE);
+            const baseATM_7DTE = baseATM_7DTE_SPY * priceScaleFactor;
+            const timeFactor = Math.sqrt(dte / 7);
+            const baseExtrinsic = baseATM_7DTE * timeFactor;
+
+            let moneynessFactor;
+            if (percentITM >= 15) {
+                moneynessFactor = 0.10;
+            } else if (percentITM >= 12) {
+                moneynessFactor = 0.10 + (15 - percentITM) / 3 * 0.10;
+            } else if (percentITM >= 8) {
+                moneynessFactor = 0.20 + (12 - percentITM) / 4 * 0.20;
+            } else if (percentITM >= 4) {
+                moneynessFactor = 0.40 + (8 - percentITM) / 4 * 0.30;
+            } else if (percentITM >= 1) {
+                moneynessFactor = 0.70 + (4 - percentITM) / 3 * 0.20;
+            } else {
+                moneynessFactor = 0.90 + percentITM * 0.10;
+            }
+
+            return baseExtrinsic * moneynessFactor;
+        }
+        
+        // Load LEAPS from tracker
+        function loadFromTracker() {
+            if (portfolio.leaps.length === 0) {
+                alert('No LEAPS positions in tracker. Create one first or use "Create New"."');
+                return;
+            }
+            
+            // Use first LEAPS from tracker
+            const trackerLeaps = portfolio.leaps[0];
+            
+            // Simulator only works with SPY positions
+            const symbol = (trackerLeaps.symbol || '').toUpperCase();
+            if (symbol !== 'SPY') {
+                const message = `Simulator only supports SPY positions.\n\n` +
+                    `Your position: ${symbol || 'Unknown'} $${trackerLeaps.strike}\n\n` +
+                    `Would you like to create a new SPY LEAPS simulation instead?`;
+                
+                if (confirm(message)) {
+                    createNewSimulation();
+                }
+                return;
+            }
+            
+            const dte = Math.floor((new Date(trackerLeaps.expiration) - new Date()) / (1000 * 60 * 60 * 24));
+            
+            const intrinsic = Math.max(0, simState.spyPrice - trackerLeaps.strike) * 100;
+            const extrinsic = (trackerLeaps.currentValue || trackerLeaps.openPremium) - intrinsic;
+            
+            simState.leaps = {
+                symbol: 'SPY',
+                strike: trackerLeaps.strike,
+                expiration: trackerLeaps.expiration,
+                delta: normalizeDelta(trackerLeaps.delta),
+                dte: Math.max(dte, 365),
+                costBasis: trackerLeaps.openPremium,
+                currentValue: trackerLeaps.currentValue || trackerLeaps.openPremium,
+                intrinsic: intrinsic,
+                extrinsic: extrinsic / 100, // Per contract
+                theta: -(extrinsic / 100) / Math.max(dte, 365), // Per contract per day
+                quantity: 1
+            };
+            
+            simState.active = true;
+            
+            // Generate historical context candles
+            simState.historicalCandles = generateHistoricalCandles(simState.spyPrice, 6);
+            
+            updateSimDisplay();
+            drawSimCharts();
+            generateOptionsChain();
+        }
+        
+        // Create new simulation with default SPY LEAPS
+        function createNewSimulation() {
+            // Default SPY LEAPS: ~15% ITM (e.g., $500 strike at $590 SPY)
+            const defaultStrike = Math.round(simState.spyPrice * 0.85 / 5) * 5; // Round to $5
+            const spyPrice = simState.spyPrice;
+            const intrinsic = Math.max(0, spyPrice - defaultStrike) * 100;
+            // Calculate extrinsic based on ~0.85 delta deep ITM LEAPS pricing
+            const totalValue = intrinsic + 8500; // ~$8,500 extrinsic for 365 DTE
+            const extrinsic = totalValue - intrinsic;
+            
+            simState.leaps = {
+                symbol: 'SPY',
+                strike: defaultStrike,
+                expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                delta: 0.85,
+                dte: 365,
+                costBasis: totalValue,
+                currentValue: totalValue,
+                intrinsic: intrinsic,
+                extrinsic: extrinsic / 100, // Per contract
+                theta: -(extrinsic / 100) / 365, // Per contract per day
+                quantity: 1
+            };
+            
+            simState.active = true;
+            
+            // Generate historical context candles
+            simState.historicalCandles = generateHistoricalCandles(simState.spyPrice, 6);
+            updateSimDisplay();
+            drawSimCharts();
+            generateOptionsChain();
+        }
+        
+        // Change scenario
+        function changeScenario() {
+            simState.scenario = document.getElementById('sim-scenario').value;
+        }
+        
+        // EXACT pricing function from minimal-game-with-leaps-selector.html
+        function calculateWeeklyCallPremium(stockPrice, strike, dte) {
+            const intrinsic = Math.max(0, stockPrice - strike) * 100;
+            const distanceFromStrike = stockPrice - strike;
+            const percentDiff = (distanceFromStrike / strike) * 100;
+
+            // Scale base extrinsic by stock price (same as LEAPS)
+            const SPY_BASE_PRICE = 590.0;
+            const baseExtrinsic7DTE_SPY = 450;
+            const priceScaleFactor = Math.sqrt(stockPrice / SPY_BASE_PRICE);
+            const baseExtrinsic7DTE = baseExtrinsic7DTE_SPY * priceScaleFactor;
+
+            const timeFactor = dte / 7;
+
+            const absPercent = Math.abs(percentDiff);
+            let moneynessFactor;
+
+            if (absPercent < 0.1) {
+                moneynessFactor = 1.0;
+            } else if (absPercent < 0.2) {
+                moneynessFactor = 1.0 - (absPercent - 0.1) * 0.4;
+            } else if (absPercent < 0.35) {
+                moneynessFactor = 0.96 - (absPercent - 0.2) * 0.8;
+            } else if (absPercent < 0.5) {
+                moneynessFactor = 0.84 - (absPercent - 0.35) * 1.2;
+            } else {
+                moneynessFactor = Math.max(0.3, 0.66 - (absPercent - 0.5) * 0.8);
+            }
+
+            const extrinsic = baseExtrinsic7DTE * timeFactor * moneynessFactor;
+            return intrinsic + extrinsic;
+        }
+
+        // Generate options chain based on current SPY price
+        function generateOptionsChain() {
+            if (!simState.active) return;
+            
+            const spy = simState.spyPrice;
+            const vix = simState.vix;
+            
+            // Generate strikes around current price (1-point increments like minimal-game)
+            const strikes = [];
+            // ITM strikes (below current price)
+            for (let i = 5; i >= 1; i--) {
+                strikes.push(Math.round(spy - i));
+            }
+            // ATM
+            strikes.push(Math.round(spy));
+            // OTM strikes (above current price)
+            for (let i = 1; i <= 5; i++) {
+                strikes.push(Math.round(spy + i));
+            }
+            
+            let html = '<p style="color: #666; font-size: 10px;">VIX: ' + vix.toFixed(1) + ' | Click to sell:</p>';
+            
+            strikes.forEach(strike => {
+                const type = strike < spy ? 'ITM' : (strike > spy ? 'OTM' : 'ATM');
+                const premium = calculateWeeklyCallPremium(spy, strike, 7);
+                
+                html += `<button class="sim-option-btn" onclick="sellCall(${strike}, ${premium.toFixed(0)})">`;
+                html += `$${strike} <span style="float: right;">$${premium.toFixed(0)} ${type}</span>`;
+                html += '</button>';
+            });
+            
+            document.getElementById('sim-options-list').innerHTML = html;
+        }
+        
+        // Sell a call
+        function sellCall(strike, premium) {
+            if (simState.shortCall) {
+                alert('Already have a short call open this week. Run the week first.');
+                return;
+            }
+            
+            simState.shortCall = {
+                strike: strike,
+                premium: premium,
+                openSpy: simState.spyPrice
+            };
+            
+            // Update UI
+            document.getElementById('sim-call-empty').style.display = 'none';
+            document.getElementById('sim-call-details').style.display = 'block';
+            document.getElementById('sim-call-header').className = 'sim-panel-header';
+            document.getElementById('sim-call-strike').textContent = '$' + strike;
+            document.getElementById('sim-call-premium').textContent = '$' + premium.toFixed(0);
+            
+            // Highlight selected button
+            generateOptionsChain();
+        }
+        
+        // Run week simulation
+        function runWeek() {
+            if (!simState.active) {
+                alert('Load a LEAPS position first!');
+                return;
+            }
+            
+            const scenario = SCENARIOS[simState.scenario];
+            const prevSpy = simState.spyPrice;
+            const prevVix = simState.vix;
+            
+            // Generate price move
+            const volatility = 0.008 * scenario.volFactor;
+            const drift = scenario.drift;
+            const randomWalk = (Math.random() - 0.5) * volatility * 2;
+            const weeklyReturn = drift * 5 + randomWalk * Math.sqrt(5);
+            
+            const newSpy = prevSpy * (1 + weeklyReturn);
+            simState.spyPrice = newSpy;
+            simState.priceHistory.push(newSpy);
+            
+            // Generate OHLC candle for this week
+            const intradayVol = Math.abs(weeklyReturn) * 0.5;
+            const weekHigh = Math.max(prevSpy, newSpy) * (1 + intradayVol * Math.random());
+            const weekLow = Math.min(prevSpy, newSpy) * (1 - intradayVol * Math.random());
+            simState.candles.push({
+                open: prevSpy,
+                high: weekHigh,
+                low: weekLow,
+                close: newSpy,
+                isHistorical: false
+            });
+            
+            // Generate VIX move (inversely correlated)
+            const vixChange = -weeklyReturn * 100 * 0.5 + (Math.random() - 0.5) * 2;
+            simState.vix = Math.max(10, Math.min(50, prevVix + vixChange));
+            simState.vixHistory.push(simState.vix);
+            
+            // Update LEAPS value using INCREMENTAL updates (matches minimal-game-with-leaps-selector)
+            const oldLeapsValue = simState.leaps.currentValue;
+            const stockChange = newSpy - prevSpy; // Price change from old to new
+            const stockImpact = stockChange * simState.leaps.delta * 100;
+            const thetaImpact = simState.leaps.theta * 7; // 7 days of theta decay
+            
+            simState.leaps.currentValue += stockImpact + thetaImpact;
+            simState.leaps.extrinsic = Math.max(0, simState.leaps.extrinsic + (thetaImpact / 100)); // Per contract
+            simState.leaps.intrinsic = Math.max(0, newSpy - simState.leaps.strike) * 100;
+            simState.leaps.dte -= 7;
+            
+            // Recalculate theta for new DTE
+            if (simState.leaps.dte > 0) {
+                simState.leaps.theta = -(simState.leaps.extrinsic / simState.leaps.dte) * 100;
+            } else {
+                simState.leaps.theta = 0;
+                simState.leaps.extrinsic = 0;
+            }
+            
+            simState.leaps.delta = calculateSimpleDelta(newSpy, simState.leaps.strike, simState.leaps.dte);
+            const weeklyLeapsPnl = simState.leaps.currentValue - oldLeapsValue;
+            
+            // Calculate short call P&L (leapsPnl already calculated as weeklyLeapsPnl above)
+            let callPnl = 0;
+            
+            if (simState.shortCall) {
+                const callStrike = simState.shortCall.strike;
+                // Calculate current call value using proper pricing with current VIX
+                const currentCallValue = calculateWeeklyCallPremium(newSpy, callStrike, 1);
+                callPnl = simState.shortCall.premium - currentCallValue;
+            }
+            
+            const totalPnl = weeklyLeapsPnl + callPnl;
+            simState.cumulativePnl += totalPnl;
+            
+            // Store result
+            simState.weeklyResults.push({
+                week: simState.week,
+                spyStart: prevSpy,
+                spyEnd: newSpy,
+                leapsPnl: weeklyLeapsPnl,
+                callPnl: callPnl,
+                totalPnl: totalPnl
+            });
+            
+            // Show results
+            document.getElementById('sim-results').style.display = 'block';
+            document.getElementById('sim-result-week').textContent = simState.week;
+            document.getElementById('sim-leaps-pnl').textContent = formatMoney(weeklyLeapsPnl);
+            document.getElementById('sim-leaps-pnl').className = 'sim-stat-value ' + (weeklyLeapsPnl >= 0 ? 'sim-pnl-positive-dark' : 'sim-pnl-negative-dark');
+            document.getElementById('sim-call-pnl').textContent = formatMoney(callPnl);
+            document.getElementById('sim-call-pnl').className = 'sim-stat-value ' + (callPnl >= 0 ? 'sim-pnl-positive-dark' : 'sim-pnl-negative-dark');
+            document.getElementById('sim-total-pnl').textContent = formatMoney(totalPnl);
+            document.getElementById('sim-total-pnl').className = 'sim-stat-value ' + (totalPnl >= 0 ? 'sim-pnl-positive-dark' : 'sim-pnl-negative-dark');
+            
+            document.getElementById('sim-run-btn').disabled = true;
+            document.getElementById('sim-run-btn').textContent = '[ Week Complete ]';
+            
+            updateSimDisplay();
+            drawSimCharts();
+        }
+        
+        // Continue to next week
+        function continueToNextWeek() {
+            simState.week++;
+            simState.shortCall = null;
+            
+            document.getElementById('sim-results').style.display = 'none';
+            document.getElementById('sim-call-empty').style.display = 'block';
+            document.getElementById('sim-call-details').style.display = 'none';
+            document.getElementById('sim-call-header').className = 'sim-panel-header-inactive';
+            document.getElementById('sim-run-btn').disabled = false;
+            document.getElementById('sim-run-btn').textContent = '[ ▶ Run Week ]';
+            
+            generateOptionsChain();
+            updateSimDisplay();
+        }
+        
+        // Reset simulation
+        function resetSimulation() {
+            simState = {
+                active: false,
+                week: 1,
+                spyPrice: 590,
+                vix: 15,
+                scenario: 'normal',
+                priceHistory: [590],
+                vixHistory: [15],
+                candles: [],
+                historicalCandles: [],
+                leaps: null,
+                shortCall: null,
+                weeklyResults: [],
+                cumulativePnl: 0
+            };
+            
+            document.getElementById('sim-leaps-empty').style.display = 'block';
+            document.getElementById('sim-leaps-details').style.display = 'none';
+            document.getElementById('sim-call-empty').style.display = 'block';
+            document.getElementById('sim-call-details').style.display = 'none';
+            document.getElementById('sim-call-header').className = 'sim-panel-header-inactive';
+            document.getElementById('sim-results').style.display = 'none';
+            document.getElementById('sim-run-btn').disabled = false;
+            document.getElementById('sim-run-btn').textContent = '[ ▶ Run Week ]';
+            document.getElementById('sim-options-list').innerHTML = '<p style="color: #666; font-size: 10px;">Load a LEAPS position to see options</p>';
+            
+            updateSimDisplay();
+            drawSimCharts();
+        }
+        
+        // Update simulator display
+        function updateSimDisplay() {
+            // Top P&L Bar
+            document.getElementById('sim-week').textContent = simState.week;
+            document.getElementById('sim-total-weeks').textContent = simState.weeklyResults.length;
+            
+            const cumPnlEl = document.getElementById('sim-cumulative-pnl');
+            cumPnlEl.textContent = formatMoney(simState.cumulativePnl);
+            cumPnlEl.className = 'sim-pnl-value ' + (simState.cumulativePnl >= 0 ? 'sim-pnl-positive' : 'sim-pnl-negative');
+            
+            const avgPnl = simState.weeklyResults.length > 0 ? simState.cumulativePnl / simState.weeklyResults.length : 0;
+            const avgPnlEl = document.getElementById('sim-avg-pnl');
+            avgPnlEl.textContent = formatMoney(avgPnl);
+            avgPnlEl.className = 'sim-pnl-value ' + (avgPnl >= 0 ? 'sim-pnl-positive' : 'sim-pnl-negative');
+            
+            // Market stats
+            document.getElementById('sim-spy').textContent = '$' + simState.spyPrice.toFixed(2);
+            document.getElementById('sim-vix').textContent = simState.vix.toFixed(1);
+            
+            // LEAPS position
+            if (simState.leaps) {
+                document.getElementById('sim-leaps-empty').style.display = 'none';
+                document.getElementById('sim-leaps-details').style.display = 'block';
+                document.getElementById('sim-leaps-symbol').textContent = simState.leaps.symbol;
+                document.getElementById('sim-leaps-strike').textContent = '$' + simState.leaps.strike;
+                document.getElementById('sim-leaps-delta').textContent = (simState.leaps.delta * 100).toFixed(0) + '%';
+                document.getElementById('sim-leaps-dte').textContent = simState.leaps.dte + 'd';
+                document.getElementById('sim-leaps-cost').textContent = formatMoney(simState.leaps.costBasis);
+                document.getElementById('sim-leaps-value').textContent = formatMoney(simState.leaps.currentValue);
+            }
+        }
+        
+        // Generate historical context candles (imagined, not real market data)
+        function generateHistoricalCandles(currentPrice, numCandles = 6) {
+            const candles = [];
+            let price = currentPrice;
+            
+            for (let i = 0; i < numCandles; i++) {
+                // Random weekly change between -2% and +3%
+                const change = (Math.random() * 5 - 2) / 100;
+                const open = price / (1 + change);
+                const close = price;
+                const volatility = Math.abs(change) + 0.01;
+                const high = Math.max(open, close) * (1 + volatility * Math.random());
+                const low = Math.min(open, close) * (1 - volatility * Math.random());
+                
+                candles.unshift({ open, high, low, close, isHistorical: true });
+                price = open;
+            }
+            
+            return candles;
+        }
+        
+        // Draw charts
+        function drawSimCharts() {
+            drawPriceChart();
+            drawVixChart();
+        }
+        
+        function drawPriceChart() {
+            const canvas = document.getElementById('sim-price-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Combine historical + game candles
+            const allCandles = [...simState.historicalCandles, ...simState.candles];
+            if (allCandles.length === 0) return;
+            
+            // Calculate min/max for scaling
+            let min = Infinity, max = 0;
+            allCandles.forEach(c => {
+                min = Math.min(min, c.low);
+                max = Math.max(max, c.high);
+            });
+            // Add padding
+            const range = max - min;
+            min -= range * 0.05;
+            max += range * 0.05;
+            const paddedRange = max - min;
+            
+            // Draw grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 5; i++) {
+                const y = h - (h * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+                
+                const price = min + (paddedRange * i / 4);
+                ctx.fillStyle = '#0f0';
+                ctx.font = '10px monospace';
+                ctx.fillText(price.toFixed(0), 5, y - 2);
+            }
+            
+            // Draw candles
+            const candleWidth = (w - 40) / allCandles.length;
+            const padding = 20;
+            
+            allCandles.forEach((candle, i) => {
+                const x = padding + i * candleWidth + candleWidth / 2;
+                const isUp = candle.close >= candle.open;
+                
+                // Historical candles are gray, game candles are green/red
+                if (candle.isHistorical) {
+                    ctx.strokeStyle = '#666';
+                    ctx.fillStyle = '#444';
+                } else {
+                    ctx.strokeStyle = isUp ? '#0f0' : '#f00';
+                    ctx.fillStyle = isUp ? '#000' : '#f00';
+                }
+                
+                // Wick
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, h - ((candle.high - min) / paddedRange) * h);
+                ctx.lineTo(x, h - ((candle.low - min) / paddedRange) * h);
+                ctx.stroke();
+                
+                // Body
+                const bodyTop = h - ((Math.max(candle.open, candle.close) - min) / paddedRange) * h;
+                const bodyBottom = h - ((Math.min(candle.open, candle.close) - min) / paddedRange) * h;
+                const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+                
+                ctx.fillRect(x - candleWidth / 3, bodyTop, candleWidth / 1.5, bodyHeight);
+                ctx.strokeRect(x - candleWidth / 3, bodyTop, candleWidth / 1.5, bodyHeight);
+            });
+            
+            // Draw current price dot
+            if (simState.candles.length > 0) {
+                const lastCandle = simState.candles[simState.candles.length - 1];
+                const currentY = h - ((lastCandle.close - min) / paddedRange) * h;
+                ctx.fillStyle = '#ff0';
+                ctx.beginPath();
+                ctx.arc(w - 5, currentY, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        
+        function drawVixChart() {
+            const canvas = document.getElementById('sim-vix-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+            
+            if (simState.vixHistory.length < 2) return;
+            
+            const vixs = simState.vixHistory;
+            
+            // Auto-scale Y-axis based on actual VIX range with padding
+            const dataMin = Math.min(...vixs);
+            const dataMax = Math.max(...vixs);
+            const dataRange = dataMax - dataMin;
+            
+            // Add 20% padding to make variations visible, minimum range of 5
+            const min = Math.max(5, dataMin - Math.max(dataRange * 0.2, 1));
+            const max = dataMax + Math.max(dataRange * 0.2, 1);
+            const range = max - min;
+            
+            // Color based on VIX level
+            let lineColor = '#0f0'; // Normal
+            const currentVix = vixs[vixs.length - 1];
+            if (currentVix > 30) lineColor = '#f00';
+            else if (currentVix > 20) lineColor = '#ff0';
+            
+            // Draw grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const y = h - (h * i / 2);
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+            
+            // Draw VIX line
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            vixs.forEach((vix, i) => {
+                const x = (i / (vixs.length - 1)) * w;
+                const y = h - ((vix - min) / range) * h;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+        
+        // ==================== INIT ====================
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+    
+        // ==================== LEAPS VALUE CHART ====================
+        
+        function drawLEAPSValueChart(leapsId, costBasis) {
+            const canvas = document.getElementById('leaps-value-chart');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const history = portfolio.history[leapsId] || [];
+            
+            // Update data points counter
+            const dataPointsEl = document.getElementById('chart-data-points');
+            if (dataPointsEl) dataPointsEl.textContent = history.length + ' data points';
+            
+            if (history.length === 0) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#666';
+                ctx.font = '14px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('No value history yet. Click "Update LEAPS Value" to add data points.', canvas.width/2, canvas.height/2);
+                return;
+            }
+            
+            // Sort by date
+            const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Calculate min/max values
+            let minValue = Infinity;
+            let maxValue = -Infinity;
+            sorted.forEach(h => {
+                minValue = Math.min(minValue, h.value);
+                maxValue = Math.max(maxValue, h.value);
+            });
+            minValue = Math.min(minValue, costBasis);
+            maxValue = Math.max(maxValue, costBasis);
+            
+            // Add padding
+            const range = maxValue - minValue;
+            const padding = range * 0.1 || maxValue * 0.05;
+            minValue = Math.max(0, minValue - padding);
+            maxValue = maxValue + padding;
+            
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const chartPadding = { top: 20, right: 60, bottom: 30, left: 60 };
+            const chartWidth = canvas.width - chartPadding.left - chartPadding.right;
+            const chartHeight = canvas.height - chartPadding.top - chartPadding.bottom;
+            
+            // Helper functions
+            const valueToY = function(value) { return chartPadding.top + chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight; };
+            const indexToX = function(index) { return chartPadding.left + (index / (sorted.length - 1 || 1)) * chartWidth; };
+            
+            // Draw grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 2]);
+            for (let i = 0; i <= 4; i++) {
+                const y = chartPadding.top + (chartHeight * i / 4);
+                ctx.beginPath();
+                ctx.moveTo(chartPadding.left, y);
+                ctx.lineTo(chartPadding.left + chartWidth, y);
+                ctx.stroke();
+                
+                const value = maxValue - (maxValue - minValue) * (i / 4);
+                ctx.fillStyle = '#0f0';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'right';
+                ctx.fillText('
+</html>
+ + Math.round(value).toLocaleString(), chartPadding.left - 5, y + 3);
+            }
+            ctx.setLineDash([]);
+            
+            // Draw cost basis line
+            const costY = valueToY(costBasis);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath();
+            ctx.moveTo(chartPadding.left, costY);
+            ctx.lineTo(chartPadding.left + chartWidth, costY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Cost basis label
+            ctx.fillStyle = '#666';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('Cost', chartPadding.left + chartWidth + 3, costY + 3);
+            
+            // Draw value line
+            if (sorted.length > 1) {
+                const pnl = sorted[sorted.length - 1].value - costBasis;
+                const lineColor = pnl >= 0 ? '#0f0' : '#f00';
+                
+                // Create gradient
+                const gradient = ctx.createLinearGradient(0, chartPadding.top, 0, canvas.height - chartPadding.bottom);
+                gradient.addColorStop(0, pnl >= 0 ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)');
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                // Draw area under line
+                ctx.beginPath();
+                ctx.moveTo(indexToX(0), valueToY(sorted[0].value));
+                for (let i = 1; i < sorted.length; i++) {
+                    ctx.lineTo(indexToX(i), valueToY(sorted[i].value));
+                }
+                ctx.lineTo(indexToX(sorted.length - 1), chartPadding.top + chartHeight);
+                ctx.lineTo(indexToX(0), chartPadding.top + chartHeight);
+                ctx.closePath();
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // Draw line
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(indexToX(0), valueToY(sorted[0].value));
+                for (let i = 1; i < sorted.length; i++) {
+                    ctx.lineTo(indexToX(i), valueToY(sorted[i].value));
+                }
+                ctx.stroke();
+            }
+            
+            // Draw data points
+            sorted.forEach(function(h, i) {
+                const x = indexToX(i);
+                const y = valueToY(h.value);
+                const isLast = i === sorted.length - 1;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, isLast ? 5 : 3, 0, Math.PI * 2);
+                ctx.fillStyle = isLast ? '#0f0' : '#888';
+                ctx.fill();
+                
+                if (isLast) {
+                    // Highlight last point
+                    ctx.beginPath();
+                    ctx.arc(x, y, 7, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#0f0';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // Show value
+                    ctx.fillStyle = '#0f0';
+                    ctx.font = 'bold 11px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('
+</html>
+ + Math.round(h.value).toLocaleString(), x, y - 10);
+                }
+            });
+            
+            // Draw X-axis labels (first, middle, last dates)
+            ctx.fillStyle = '#888';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            
+            if (sorted.length > 0) {
+                const first = sorted[0];
+                const last = sorted[sorted.length - 1];
+                const midIndex = Math.floor(sorted.length / 2);
+                const mid = sorted[midIndex];
+                
+                ctx.fillText(formatShortDate(first.date), indexToX(0), canvas.height - 10);
+                if (sorted.length > 2) {
+                    ctx.fillText(formatShortDate(mid.date), indexToX(midIndex), canvas.height - 10);
+                }
+                ctx.fillText(formatShortDate(last.date), indexToX(sorted.length - 1), canvas.height - 10);
+            }
+            
+            // Draw P&L box
+            const currentValue = sorted[sorted.length - 1].value;
+            const totalPnL = currentValue - costBasis;
+            const pnlPercent = (totalPnL / costBasis) * 100;
+            const pnlColor = totalPnL >= 0 ? '#0f0' : '#f00';
+            
+            ctx.fillStyle = 'rgba(31, 41, 55, 0.9)';
+            ctx.fillRect(canvas.width - 120, 5, 110, 24);
+            ctx.strokeStyle = pnlColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(canvas.width - 120, 5, 110, 24);
+            
+            ctx.fillStyle = pnlColor;
+            ctx.font = 'bold 11px sans-serif';
+            ctx.textAlign = 'center';
+            const pnlSign = totalPnL >= 0 ? '+' : '-';
+            const pctSign = pnlPercent >= 0 ? '+' : '';
+            ctx.fillText(pnlSign + '
+</html>
+ + Math.abs(totalPnL).toFixed(0) + ' (' + pctSign + pnlPercent.toFixed(1) + '%)', canvas.width - 65, 22);
+        }
+        
+        function formatShortDate(dateStr) {
+            const d = new Date(dateStr);
+            return (d.getMonth() + 1) + '/' + d.getDate();
+        }
+
+        </script>
+</body>
+</html>

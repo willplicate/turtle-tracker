@@ -1,0 +1,204 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.sim{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden}
+.topbar{background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.topbar-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.topbar-meta{font-size:12px;color:var(--color-text-secondary)}
+.steps{display:flex;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.step{padding:8px 14px;font-size:12px;color:var(--color-text-tertiary);display:flex;align-items:center;gap:6px;border-right:0.5px solid var(--color-border-tertiary)}
+.step.done{color:var(--color-text-success)}
+.step.active{color:var(--color-text-primary);font-weight:500;background:var(--color-background-primary);border-bottom:2px solid #378ADD}
+.step-num{width:18px;height:18px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.step.done .step-num{background:var(--color-background-success);border-color:var(--color-border-success);color:var(--color-text-success)}
+.main{display:grid;grid-template-columns:1fr 280px;min-height:520px}
+.left{padding:16px;border-right:0.5px solid var(--color-border-tertiary)}
+.right{padding:16px;background:var(--color-background-secondary)}
+.section-label{font-size:10px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
+.chart-mock{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:8px;margin-bottom:12px}
+.chart-title{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px}
+.regime-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--border-radius-md);font-size:11px;font-weight:500;background:#FAEEDA;color:#854F0B;border:0.5px solid #EF9F27;margin-bottom:12px}
+.regime-dot{width:7px;height:7px;border-radius:50%;background:#EF9F27;flex-shrink:0}
+.rule-signal{background:#E6F1FB;border:0.5px solid #85B7EB;border-radius:var(--border-radius-md);padding:10px 12px;margin-bottom:12px}
+.rule-signal-label{font-size:10px;color:#185FA5;text-transform:uppercase;letter-spacing:0.06em;font-weight:500;margin-bottom:2px}
+.rule-signal-val{font-size:14px;font-weight:500;color:#0C447C}
+.strike-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
+.strike-table th{text-align:left;color:var(--color-text-secondary);font-weight:500;padding:4px 8px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:11px}
+.strike-table td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary)}
+.strike-table tr.selected{background:#E6F1FB}
+.strike-table tr.suggested td:first-child{border-left:2px solid #378ADD}
+.radio-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--color-border-secondary);display:inline-block;vertical-align:middle}
+.radio-dot.on{border-color:#378ADD;background:#378ADD}
+.metric-row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px}
+.metric-row:last-child{border-bottom:none}
+.metric-key{color:var(--color-text-secondary)}
+.metric-val{font-weight:500;color:var(--color-text-primary)}
+.metric-val.pos{color:var(--color-text-success)}
+.metric-val.neg{color:var(--color-text-danger)}
+.pnl-block{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px;margin-bottom:10px}
+.pnl-title{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:6px}
+.big-num{font-size:22px;font-weight:500}
+.big-num.pos{color:var(--color-text-success)}
+.big-num.neg{color:var(--color-text-danger)}
+.btn-row{display:flex;gap:8px;margin-top:12px}
+.btn-primary{background:#378ADD;color:white;border:none;border-radius:var(--border-radius-md);padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer}
+.btn-secondary{background:var(--color-background-secondary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 16px;font-size:13px;cursor:pointer}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.toggle{width:32px;height:18px;background:#378ADD;border-radius:9px;position:relative;cursor:pointer;flex-shrink:0}
+.toggle-dot{width:14px;height:14px;background:white;border-radius:50%;position:absolute;top:2px;right:2px}
+.leaps-summary{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px;margin-bottom:10px}
+.progress-bar{height:4px;background:var(--color-background-tertiary);border-radius:2px;margin:6px 0}
+.progress-fill{height:4px;background:#378ADD;border-radius:2px;width:15%}
+</style>
+
+<h2 class="sr-only">Turtle trading simulator UI layout mockup showing four stages: setup, LEAPS selection, strike selection, and weekly results</h2>
+
+<div class="sim">
+
+  <div class="topbar">
+    <span class="topbar-title">Turtle trading simulator</span>
+    <span class="topbar-meta">Week 3 of 52 &nbsp;|&nbsp; IWM $214.50 &nbsp;|&nbsp; RVX 24.35</span>
+  </div>
+
+  <div class="steps">
+    <div class="step done"><span class="step-num">+</span>Setup</div>
+    <div class="step done"><span class="step-num">+</span>Buy LEAPS</div>
+    <div class="step active"><span class="step-num">3</span>Sell call</div>
+    <div class="step"><span class="step-num">4</span>Results</div>
+  </div>
+
+  <div class="main">
+    <div class="left">
+
+      <div class="section-label">Market charts</div>
+
+      <div class="chart-mock">
+        <div class="chart-title">IWM price — weekly candles + EMA 15</div>
+        <svg width="100%" height="80" viewBox="0 0 420 80" preserveAspectRatio="none">
+          <line x1="40" y1="20" x2="40" y2="60" stroke="#ccc" stroke-width="1"/>
+          <rect x="35" y="30" width="10" height="20" fill="#E24B4A"/>
+          <line x1="80" y1="25" x2="80" y2="65" stroke="#ccc" stroke-width="1"/>
+          <rect x="75" y="35" width="10" height="22" fill="#E24B4A"/>
+          <line x1="120" y1="15" x2="120" y2="55" stroke="#ccc" stroke-width="1"/>
+          <rect x="115" y="25" width="10" height="20" fill="#639922"/>
+          <line x1="160" y1="18" x2="160" y2="50" stroke="#ccc" stroke-width="1"/>
+          <rect x="155" y="25" width="10" height="18" fill="#639922"/>
+          <line x1="200" y1="22" x2="200" y2="58" stroke="#ccc" stroke-width="1"/>
+          <rect x="195" y="30" width="10" height="20" fill="#E24B4A"/>
+          <line x1="240" y1="20" x2="240" y2="52" stroke="#ccc" stroke-width="1"/>
+          <rect x="235" y="28" width="10" height="16" fill="#639922"/>
+          <line x1="280" y1="16" x2="280" y2="48" stroke="#ccc" stroke-width="1"/>
+          <rect x="275" y="22" width="10" height="18" fill="#639922"/>
+          <line x1="320" y1="18" x2="320" y2="50" stroke="#ccc" stroke-width="1"/>
+          <rect x="315" y="24" width="10" height="16" fill="#639922"/>
+          <polyline points="20,58 60,55 100,60 140,45 180,42 220,48 260,38 300,35 340,33" fill="none" stroke="#378ADD" stroke-width="1.5"/>
+          <text x="4" y="76" font-size="9" fill="#888">EMA 15</text>
+          <rect x="20" y="70" width="20" height="2" fill="#378ADD"/>
+        </svg>
+      </div>
+
+      <div class="chart-mock" style="margin-bottom:14px">
+        <div class="chart-title">RVX volatility index + EMA 15</div>
+        <svg width="100%" height="70" viewBox="0 0 420 70" preserveAspectRatio="none">
+          <line x1="0" y1="25" x2="420" y2="25" stroke="#EF9F27" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <line x1="0" y1="45" x2="420" y2="45" stroke="#97C459" stroke-width="0.5" stroke-dasharray="4,3"/>
+          <text x="2" y="23" font-size="8" fill="#854F0B">27</text>
+          <text x="2" y="43" font-size="8" fill="#3B6D11">22</text>
+          <polyline points="20,50 60,42 100,28 140,18 180,20 220,24 260,32 300,38 340,40" fill="none" stroke="#888780" stroke-width="1.5"/>
+          <polyline points="20,52 60,46 100,34 140,26 180,25 220,28 260,35 300,40 340,42" fill="none" stroke="#EF9F27" stroke-width="1.5"/>
+          <circle cx="340" cy="42" r="3" fill="#EF9F27"/>
+          <text x="344" y="46" font-size="9" fill="#854F0B">24.35</text>
+        </svg>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="regime-badge"><span class="regime-dot"></span>Elevated volatility — RVX 24.35, EMA falling</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text-secondary)">
+          Rules <div class="toggle"><div class="toggle-dot"></div></div>
+        </div>
+      </div>
+
+      <div class="rule-signal">
+        <div class="rule-signal-label">Rules engine suggests</div>
+        <div class="rule-signal-val">Sell ATM call &mdash; RVX elevated but EMA declining</div>
+      </div>
+
+      <div class="section-label">Choose your strike</div>
+      <table class="strike-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Strike</th>
+            <th>Type</th>
+            <th>Premium</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="radio-dot"></span></td>
+            <td>$210</td><td>ITM</td><td style="color:#0C447C;font-weight:500">$620</td><td style="color:var(--color-text-secondary)">Max premium, capped upside</td>
+          </tr>
+          <tr class="selected suggested">
+            <td><span class="radio-dot on"></span></td>
+            <td>$214</td><td>ATM</td><td style="color:#0C447C;font-weight:500">$380</td><td style="color:#185FA5">Suggested by rules</td>
+          </tr>
+          <tr>
+            <td><span class="radio-dot"></span></td>
+            <td>$218</td><td>Near OTM</td><td style="color:#0C447C;font-weight:500">$210</td><td style="color:var(--color-text-secondary)">Some upside room</td>
+          </tr>
+          <tr>
+            <td><span class="radio-dot"></span></td>
+            <td>$224</td><td>Far OTM</td><td style="color:#0C447C;font-weight:500">$95</td><td style="color:var(--color-text-secondary)">Most upside, less income</td>
+          </tr>
+          <tr>
+            <td><span class="radio-dot"></span></td>
+            <td>&mdash;</td><td>Uncovered</td><td style="color:var(--color-text-secondary)">$0</td><td style="color:var(--color-text-secondary)">Full LEAPS exposure</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="btn-row">
+        <button class="btn-primary">Run this week</button>
+        <button class="btn-secondary">Reset</button>
+      </div>
+
+    </div>
+
+    <div class="right">
+
+      <div class="section-label">Your position</div>
+      <div class="leaps-summary">
+        <div class="metric-row"><span class="metric-key">LEAPS strike</span><span class="metric-val">$190 Jun 2027</span></div>
+        <div class="metric-row"><span class="metric-key">Delta</span><span class="metric-val pos">0.84</span></div>
+        <div class="metric-row"><span class="metric-key">DTE</span><span class="metric-val">423 days</span></div>
+        <div class="metric-row"><span class="metric-key">Theta / day</span><span class="metric-val neg">-$2.40</span></div>
+        <div class="metric-row"><span class="metric-key">LEAPS value</span><span class="metric-val">$8,420</span></div>
+      </div>
+
+      <div class="section-label" style="margin-top:12px">Season progress</div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:4px">Week 3 of 52</div>
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+
+      <div class="section-label" style="margin-top:14px">Running totals</div>
+      <div class="pnl-block">
+        <div class="pnl-title">Total account</div>
+        <div class="big-num pos">$20,431</div>
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">+$431 since start</div>
+      </div>
+      <div class="metric-row"><span class="metric-key">Premium collected</span><span class="metric-val pos">+$893</span></div>
+      <div class="metric-row"><span class="metric-key">LEAPS p&l</span><span class="metric-val neg">-$462</span></div>
+      <div class="metric-row"><span class="metric-key">Avg / week</span><span class="metric-val pos">+$144</span></div>
+      <div class="metric-row"><span class="metric-key">Annualised return</span><span class="metric-val pos">+37.4%</span></div>
+      <div class="metric-row"><span class="metric-key">Weeks traded</span><span class="metric-val">3</span></div>
+
+      <div class="section-label" style="margin-top:14px">This week preview</div>
+      <div class="metric-row"><span class="metric-key">Strike selected</span><span class="metric-val">$214 ATM</span></div>
+      <div class="metric-row"><span class="metric-key">Premium to collect</span><span class="metric-val pos">+$380</span></div>
+      <div class="metric-row"><span class="metric-key">Cash reserve</span><span class="metric-val">$11,580</span></div>
+
+    </div>
+  </div>
+
+</div>

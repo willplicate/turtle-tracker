@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turtle trading simulator</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ─── Topbar ─────────────────────────────────────────────────────────────── -->
+<div class="topbar">
+    <div class="topbar-title">Turtle trading simulator</div>
+    <div class="topbar-right">
+        <span id="sell-header-price"></span>
+        <span id="sell-header-vix"></span>
+        <span id="sell-header-capital"></span>
+    </div>
+</div>
+
+<!-- ─── Step bar ───────────────────────────────────────────────────────────── -->
+<div class="step-bar">
+    <div class="step-tab" data-step="setup"><span class="step-num">1</span> Setup</div>
+    <div class="step-tab" data-step="leaps"><span class="step-num">2</span> Buy LEAPS</div>
+    <div class="step-tab" data-step="sell"><span class="step-num">3</span> Sell call</div>
+    <div class="step-tab" data-step="results"><span class="step-num">4</span> Results</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 1: SETUP
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-setup" class="screen active">
+    <div class="layout">
+        <!-- Left -->
+        <div class="left-panel">
+
+            <div class="section-title">Starting capital</div>
+            <div class="field-label">
+                How much are you starting with?
+                <button class="tooltip-trigger" data-tooltip="cash-reserve">?</button>
+            </div>
+            <div class="field-desc">This sets your buying power. The simulator will show how much LEAPS cost relative to your account.</div>
+            <div class="input-group" style="margin-bottom:10px;">
+                <span class="input-prefix">USD</span>
+                <input type="number" id="capital-input" value="20000" min="5000" max="500000">
+            </div>
+            <div class="preset-group">
+                <button class="preset-btn" data-preset="5000" data-value="5000">$5k</button>
+                <button class="preset-btn" data-preset="10000" data-value="10000">$10k</button>
+                <button class="preset-btn active" data-preset="20000" data-value="20000">$20k</button>
+                <button class="preset-btn" data-preset="50000" data-value="50000">$50k</button>
+                <button class="preset-btn" data-preset="100000" data-value="100000">$100k</button>
+            </div>
+
+            <div class="section-title">Underlying ticker</div>
+            <div class="field-desc">Choose which ETF to trade LEAPS on. IWM is cheaper per contract, easier to start with smaller capital.</div>
+            <div class="ticker-grid">
+                <div class="ticker-card active" data-ticker="IWM">
+                    <div class="ticker-symbol">IWM</div>
+                    <div class="ticker-name">iShares Russell 2000 ETF</div>
+                    <div class="ticker-price">~$285 / share</div>
+                </div>
+                <div class="ticker-card" data-ticker="SPY">
+                    <div class="ticker-symbol">SPY</div>
+                    <div class="ticker-name">S&amp;P 500 ETF</div>
+                    <div class="ticker-price">~$760 / share</div>
+                </div>
+            </div>
+
+            <div class="section-title">Difficulty</div>
+            <div class="field-desc">Each level plays differently — discover the market as it unfolds.</div>
+            <div class="scenario-grid" style="grid-template-columns:1fr 1fr 1fr;">
+                <div class="scenario-card" data-scenario="easy" style="display:flex;align-items:center;justify-content:center;padding:16px 12px;">
+                    <span class="scenario-badge badge-green">Easy</span>
+                </div>
+                <div class="scenario-card" data-scenario="medium" style="display:flex;align-items:center;justify-content:center;padding:16px 12px;">
+                    <span class="scenario-badge badge-amber">Medium</span>
+                </div>
+                <div class="scenario-card" data-scenario="hard" style="display:flex;align-items:center;justify-content:center;padding:16px 12px;">
+                    <span class="scenario-badge badge-red">Hard</span>
+                </div>
+            </div>
+
+            <div class="section-title" style="margin-top:20px;">Market regimes</div>
+            <div class="field-desc">Pick a scenario or let the simulator surprise you. Use RVX to read the regime — just like the real strategy.</div>
+            <div class="scenario-grid">
+                <div class="scenario-card active" data-scenario="mystery">
+                    <span class="scenario-badge badge-purple">Recommended</span>
+                    <div class="scenario-name">Mystery scenario</div>
+                    <div class="scenario-desc">Hidden — use RVX to figure it out</div>
+                </div>
+                <div class="scenario-card" data-scenario="bull">
+                    <span class="scenario-badge badge-green">Bullish</span>
+                    <div class="scenario-name">Bull market</div>
+                    <div class="scenario-desc">+2% weekly drift, low volatility</div>
+                </div>
+                <div class="scenario-card" data-scenario="bear">
+                    <span class="scenario-badge badge-red">Bearish</span>
+                    <div class="scenario-name">Bear market</div>
+                    <div class="scenario-desc">Slow grind down, elevated VIX</div>
+                </div>
+                <div class="scenario-card" data-scenario="choppy">
+                    <span class="scenario-badge badge-amber">Choppy</span>
+                    <div class="scenario-name">Sideways chop</div>
+                    <div class="scenario-desc">No clear trend, range-bound</div>
+                </div>
+                <div class="scenario-card" data-scenario="crash">
+                    <span class="scenario-badge badge-red">Crisis</span>
+                    <div class="scenario-name">Flash crash</div>
+                    <div class="scenario-desc">2020-style drop, VIX spikes to 80</div>
+                </div>
+                <div class="scenario-card" data-scenario="bear-recovery">
+                    <span class="scenario-badge badge-amber">Recovery</span>
+                    <div class="scenario-name">V-shape recovery</div>
+                    <div class="scenario-desc">Crash then sharp rally — hardest regime</div>
+                </div>
+            </div>
+
+            <div class="section-title" style="margin-top:20px;">Historical periods — real IWM data</div>
+            <div class="field-desc">Trade on actual weekly closes. No randomness — these are the real prices. Use RVX to practise reading real market regimes.</div>
+            <div class="scenario-grid">
+                <div class="scenario-card" data-scenario="covid-2020">
+                    <span class="scenario-badge badge-red">Crisis</span>
+                    <div class="scenario-name">COVID Crash 2020</div>
+                    <div class="scenario-desc">36% crash in 5 weeks, RVX hits 76, then full recovery</div>
+                </div>
+                <div class="scenario-card" data-scenario="bear-2022">
+                    <span class="scenario-badge badge-amber">Bear</span>
+                    <div class="scenario-name">2022 Bear Market</div>
+                    <div class="scenario-desc">Grinding 33% decline, RVX elevated all year at 28–42</div>
+                </div>
+                <div class="scenario-card" data-scenario="bull-2024">
+                    <span class="scenario-badge badge-green">Bull</span>
+                    <div class="scenario-name">2024 Bull Run</div>
+                    <div class="scenario-desc">Low-RVX rally, rotation spike in July, election surge</div>
+                </div>
+            </div>
+
+            <div class="section-title">Pricing model</div>
+            <div class="field-desc">Advanced mode shows how volatility affects option prices in real time. Recommended once you understand the basics.</div>
+            <div class="pricing-toggle" style="margin-bottom:24px;">
+                <button class="pricing-btn active" data-mode="simple">Simple (no VIX)</button>
+                <button class="pricing-btn" data-mode="advanced">Advanced (with VIX)</button>
+            </div>
+
+            <div class="section-title">Decision frequency</div>
+            <div class="field-desc">Daily mode shows all 5 trading days separately so you can close or roll your short call mid-week when the market moves sharply.</div>
+            <div class="pricing-toggle" style="margin-bottom:24px;">
+                <button class="pricing-btn daily-mode-btn active" data-daily="false">Weekly (default)</button>
+                <button class="pricing-btn daily-mode-btn" data-daily="true">Daily mode</button>
+            </div>
+
+            <div class="section-title">Income withdrawal
+                <button class="tooltip-trigger" data-tooltip="withdrawal" style="margin-left:4px;">?</button>
+            </div>
+            <div class="field-desc">Automatically withdraw a fixed amount each week from your cash pot — simulating drawing real income from your trading account.</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="income-withdrawal-toggle">
+                    <span class="toggle-track"></span>
+                </label>
+                <span style="font-size:13px;color:var(--text-secondary);">Weekly withdrawal</span>
+            </div>
+            <div id="withdrawal-amount-row" style="display:none;margin-bottom:24px;">
+                <div class="input-group" style="margin-bottom:10px;">
+                    <span class="input-prefix">USD</span>
+                    <input type="number" id="withdrawal-amount-input" value="500" min="0" max="10000" step="50">
+                </div>
+                <div class="preset-group">
+                    <button class="withdrawal-preset-btn" data-amount="250">$250</button>
+                    <button class="withdrawal-preset-btn active" data-amount="500">$500</button>
+                    <button class="withdrawal-preset-btn" data-amount="1000">$1,000</button>
+                    <button class="withdrawal-preset-btn" data-amount="2000">$2,000</button>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" id="btn-select-leaps">Select LEAPS →</button>
+        </div>
+
+        <!-- Right -->
+        <div class="right-panel">
+            <div class="card-title">Session preview</div>
+            <div class="stat-row"><span class="stat-label">Starting capital</span><span class="stat-value mono" id="prev-capital">$20,000</span></div>
+            <div class="stat-row"><span class="stat-label">Ticker</span><span class="stat-value mono" id="prev-ticker">IWM — $285</span></div>
+            <div class="stat-row"><span class="stat-label">Scenario</span><span class="stat-value" id="prev-scenario">Mystery</span></div>
+            <div class="stat-row"><span class="stat-label">Pricing</span><span class="stat-value" id="prev-pricing">Simple</span></div>
+            <div class="stat-row" id="prev-withdrawal-row" style="display:none;"><span class="stat-label">Weekly withdrawal</span><span class="stat-value mono" id="prev-withdrawal">$500/week</span></div>
+
+            <div style="margin-top:20px;">
+                <div class="card-title">Estimated LEAPS cost</div>
+                <div class="field-desc" style="font-size:12px;margin-bottom:8px;">At $20k with IWM, a single deep ITM LEAPS contract typically costs:</div>
+                <div class="stat-row"><span class="stat-label">1 contract (360d, $30 ITM)</span><span class="stat-value mono" id="leaps-est-cost">—</span></div>
+                <div class="stat-row"><span class="stat-label">% of account</span><span class="stat-value mono" id="leaps-est-pct">—</span></div>
+                <div class="allocation-bar"><div class="allocation-bar-fill" id="allocation-bar-fill" style="width:0%"></div></div>
+                <div class="stat-row"><span class="stat-label">Cash remaining</span><span class="stat-value mono" id="leaps-est-remaining">—</span></div>
+                <div class="field-desc" style="margin-top:6px;font-size:11px;color:var(--text-tertiary)">Recommended: keep 50%+ as cash reserve</div>
+            </div>
+
+            <div id="small-account-tip" class="small-tip" style="display:none;margin-top:8px;">
+                With under $10k, consider 1 IWM contract only. Never put more than 50% into the LEAPS — you need the reserve to roll during stress.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 2: BUY LEAPS
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-leaps" class="screen">
+    <div class="layout">
+        <!-- Left -->
+        <div class="left-panel">
+            <div class="section-title">Configure your LEAPS</div>
+            <div class="field-desc" style="margin-bottom:16px;">A LEAPS is a long-dated call option that gives you exposure to IWM without buying the shares outright.</div>
+
+            <div class="card">
+                <div class="field-label">
+                    1. How deep in-the-money?
+                    <button class="tooltip-trigger" data-tooltip="itm">?</button>
+                </div>
+                <div class="field-desc">Deeper ITM = higher delta (more leverage), costs more.</div>
+                <div class="slider-display" id="itm-display">$184 strike — $30 below current price</div>
+                <input type="range" id="itm-slider" min="5" max="80" value="30" step="1">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-tertiary);">
+                    <span id="itm-slider-min-label">$5 ITM (shallower)</span><span id="itm-slider-max-label">$80 ITM (deeper)</span>
+                </div>
+
+                <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+
+                <div class="field-label">
+                    2. Time to expiry (DTE)
+                    <button class="tooltip-trigger" data-tooltip="dte">?</button>
+                </div>
+                <div class="field-desc">More time = more expensive, but slower decay. Roll when DTE drops below 180.</div>
+                <div class="dte-grid">
+                    <div class="dte-card" data-dte="200">
+                        <div class="dte-days">200d</div>
+                        <div class="dte-approx">~7 months</div>
+                    </div>
+                    <div class="dte-card active" data-dte="360">
+                        <div class="dte-days">360d</div>
+                        <div class="dte-approx">~12 months</div>
+                    </div>
+                    <div class="dte-card" data-dte="450">
+                        <div class="dte-days">450d</div>
+                        <div class="dte-approx">~15 months</div>
+                    </div>
+                </div>
+
+                <div style="height:1px;background:var(--border);margin:16px 0;"></div>
+
+                <div class="field-label">
+                    3. Number of contracts
+                    <button class="tooltip-trigger" data-tooltip="delta">?</button>
+                </div>
+                <div class="slider-display" id="contracts-display">1 contract — controls 100 shares</div>
+                <input type="range" id="contracts-slider" min="1" max="5" value="1" step="1">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-tertiary);">
+                    <span>1 (conservative)</span><span>5 (aggressive)</span>
+                </div>
+            </div>
+
+            <div id="leaps-health"></div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btn-buy-leaps">Buy this LEAPS →</button>
+                <button class="btn btn-secondary" id="btn-leaps-back">← Back</button>
+            </div>
+        </div>
+
+        <!-- Right -->
+        <div class="right-panel">
+            <div class="card-title">LEAPS preview</div>
+            <div class="preview-card">
+                <div class="preview-row"><span class="preview-label">Strike</span><span class="preview-value" id="leaps-prev-strike">—</span></div>
+                <div class="preview-row"><span class="preview-label">Expiry</span><span class="preview-value" id="leaps-prev-expiry">—</span></div>
+                <div class="preview-row"><span class="preview-label">Delta</span><span class="preview-value" id="leaps-prev-delta">—</span></div>
+                <div class="preview-row"><span class="preview-label">Theta / day</span><span class="preview-value" id="leaps-prev-theta">—</span></div>
+                <div class="preview-row"><span class="preview-label">Theta / week</span><span class="preview-value" id="leaps-prev-theta-week">—</span></div>
+                <div class="preview-row"><span class="preview-label">Cost per contract</span><span class="preview-value" id="leaps-prev-cost">—</span></div>
+                <div class="preview-row"><span class="preview-label">Total cost</span><span class="preview-value" id="leaps-prev-total">—</span></div>
+            </div>
+
+            <div style="margin-top:8px;">
+                <div class="card-title">Capital allocation</div>
+                <div class="stat-row"><span class="stat-label">Starting capital</span><span class="stat-value mono" id="leaps-cap-start">—</span></div>
+                <div class="stat-row"><span class="stat-label">LEAPS cost</span><span class="stat-value mono" id="leaps-cap-cost">—</span></div>
+                <div class="allocation-bar"><div class="allocation-bar-fill" id="leaps-cap-bar" style="width:0%"></div></div>
+                <div class="stat-row"><span class="stat-label">Cash remaining</span><span class="stat-value mono" id="leaps-cap-remaining">—</span></div>
+                <div class="field-desc" style="font-size:11px;color:var(--text-tertiary);margin-top:6px;">Keep at least 50% as cash reserve to fund rolls during drawdowns.</div>
+            </div>
+
+            <div style="margin-top:8px;">
+                <div class="card-title">Weekly cost to own</div>
+                <div class="stat-row"><span class="stat-label">Theta / week</span><span class="stat-value mono" id="leaps-weekly-theta">—</span></div>
+                <div class="stat-row"><span class="stat-label">Typical premium collected</span><span class="stat-value mono" id="leaps-weekly-premium">—</span></div>
+                <div class="stat-row"><span class="stat-label">Net weekly edge</span><span class="stat-value mono" id="leaps-weekly-edge">—</span></div>
+                <div class="field-desc" style="font-size:11px;color:var(--text-tertiary);margin-top:6px;">Even in flat markets, short call covers decay and then some.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 3: SELL CALL
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-sell" class="screen">
+    <div class="layout">
+        <!-- Left -->
+        <div class="left-panel">
+            <div class="charts-section">
+                <div class="chart-label"><span id="price-chart-label">IWM price — weekly candles + EMA 15</span></div>
+                <canvas id="price-chart" height="160"></canvas>
+                <div class="chart-label" style="margin-top:10px;"><span id="vix-chart-label">Volatility index + EMA 15</span></div>
+                <canvas id="vix-chart" height="100"></canvas>
+            </div>
+
+            <div class="regime-row">
+                <span class="regime-badge regime-green" id="regime-badge">Normal — RVX 16.0</span>
+                <div class="rules-row">
+                    <span>Rules</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="rules-toggle" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="rules-signal signal-green" id="rules-signal" style="display:none;"></div>
+
+            <div class="section-title" style="margin-top:8px;">Choose your strike</div>
+            <table class="strike-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Strike</th>
+                        <th>Type</th>
+                        <th>Premium</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody id="strike-tbody"></tbody>
+            </table>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btn-run-week">Run this week</button>
+                <button class="btn btn-secondary" id="btn-sell-reset">Reset</button>
+            </div>
+        </div>
+
+        <!-- Right -->
+        <div class="right-panel">
+            <div class="card-title">Your position</div>
+            <div class="stat-row"><span class="stat-label">LEAPS strike</span><span class="stat-value mono" id="pos-strike">—</span></div>
+            <div class="stat-row"><span class="stat-label">Expiry</span><span class="stat-value mono" id="pos-expiry">—</span></div>
+            <div class="stat-row"><span class="stat-label">Delta</span><span class="stat-value mono" id="pos-delta">—</span></div>
+            <div class="stat-row"><span class="stat-label">DTE</span><span class="stat-value mono" id="pos-dte">—</span></div>
+            <div class="stat-row"><span class="stat-label">Theta / day</span><span class="stat-value mono" id="pos-theta">—</span></div>
+            <div class="stat-row"><span class="stat-label">LEAPS value</span><span class="stat-value mono" id="pos-leaps-value">—</span></div>
+            <div class="stat-row"><span class="stat-label">Cash reserve</span><span class="stat-value mono" id="pos-cash">—</span></div>
+            <div class="stat-row"><span class="stat-label">Total account</span><span class="stat-value mono" id="pos-total">—</span></div>
+
+            <div id="sell-leaps-health"></div>
+
+            <div class="week-progress" id="week-progress-sell">Week 1 of 52</div>
+
+            <div style="margin-top:8px;">
+                <div class="card-title">Running totals</div>
+                <div class="stat-row"><span class="stat-label">Premium collected</span><span class="stat-value mono" id="total-premium">$0</span></div>
+                <div class="stat-row"><span class="stat-label">LEAPS P&amp;L</span><span class="stat-value mono" id="leaps-pnl-total">$0</span></div>
+                <div class="stat-row"><span class="stat-label">Avg / week</span><span class="stat-value mono" id="avg-per-week">—</span></div>
+                <div class="stat-row"><span class="stat-label">Annualised return</span><span class="stat-value mono" id="ann-return-sell">—</span></div>
+                <div class="stat-row"><span class="stat-label">Win rate</span><span class="stat-value mono" id="win-rate">—</span></div>
+            </div>
+            <div style="margin-top:16px;text-align:right;">
+                <button class="btn-skip-to-report" id="btn-skip-report-sell">Skip to annual report →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 3b: DAILY RESULT (daily mode only — shown between each of the 5 days)
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-daily" class="screen">
+    <div class="layout">
+        <!-- Left -->
+        <div class="left-panel">
+            <div class="outcome-banner outcome-blue" id="daily-banner">Day 1 of 5 — Monday</div>
+
+            <div class="price-action-row">
+                <div class="price-action-item">
+                    <div class="price-action-label">Week open</div>
+                    <div class="mono price-action-val" id="daily-price-open">—</div>
+                </div>
+                <div class="price-action-arrow">→</div>
+                <div class="price-action-item">
+                    <div class="price-action-label">Today's close</div>
+                    <div class="mono price-action-val" id="daily-price-today">—</div>
+                </div>
+                <div class="price-action-item">
+                    <div class="price-action-label">Move so far</div>
+                    <div class="mono price-action-change-val" id="daily-price-change">—</div>
+                </div>
+            </div>
+
+            <div class="pnl-cards">
+                <div class="pnl-card">
+                    <div class="pnl-card-label">P&amp;L so far this week</div>
+                    <div class="pnl-card-value mono" id="daily-pnl-sofar">—</div>
+                </div>
+                <div class="pnl-card">
+                    <div class="pnl-card-label">Total account</div>
+                    <div class="pnl-card-value mono" id="daily-total-value">—</div>
+                </div>
+            </div>
+
+            <div class="section-title">Position status</div>
+            <table class="breakdown-table">
+                <thead>
+                    <tr><th>Position</th><th>Current value</th><th>Day's change</th><th>Week P&amp;L</th></tr>
+                </thead>
+                <tbody>
+                    <tr id="daily-row-leaps">
+                        <td>LEAPS (long call)</td>
+                        <td class="mono">—</td>
+                        <td class="mono pnl-cell" id="daily-leaps-day-pnl">—</td>
+                        <td class="mono pnl-cell" id="daily-leaps-week-pnl">—</td>
+                    </tr>
+                    <tr id="daily-row-call">
+                        <td>Short call</td>
+                        <td class="mono">—</td>
+                        <td class="mono pnl-cell" id="daily-call-day-pnl">—</td>
+                        <td class="mono pnl-cell" id="daily-call-week-pnl">—</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div id="daily-alert" style="display:none;margin:12px 0;"></div>
+            <div id="daily-action-msg" style="display:none;margin:12px 0;"></div>
+
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button class="btn btn-primary" id="btn-daily-continue" style="flex:1.5;">Continue to Tuesday →</button>
+                <button class="btn btn-secondary" id="btn-daily-close-call" style="flex:1;">Close short call</button>
+                <button class="btn btn-secondary" id="btn-daily-sell-call" style="flex:1;display:none;">Sell ATM call</button>
+                <div style="flex:1;display:flex;flex-direction:column;gap:6px;" id="btn-daily-roll-group">
+                    <button class="btn btn-secondary" id="btn-daily-roll-up" style="width:100%;font-size:12px;">Roll up ↑</button>
+                    <button class="btn btn-secondary" id="btn-daily-roll-down" style="width:100%;font-size:12px;">Roll down ↓</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right -->
+        <div class="right-panel">
+            <div class="card-title">Week progress</div>
+            <div id="daily-day-dots" style="display:flex;gap:8px;margin-bottom:16px;"></div>
+
+            <div class="card-title" style="margin-top:16px;">Your position</div>
+            <div class="stat-row"><span class="stat-label">LEAPS strike</span><span class="stat-value mono" id="daily-rp-strike">—</span></div>
+            <div class="stat-row"><span class="stat-label">LEAPS delta</span><span class="stat-value mono" id="daily-rp-delta">—</span></div>
+            <div class="stat-row"><span class="stat-label">DTE remaining</span><span class="stat-value mono" id="daily-rp-dte">—</span></div>
+            <div class="stat-row" id="daily-rp-call-row"><span class="stat-label">Short call strike</span><span class="stat-value mono" id="daily-rp-call-strike">—</span></div>
+            <div class="stat-row" id="daily-rp-call-premium-row"><span class="stat-label">Premium collected</span><span class="stat-value mono" id="daily-rp-call-premium">—</span></div>
+            <div class="stat-row" id="daily-rp-call-value-row"><span class="stat-label">Current value</span><span class="stat-value mono" id="daily-rp-call-value">—</span></div>
+            <div class="stat-row"><span class="stat-label">Cash reserve</span><span class="stat-value mono" id="daily-rp-cash">—</span></div>
+
+            <div style="margin-top:16px;" id="daily-rp-health"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 4: RESULTS
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-results" class="screen">
+    <div class="layout">
+        <!-- Left -->
+        <div class="left-panel">
+            <div class="outcome-banner outcome-green" id="outcome-banner">—</div>
+
+            <div class="price-action-row">
+                <div class="price-action-item">
+                    <div class="price-action-label">Opened</div>
+                    <div class="mono price-action-val" id="res-price-open">—</div>
+                </div>
+                <div class="price-action-arrow">→</div>
+                <div class="price-action-item">
+                    <div class="price-action-label">Closed</div>
+                    <div class="mono price-action-val" id="res-price-close">—</div>
+                </div>
+                <div class="price-action-item">
+                    <div class="price-action-label">Change</div>
+                    <div class="mono price-action-change-val" id="res-price-change">—</div>
+                </div>
+            </div>
+
+            <div class="pnl-cards">
+                <div class="pnl-card">
+                    <div class="pnl-card-label">Weekly P&amp;L</div>
+                    <div class="pnl-card-value mono" id="res-weekly-pnl">—</div>
+                </div>
+                <div class="pnl-card">
+                    <div class="pnl-card-label">Total return</div>
+                    <div class="pnl-card-value mono" id="res-total-return">—</div>
+                </div>
+            </div>
+
+            <div class="section-title">P&amp;L breakdown</div>
+            <table class="breakdown-table">
+                <thead>
+                    <tr>
+                        <th>Position</th>
+                        <th>Start value</th>
+                        <th>End value</th>
+                        <th>P&amp;L</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="row-leaps">
+                        <td>LEAPS (long call)</td>
+                        <td class="mono">—</td>
+                        <td class="mono">—</td>
+                        <td class="mono pnl-cell">—</td>
+                    </tr>
+                    <tr id="row-call">
+                        <td>Short call</td>
+                        <td class="mono">—</td>
+                        <td class="mono">—</td>
+                        <td class="mono pnl-cell">—</td>
+                    </tr>
+                    <tr id="row-theta" style="color:var(--text-secondary);">
+                        <td>Theta decay (LEAPS)</td>
+                        <td class="mono" style="color:var(--text-tertiary);">—</td>
+                        <td class="mono" style="color:var(--text-tertiary);">—</td>
+                        <td class="mono pnl-cell">—</td>
+                    </tr>
+                    <tr id="row-net" class="net-row">
+                        <td><strong>Net weekly total</strong></td>
+                        <td class="mono">—</td>
+                        <td class="mono">—</td>
+                        <td class="mono pnl-cell">—</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div id="withdrawal-summary" style="display:none; margin: 8px 0 4px 0;">
+                <div class="withdrawal-summary-box" id="withdrawal-summary-box">
+                    <div class="withdrawal-summary-row">
+                        <span class="withdrawal-summary-label">Income withdrawn this week</span>
+                        <span class="mono withdrawal-amount" id="ws-amount">—</span>
+                    </div>
+                    <div class="withdrawal-summary-divider"></div>
+                    <div class="withdrawal-summary-row">
+                        <span class="withdrawal-summary-label">Cash reserve</span>
+                        <span class="mono" id="ws-remaining">—</span>
+                    </div>
+                    <div class="withdrawal-summary-row">
+                        <span class="withdrawal-summary-label" style="color:var(--text-tertiary);">Total withdrawn to date</span>
+                        <span class="mono" style="color:var(--text-secondary);" id="ws-total-withdrawn">—</span>
+                    </div>
+                    <div class="withdrawal-summary-row" style="font-weight:500;">
+                        <span class="withdrawal-summary-label">True total (pot + withdrawals)</span>
+                        <span class="mono" id="ws-true-total">—</span>
+                    </div>
+                    <div class="withdrawal-summary-divider"></div>
+                    <div class="withdrawal-summary-row">
+                        <span class="withdrawal-summary-label">Net capital this week</span>
+                        <span class="mono" id="ws-net-change">—</span>
+                    </div>
+                </div>
+                <div id="withdrawal-missed-msg" style="display:none;" class="health-alert alert-red" style="margin-top:4px;"></div>
+                <div id="withdrawal-low-msg" style="display:none;" class="health-alert alert-amber" style="margin-top:4px;"></div>
+            </div>
+
+            <div class="section-title" style="margin-top:12px;">Cumulative P&amp;L — <span id="res-week-label" style="font-size:11px;font-weight:400;color:var(--text-tertiary);"></span></div>
+            <canvas id="pnl-chart" height="120"></canvas>
+
+            <div class="btn-row" style="margin-top:16px;">
+                <button class="btn btn-primary" id="btn-next-week">Next week</button>
+                <button class="btn btn-secondary" id="btn-adjust-leaps">Adjust LEAPS</button>
+                <button class="btn btn-secondary" id="btn-results-reset">Reset</button>
+            </div>
+
+            <div id="res-day-log" style="margin-top:20px;display:none;">
+                <div class="section-title">Day-by-day activity</div>
+                <div id="res-day-log-body"></div>
+            </div>
+        </div>
+
+        <!-- Right -->
+        <div class="right-panel">
+            <div class="stat-cards">
+                <div class="stat-card">
+                    <div class="stat-card-label">Avg / week</div>
+                    <div class="stat-card-value" id="res-avg-week">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Ann. return</div>
+                    <div class="stat-card-value" id="res-ann-return">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Total premium</div>
+                    <div class="stat-card-value" id="res-total-premium">—</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Win rate</div>
+                    <div class="stat-card-value" id="res-win-rate">—</div>
+                </div>
+            </div>
+
+            <div class="week-progress" id="res-week-progress">—</div>
+
+            <div id="res-short-call-section" style="margin-top:4px;">
+                <div class="card-title">Short call sold</div>
+                <div class="stat-row"><span class="stat-label">Strike</span><span class="stat-value mono" id="res-call-strike">—</span></div>
+                <div class="stat-row"><span class="stat-label">Type at entry</span><span class="stat-value mono" id="res-call-type">—</span></div>
+                <div class="stat-row"><span class="stat-label">Premium collected</span><span class="stat-value mono" id="res-call-premium">—</span></div>
+                <div class="stat-row" style="padding-left:10px;"><span class="stat-label" style="color:var(--text-tertiary);">Intrinsic (at entry)</span><span class="stat-value mono" id="res-call-intrinsic">—</span></div>
+                <div class="stat-row" style="padding-left:10px;"><span class="stat-label" style="color:var(--text-tertiary);">Extrinsic (at entry)</span><span class="stat-value mono" id="res-call-extrinsic">—</span></div>
+                <div class="stat-row"><span class="stat-label">Cushion at entry</span><span class="stat-value mono" id="res-call-cushion">—</span></div>
+                <div class="stat-row" style="padding-left:10px;"><span class="stat-label" style="color:var(--text-tertiary);" id="res-call-otm-label">OTM distance</span><span class="stat-value mono" id="res-call-otm-dist">—</span></div>
+                <div class="stat-row" style="padding-left:10px;"><span class="stat-label" style="color:var(--text-tertiary);">Extrinsic buffer</span><span class="stat-value mono" id="res-call-extrinsic-buf">—</span></div>
+                <div class="stat-row"><span class="stat-label">Breakeven</span><span class="stat-value mono" id="res-call-breakeven">—</span></div>
+                <div id="res-call-current-status" style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border);">
+                    <div class="stat-row"><span class="stat-label" style="font-weight:500;">End-of-week status</span><span class="stat-value mono" id="res-call-current-type" style="font-weight:500;">—</span></div>
+                    <div class="stat-row" id="res-call-cost-row"><span class="stat-label" style="color:var(--text-tertiary);">Cost to close</span><span class="stat-value mono" id="res-call-cost-to-close">—</span></div>
+                    <div class="stat-row" id="res-call-itm-depth-row" style="display:none;"><span class="stat-label" style="color:var(--text-tertiary);">ITM depth</span><span class="stat-value mono" id="res-call-itm-depth">—</span></div>
+                </div>
+            </div>
+
+            <div style="margin-top:4px;">
+                <div class="card-title">LEAPS health</div>
+                <div id="res-leaps-health"></div>
+                <div class="stat-row"><span class="stat-label">Delta</span><span class="stat-value mono" id="res-leaps-delta">—</span></div>
+                <div class="stat-row"><span class="stat-label">DTE remaining</span><span class="stat-value mono" id="res-leaps-dte">—</span></div>
+                <div class="stat-row"><span class="stat-label">Current value</span><span class="stat-value mono" id="res-leaps-value">—</span></div>
+                <div class="stat-row"><span class="stat-label">vs cost basis</span><span class="stat-value mono" id="res-leaps-pnl">—</span></div>
+            </div>
+
+            <div style="margin-top:4px;">
+                <div class="card-title">Capital position</div>
+                <div class="stat-row"><span class="stat-label">LEAPS value</span><span class="stat-value mono" id="res-leaps-val-cap">—</span></div>
+                <div class="stat-row"><span class="stat-label">Cash reserve</span><span class="stat-value mono" id="res-cash-reserve">—</span></div>
+                <div class="stat-row"><span class="stat-label">Total account</span><span class="stat-value mono" id="res-total-account">—</span></div>
+                <div class="stat-row"><span class="stat-label">Cash as % of account</span><span class="stat-value mono" id="res-cash-pct">—</span></div>
+                <div class="stat-row" id="res-cap-withdrawn-row" style="display:none;"><span class="stat-label">Total withdrawn</span><span class="stat-value mono" id="res-cap-withdrawn">$0</span></div>
+                <div class="stat-row" id="res-cap-total-incl-row" style="display:none;"><span class="stat-label" style="font-weight:500;">Total if no withdrawals</span><span class="stat-value mono" style="font-weight:500;" id="res-cap-total-incl">$0</span></div>
+            </div>
+
+            <div style="margin-top:4px;">
+                <div class="card-title">Market comparison</div>
+                <div class="stat-row"><span class="stat-label" id="res-bah-start-label">SPY at start</span><span class="stat-value mono" id="res-bah-start-price">—</span></div>
+                <div class="stat-row"><span class="stat-label">Current price</span><span class="stat-value mono" id="res-bah-current-price">—</span></div>
+                <div class="stat-row"><span class="stat-label">Buy &amp; hold would be</span><span class="stat-value mono" id="res-bah-value">—</span></div>
+                <div class="stat-row" style="border-top:1px solid var(--border);padding-top:4px;margin-top:2px;"><span class="stat-label" style="font-weight:500;">Your strategy</span><span class="stat-value mono" style="font-weight:500;" id="res-bah-strategy">—</span></div>
+            </div>
+
+            <div style="margin-top:4px;">
+                <div class="card-title">Next week signal</div>
+                <div class="next-signal signal-green" id="next-week-signal">—</div>
+            </div>
+
+            <div id="withdrawal-stats-card" style="display:none;margin-top:4px;">
+                <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+                    Withdrawal tracker
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:400;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" id="res-withdrawal-toggle" style="cursor:pointer;">
+                        Active
+                    </label>
+                </div>
+                <div id="res-withdrawal-amount-row" style="margin-bottom:6px;">
+                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">Amount / week</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <button class="res-withdrawal-preset-btn" data-amount="250" style="font-size:11px;padding:2px 8px;border:1px solid var(--border-strong);border-radius:4px;cursor:pointer;background:var(--bg-tertiary);">$250</button>
+                        <button class="res-withdrawal-preset-btn" data-amount="500" style="font-size:11px;padding:2px 8px;border:1px solid var(--border-strong);border-radius:4px;cursor:pointer;background:var(--bg-tertiary);">$500</button>
+                        <button class="res-withdrawal-preset-btn" data-amount="1000" style="font-size:11px;padding:2px 8px;border:1px solid var(--border-strong);border-radius:4px;cursor:pointer;background:var(--bg-tertiary);">$1,000</button>
+                        <button class="res-withdrawal-preset-btn" data-amount="2000" style="font-size:11px;padding:2px 8px;border:1px solid var(--border-strong);border-radius:4px;cursor:pointer;background:var(--bg-tertiary);">$2,000</button>
+                    </div>
+                </div>
+                <div class="stat-row"><span class="stat-label">This week</span><span class="stat-value mono" id="res-withdrawal-this-week">—</span></div>
+                <div class="stat-row"><span class="stat-label">Total withdrawn</span><span class="stat-value mono" id="res-total-withdrawn">$0</span></div>
+                <div class="stat-row"><span class="stat-label">Missed weeks</span><span class="stat-value mono" id="res-missed-weeks">0</span></div>
+            </div>
+            <div style="margin-top:16px;text-align:right;">
+                <button class="btn-skip-to-report" id="btn-skip-report-results">Skip to annual report →</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 5: ROLL LEAPS
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-roll" class="screen">
+    <div class="layout">
+        <div class="left-panel">
+            <div class="section-title">Current position</div>
+            <div class="stat-row"><span class="stat-label">Strike</span><span class="stat-value mono" id="roll-current-strike">—</span></div>
+            <div class="stat-row"><span class="stat-label">DTE</span><span class="stat-value mono" id="roll-current-dte">—</span></div>
+            <div class="stat-row"><span class="stat-label">Delta</span><span class="stat-value mono" id="roll-current-delta">—</span></div>
+            <div class="stat-row"><span class="stat-label">Current value</span><span class="stat-value mono" id="roll-current-value">—</span></div>
+            <div class="stat-row"><span class="stat-label">Total available capital</span><span class="stat-value mono" id="roll-available-capital">—</span></div>
+
+            <div class="section-title">New position</div>
+            <div class="field-label">How deep ITM?</div>
+            <div class="slider-display" id="roll-itm-display">$30 ITM</div>
+            <input type="range" id="roll-itm-slider" min="5" max="80" value="30" step="1">
+
+            <div class="field-label" style="margin-top:12px;">New DTE</div>
+            <div class="dte-grid">
+                <div class="dte-card roll-dte-card" data-dte="200"><div class="dte-days">200d</div></div>
+                <div class="dte-card roll-dte-card active" data-dte="360"><div class="dte-days">360d</div></div>
+                <div class="dte-card roll-dte-card" data-dte="450"><div class="dte-days">450d</div></div>
+            </div>
+
+            <div id="roll-health" style="margin-top:12px;"></div>
+
+            <div class="section-title">Roll cost preview</div>
+            <div class="stat-row"><span class="stat-label">New strike</span><span class="stat-value mono" id="roll-new-strike">—</span></div>
+            <div class="stat-row"><span class="stat-label">New expiry</span><span class="stat-value mono" id="roll-new-expiry">—</span></div>
+            <div class="stat-row"><span class="stat-label">New delta</span><span class="stat-value mono" id="roll-new-delta">—</span></div>
+            <div class="stat-row"><span class="stat-label">New cost</span><span class="stat-value mono" id="roll-new-cost">—</span></div>
+            <div class="stat-row"><span class="stat-label">Net cost</span><span class="stat-value mono" id="roll-net-cost">—</span></div>
+            <div class="stat-row"><span class="stat-label">Cash after roll</span><span class="stat-value mono" id="roll-cash-after">—</span></div>
+
+            <div id="roll-error-msg" style="display:none;padding:10px 12px;background:var(--red-light);border:1px solid var(--red-border);border-radius:6px;color:var(--red);font-size:13px;margin-bottom:8px;"></div>
+
+            <div class="btn-row">
+                <button class="btn btn-primary" id="btn-execute-roll">Execute Roll</button>
+                <button class="btn btn-secondary" id="btn-cancel-roll">← Cancel</button>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="card-title">Roll summary</div>
+            <div class="field-desc">Selling your current LEAPS and buying a new one with more time and a fresh delta.</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 6: GAME OVER
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-gameover" class="screen">
+    <div class="full-screen-card">
+        <div class="final-banner final-banner-red">Account liquidated</div>
+        <div class="stat-row"><span class="stat-label">Starting capital</span><span class="stat-value mono" id="go-start">—</span></div>
+        <div class="stat-row"><span class="stat-label">Final value</span><span class="stat-value mono" id="go-final">—</span></div>
+        <div class="stat-row"><span class="stat-label">Total loss</span><span class="stat-value mono negative" id="go-loss">—</span></div>
+        <div class="stat-row"><span class="stat-label">Weeks survived</span><span class="stat-value mono" id="go-weeks">—</span></div>
+        <div class="stat-row"><span class="stat-label">Loss %</span><span class="stat-value mono negative" id="go-pct">—</span></div>
+
+        <div class="section-title" style="margin-top:24px;">What happened</div>
+        <ul class="learning-list">
+            <li>Position sizing matters — never risk more than you can roll.</li>
+            <li>Watch your delta — when it falls below 0.72, the LEAPS loses leverage.</li>
+            <li>Keep at least 50% as cash reserve for rolling during drawdowns.</li>
+            <li>In crisis regimes, sell ITM calls to collect maximum premium.</li>
+        </ul>
+
+        <button class="btn btn-danger btn-full" id="btn-play-again-go" style="margin-top:24px;">Start new game</button>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     SCREEN 7: ANNUAL REPORT
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-annual" class="screen">
+    <div class="full-screen-card">
+        <div class="final-banner final-banner-green" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Year complete — 52 weeks</span>
+            <div class="grade-badge" id="ar-grade" style="margin:0;">B</div>
+        </div>
+
+        <div class="section-title" style="margin-top:20px;">Performance</div>
+        <div class="stat-row"><span class="stat-label">Starting capital</span><span class="stat-value mono" id="ar-start">—</span></div>
+        <div class="stat-row"><span class="stat-label">Portfolio value (end)</span><span class="stat-value mono" id="ar-end">—</span></div>
+        <div class="stat-row" id="ar-withdrawn-row" style="display:none;"><span class="stat-label">Cash withdrawn</span><span class="stat-value mono" id="ar-withdrawn-display">—</span></div>
+        <div class="stat-row" id="ar-effective-row" style="display:none;"><span class="stat-label" style="font-weight:500;">Portfolio + withdrawals</span><span class="stat-value mono" id="ar-effective-value">—</span></div>
+        <div class="stat-row"><span class="stat-label">Total gain</span><span class="stat-value mono" id="ar-total-gain">—</span></div>
+        <div class="stat-row"><span class="stat-label">Annualised return</span><span class="stat-value mono" id="ar-ann-return">—</span></div>
+
+        <div class="section-title" style="margin-top:20px;">Strategy breakdown</div>
+        <div class="stat-row"><span class="stat-label">Short call credits received</span><span class="stat-value mono" id="ar-premium">—</span></div>
+        <div class="stat-row"><span class="stat-label">Short call losses (ITM expiries)</span><span class="stat-value mono" id="ar-call-losses">—</span></div>
+        <div class="stat-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px;"><span class="stat-label" style="font-weight:500;">Net short call P&amp;L</span><span class="stat-value mono" id="ar-call-net">—</span></div>
+        <div class="stat-row"><span class="stat-label">LEAPS P&amp;L</span><span class="stat-value mono" id="ar-leaps-pnl">—</span></div>
+        <div class="stat-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px;"><span class="stat-label" style="font-weight:500;">Net P&amp;L</span><span class="stat-value mono" id="ar-net-pnl">—</span></div>
+
+        <div id="ar-income-section" style="display:none;">
+            <div class="section-title" style="margin-top:20px;">Income withdrawn</div>
+            <div class="stat-row"><span class="stat-label">Total withdrawn</span><span class="stat-value mono" id="ar-total-withdrawn">—</span></div>
+            <div class="stat-row"><span class="stat-label">Yield on capital</span><span class="stat-value mono" id="ar-income-yield">—</span></div>
+            <div class="stat-row"><span class="stat-label">Weekly average</span><span class="stat-value mono" id="ar-weekly-avg">—</span></div>
+        </div>
+
+        <div class="section-title" style="margin-top:20px;" id="ar-bm-section-title">vs. owning 100 shares</div>
+        <div class="stat-row"><span class="stat-label" id="ar-bm-price-label">price: start → end</span><span class="stat-value mono" id="ar-bm-prices">—</span></div>
+        <div class="stat-row"><span class="stat-label" id="ar-bm-cost-label">100 shares cost</span><span class="stat-value mono" id="ar-bm-cost">—</span></div>
+        <div class="stat-row"><span class="stat-label" id="ar-bm-pnl-label">Shares P&amp;L (no premium)</span><span class="stat-value mono" id="ar-bm-shares-pnl">—</span></div>
+        <div class="stat-row" style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px;"><span class="stat-label" style="font-weight:500;">Your strategy P&amp;L</span><span class="stat-value mono" id="ar-bm-strategy-pnl">—</span></div>
+
+        <div class="section-title" style="margin-top:20px;">Cumulative P&amp;L</div>
+        <canvas id="ar-pnl-chart" height="160"></canvas>
+
+        <div class="section-title" style="margin-top:24px;">AI analysis</div>
+        <div id="ar-ai-section">
+            <div style="margin-bottom:12px;">
+                <button class="btn btn-secondary" id="btn-get-analysis">Analyse run</button>
+            </div>
+            <div id="ar-ai-output" style="display:none;background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:14px;line-height:1.6;color:var(--text-primary);white-space:pre-wrap;"></div>
+            <div id="ar-ai-error" style="display:none;background:var(--red-light);border:1px solid var(--red-border);border-radius:8px;padding:12px;font-size:13px;color:var(--red);margin-top:8px;"></div>
+        </div>
+
+        <div style="margin-top:24px;display:flex;flex-direction:column;gap:10px;">
+            <button class="btn btn-primary btn-full" id="btn-keep-balance-ar">Continue with <span id="ar-keep-balance-label">ending balance</span> →</button>
+            <button class="btn btn-secondary btn-full" id="btn-play-again-ar">Start fresh</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/engine.js"></script>
+<script src="js/vix-engine.js"></script>
+<script src="js/scenarios.js"></script>
+<script src="js/historical-data.js"></script>
+<script src="js/rules-engine.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/game-state.js"></script>
+</body>
+</html>

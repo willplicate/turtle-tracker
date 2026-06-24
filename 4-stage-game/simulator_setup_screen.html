@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turtle Simulator — Setup Screen</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f4f4f4;padding:24px;font-family:'IBM Plex Sans',system-ui,sans-serif}
+.sim{background:#fff;border:0.5px solid #ddd;border-radius:12px;overflow:hidden;max-width:900px;margin:0 auto}
+.topbar{background:#f8f8f8;border-bottom:0.5px solid #e0e0e0;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
+.topbar-title{font-size:13px;font-weight:500;color:#1a1a1a}
+.topbar-meta{font-size:12px;color:#666}
+.steps{display:flex;border-bottom:0.5px solid #e0e0e0;background:#f8f8f8}
+.step{padding:8px 14px;font-size:12px;color:#aaa;display:flex;align-items:center;gap:6px;border-right:0.5px solid #e0e0e0}
+.step.active{color:#1a1a1a;font-weight:500;background:#fff;border-bottom:2px solid #378ADD}
+.step-num{width:18px;height:18px;border-radius:50%;border:1px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.main{display:grid;grid-template-columns:1fr 280px;min-height:520px}
+.left{padding:16px;border-right:0.5px solid #e0e0e0}
+.right{padding:16px;background:#f8f8f8}
+.section-label{font-size:10px;font-weight:500;color:#999;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px}
+.card{background:#fff;border:0.5px solid #ddd;border-radius:8px;padding:12px;margin-bottom:12px}
+.field-label{font-size:12px;font-weight:500;color:#1a1a1a;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.field-sub{font-size:11px;color:#666;margin-bottom:6px}
+.info-icon{width:14px;height:14px;border-radius:50%;border:1px solid #aaa;display:inline-flex;align-items:center;justify-content:center;font-size:9px;cursor:pointer;color:#aaa}
+.capital-wrap{display:flex;align-items:center;border:0.5px solid #ccc;border-radius:8px;overflow:hidden}
+.capital-prefix{padding:8px 10px;background:#f8f8f8;font-size:13px;color:#666;border-right:0.5px solid #ccc;flex-shrink:0}
+.capital-input{border:none;flex:1;padding:8px 10px;font-size:13px;font-family:'IBM Plex Mono',monospace;color:#1a1a1a;background:#fff;outline:none}
+.preset-row{display:flex;gap:6px;margin-top:6px}
+.preset{border:0.5px solid #ccc;border-radius:8px;padding:4px 10px;font-size:11px;color:#666;cursor:pointer;background:#f8f8f8}
+.preset.active{border-color:#378ADD;color:#185FA5;background:#E6F1FB;font-weight:500}
+.scenario-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}
+.scenario-opt{border:0.5px solid #ccc;border-radius:8px;padding:10px;cursor:pointer}
+.scenario-opt.selected{border:2px solid #378ADD;background:#E6F1FB}
+.scenario-opt.mystery{border:2px solid #534AB7;background:#EEEDFE}
+.scenario-name{font-size:12px;font-weight:500;color:#1a1a1a;margin-bottom:2px}
+.scenario-opt.mystery .scenario-name{color:#3C3489}
+.scenario-desc{font-size:11px;color:#666}
+.scenario-opt.mystery .scenario-desc{color:#534AB7}
+.scenario-badge{display:inline-block;font-size:9px;font-weight:500;padding:2px 6px;border-radius:4px;margin-bottom:4px}
+.badge-mystery{background:#CECBF6;color:#26215C}
+.badge-bull{background:#C0DD97;color:#27500A}
+.badge-bear{background:#F7C1C1;color:#791F1F}
+.badge-chop{background:#FAC775;color:#412402}
+.badge-crash{background:#F09595;color:#501313}
+.ticker-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ticker-opt{border:0.5px solid #ccc;border-radius:8px;padding:10px;cursor:pointer}
+.ticker-opt.selected{border:2px solid #378ADD;background:#E6F1FB}
+.ticker-name{font-size:14px;font-weight:500;color:#1a1a1a}
+.ticker-opt.selected .ticker-name{color:#0C447C}
+.ticker-desc{font-size:11px;color:#666;margin-top:2px}
+.ticker-price{font-size:11px;color:#aaa;margin-top:4px;font-family:'IBM Plex Mono',monospace}
+.row{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:0.5px solid #eee;font-size:12px}
+.row:last-child{border-bottom:none}
+.key{color:#666}
+.val{font-weight:500;color:#1a1a1a}
+.val.pos{color:#3B6D11}
+.cash-bar{height:6px;background:#eee;border-radius:3px;margin:6px 0 3px}
+.cash-fill{height:6px;border-radius:3px;background:#378ADD;width:42%}
+.btn-primary{background:#378ADD;color:white;border:none;border-radius:8px;padding:9px 24px;font-size:13px;font-weight:500;cursor:pointer;width:100%;margin-top:4px;font-family:'IBM Plex Sans',sans-serif}
+.pricing-toggle{display:flex;border:0.5px solid #ccc;border-radius:8px;overflow:hidden}
+.pricing-opt{flex:1;padding:7px 10px;font-size:12px;text-align:center;cursor:pointer;color:#666;background:#f8f8f8}
+.pricing-opt.selected{background:#378ADD;color:white;font-weight:500}
+</style>
+</head>
+<body>
+
+<div class="sim">
+  <div class="topbar">
+    <span class="topbar-title">Turtle trading simulator</span>
+    <span class="topbar-meta">Configure your session</span>
+  </div>
+
+  <div class="steps">
+    <div class="step active"><span class="step-num">1</span>Setup</div>
+    <div class="step"><span class="step-num">2</span>Buy LEAPS</div>
+    <div class="step"><span class="step-num">3</span>Sell call</div>
+    <div class="step"><span class="step-num">4</span>Results</div>
+  </div>
+
+  <div class="main">
+    <div class="left">
+
+      <div class="section-label">Starting capital</div>
+      <div class="card">
+        <div class="field-label">How much are you starting with? <span class="info-icon">?</span></div>
+        <div class="field-sub">This sets your buying power. The simulator will show how much LEAPS cost relative to your account.</div>
+        <div class="capital-wrap">
+          <span class="capital-prefix">USD</span>
+          <input class="capital-input" type="number" value="20000" min="5000" max="500000" step="1000">
+        </div>
+        <div class="preset-row">
+          <span class="preset">$5k</span>
+          <span class="preset">$10k</span>
+          <span class="preset active">$20k</span>
+          <span class="preset">$50k</span>
+          <span class="preset">$100k</span>
+        </div>
+      </div>
+
+      <div class="section-label">Underlying ticker</div>
+      <div class="card">
+        <div class="field-sub" style="margin-bottom:8px">Choose which ETF to trade LEAPS on. IWM is cheaper per contract, easier to start with smaller capital.</div>
+        <div class="ticker-grid">
+          <div class="ticker-opt selected">
+            <div class="ticker-name">IWM</div>
+            <div class="ticker-desc">iShares Russell 2000 ETF</div>
+            <div class="ticker-price">~$214 / share</div>
+          </div>
+          <div class="ticker-opt">
+            <div class="ticker-name">SPY</div>
+            <div class="ticker-desc">S&P 500 ETF</div>
+            <div class="ticker-price">~$590 / share</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Market scenario</div>
+      <div class="card">
+        <div class="field-sub" style="margin-bottom:8px">Pick a scenario or let the simulator surprise you. Use RVX to read the regime — just like the real strategy.</div>
+        <div class="scenario-grid">
+          <div class="scenario-opt mystery">
+            <span class="scenario-badge badge-mystery">Recommended</span>
+            <div class="scenario-name">Mystery scenario</div>
+            <div class="scenario-desc">Hidden — use RVX to figure it out</div>
+          </div>
+          <div class="scenario-opt selected">
+            <span class="scenario-badge badge-bull">Bullish</span>
+            <div class="scenario-name">Bull market</div>
+            <div class="scenario-desc">+2% weekly drift, low volatility</div>
+          </div>
+          <div class="scenario-opt">
+            <span class="scenario-badge badge-bear">Bearish</span>
+            <div class="scenario-name">Bear market</div>
+            <div class="scenario-desc">Slow grind down, elevated VIX</div>
+          </div>
+          <div class="scenario-opt">
+            <span class="scenario-badge badge-chop">Choppy</span>
+            <div class="scenario-name">Sideways chop</div>
+            <div class="scenario-desc">No clear trend, range-bound</div>
+          </div>
+          <div class="scenario-opt">
+            <span class="scenario-badge badge-crash">Crisis</span>
+            <div class="scenario-name">Flash crash</div>
+            <div class="scenario-desc">2020-style drop, VIX spikes to 80</div>
+          </div>
+          <div class="scenario-opt">
+            <span class="scenario-badge badge-chop">Recovery</span>
+            <div class="scenario-name">V-shape recovery</div>
+            <div class="scenario-desc">Crash then sharp rally — hardest regime</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label">Pricing model</div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="field-sub" style="margin-bottom:8px">Advanced mode shows how volatility affects option prices in real time. Recommended once you understand the basics.</div>
+        <div class="pricing-toggle">
+          <div class="pricing-opt selected">Simple (no VIX)</div>
+          <div class="pricing-opt">Advanced (with VIX)</div>
+        </div>
+      </div>
+
+      <button class="btn-primary">Select LEAPS &rarr;</button>
+
+    </div>
+
+    <div class="right">
+
+      <div class="section-label">Session preview</div>
+      <div class="card">
+        <div class="row"><span class="key">Starting capital</span><span class="val" style="font-family:'IBM Plex Mono',monospace">$20,000</span></div>
+        <div class="row"><span class="key">Ticker</span><span class="val">IWM ~$214</span></div>
+        <div class="row"><span class="key">Scenario</span><span class="val">Bull market</span></div>
+        <div class="row"><span class="key">Pricing</span><span class="val">Simple</span></div>
+      </div>
+
+      <div class="section-label" style="margin-top:4px">Estimated LEAPS cost</div>
+      <div class="card">
+        <div class="field-sub" style="margin-bottom:8px">At $20k with IWM, a single deep ITM LEAPS contract typically costs:</div>
+        <div class="row"><span class="key">1 contract (360d, $30 ITM)</span><span class="val" style="font-family:'IBM Plex Mono',monospace">~$8,400</span></div>
+        <div class="row"><span class="key">% of account</span><span class="val">42%</span></div>
+        <div class="row"><span class="key">Cash remaining</span><span class="val pos">$11,600</span></div>
+        <div class="cash-bar"><div class="cash-fill"></div></div>
+        <div style="font-size:10px;color:#999">Recommended: keep 50%+ as cash reserve</div>
+      </div>
+
+      <div class="section-label" style="margin-top:4px">Scenario notes</div>
+      <div style="background:#EAF3DE;border:0.5px solid #97C459;border-radius:8px;padding:10px;font-size:12px;color:#27500A;margin-bottom:10px">
+        Bull market: low RVX, steady upward drift. Good for learning OTM call selling. Expect consistent small wins.
+      </div>
+
+      <div class="section-label" style="margin-top:4px">Small account tip</div>
+      <div style="background:#FAEEDA;border:0.5px solid #EF9F27;border-radius:8px;padding:10px;font-size:12px;color:#633806">
+        With under $10k, consider 1 IWM contract only. Never put more than 50% into the LEAPS — you need the reserve to roll during stress.
+      </div>
+
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

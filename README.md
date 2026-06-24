@@ -8,6 +8,14 @@ An educational trading simulator for learning the Turtle Strategy (LEAPS + weekl
 
 ## 🚀 Quick Start
 
+### Play the Compact Game (NEW!)
+
+A streamlined dashboard view with everything on one screen:
+
+```bash
+open compact-game/index.html
+```
+
 ### Play the Minimal Game Locally
 
 Open `turtle-game/minimal-game.html` in your browser. No build required!
@@ -25,6 +33,13 @@ npm run dev
 ```
 
 ## ✨ What's Working
+
+- **Compact Game** (`compact-game/index.html`) ⭐ NEW
+  - Single-screen dashboard layout
+  - Live options chain (click to select strikes)
+  - Large candlestick chart
+  - Real-time position cards
+  - Dark professional theme
 
 - **Minimal Game** (`turtle-game/minimal-game.html`)
   - Complete standalone HTML game

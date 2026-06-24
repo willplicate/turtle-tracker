@@ -2,7 +2,7 @@
 // Displays short call position details in a clean, compact format
 
 import type { GameState } from '../../lib/game/stateManager';
-import { calculateShortCallPnL, isShortCallITM, shouldRollShortCall } from '../../lib/game/positionManager';
+import { calculateShortCallPnL, isShortCallITM } from '../../lib/game/positionManager';
 import { formatCurrency, getPnLColorClass } from '../../lib/game/pnlCalculator';
 
 interface ShortCallPanelProps {
@@ -43,7 +43,7 @@ export class ShortCallPanel {
     );
 
     const isITM = isShortCallITM(shortCall, market.spyPrice);
-    const needsRoll = shouldRollShortCall(shortCall);
+    // const _needsRoll = shouldRollShortCall(shortCall);
     const assignmentRisk = isITM && shortCall.dte <= 1;
     const breakeven = shortCall.strike + shortCall.premium / 100;
 

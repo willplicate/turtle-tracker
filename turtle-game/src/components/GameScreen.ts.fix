@@ -1,0 +1,435 @@
+// Main Game Screen
+// Integrates all components for the Turtle Trading Game
+
+import { GameStore, type GameState } from '../lib/game/stateManager';
+import { AccountHeader } from './Common/AccountHeader';
+import { GameControls, type GameMode } from './Controls/GameControls';
+import { CandlestickChart } from './Chart/CandlestickChart';
+import { OptionsChain } from './OptionsChain/OptionsChain';
+import { LEAPSPanel } from './Positions/LEAPSPanel';
+import { ShortCallPanel } from './Positions/ShortCallPanel';
+import { calculateOptionPrice } from '../lib/pricing/optionsPricing';
+import type { OptionPriceBreakdown } from '../lib/pricing/optionsPricing';
+import { formatCurrency, getPnLColorClass } from '../lib/game/pnlCalculator';
+import { fetchMarketData, getAPIStatus } from '../lib/market/stockApi';
+
+export class GameScreen {
+  private container: HTMLElement;
+  private store: GameStore;
+  private unsubscribe: (() => void) | null = null;
+  private gameMode: GameMode = '1x';
+  private isFridaySplashOpen = false;
+  private lastSplashWeek = -1;
+  private optionsChainMode: 'weekly' | 'leaps' = 'weekly';
+  private isLoadingPrice = false;
+  
+  // Component references
+  private accountHeader: AccountHeader | null = null;
+  private gameControls: GameControls | null = null;
+  private candlestickChart: CandlestickChart | null = null;
+  private optionsChain: OptionsChain | null = null;
+  private leapsPanel: LEAPSPanel | null = null;
+  private shortCallPanel: ShortCallPanel | null = null;
+  
+  // DOM element references
+  private headerEl!: HTMLElement;
+  private controlsEl!: HTMLElement;
+  private chartEl!: HTMLElement;
+  private chainEl!: HTMLElement;
+  private splashEl: HTMLElement | null = null;
+  
+  constructor(container: HTMLElement) {
+    this.container = container;
+    this.store = new GameStore('normal');
+    
+    this.createLayout();
+    this.initializeComponents();
+    
+    this.unsubscribe = this.store.subscribe((state) => {
+      this.handleStateUpdate(state);
+    });
+    
+    this.handleStateUpdate(this.store.getState());
+  }
+  
+  private createLayout(): void {
+    this.container.innerHTML = `
+      <div class="min-h-screen bg-game-bg px-6 py-4">
+        <div class="flex justify-between items-center mb-4">
+          <div id="game-header" class="flex-grow"></div>
+          <button id="open-montecarlo-btn" class="btn btn-primary ml-4">
+            📊 Monte Carlo Simulator
+          </button>
+        </div>
+        <div id="game-controls" class="mb-4"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div id="options-chain" class="lg:col-span-3 h-[600px]"></div>
+          <div id="chart-container" class="lg:col-span-6 h-[600px]"></div>
+          <div class="lg:col-span-3 flex flex-col gap-4">
+            <div id="leaps-panel" class="flex-shrink-0"></div>
+            <div id="shortcall-panel" class="flex-shrink-0"></div>
+          </div>
+        </div>
+        <div id="splash-container"></div>
+      </div>
+    `;
+
+    this.headerEl = this.container.querySelector('#game-header')!;
+    this.controlsEl = this.container.querySelector('#game-controls')!;
+    this.chainEl = this.container.querySelector('#options-chain')!;
+    this.chartEl = this.container.querySelector('#chart-container')!;
+    this.splashEl = this.container.querySelector('#splash-container');
+
+    this.container.querySelector('#open-montecarlo-btn')?.addEventListener('click', () => {
+      window.open('/montecarlo.html', '_blank');
+    });
+  }
+  
+  private initializeComponents(): void {
+    const state = this.store.getState();
+    
+    this.accountHeader = new AccountHeader(this.headerEl, { state });
+    
+    this.gameControls = new GameControls(this.controlsEl, {
+      state,
+      gameMode: this.gameMode,
+      onStart: () => this.store.start(),
+      onPause: () => this.store.pause(),
+      onModeChange: (mode) => this.handleModeChange(mode),
+      onReset: () => this.store.reset(),
+      onScenarioChange: (scenario) => this.store.reset(scenario),
+      onLoadPrice: () => this.handleLoadPrice(),
+      isLoadingPrice: this.isLoadingPrice,
+    });
+    
+    this.candlestickChart = new CandlestickChart(this.chartEl);
+    
+    this.optionsChain = new OptionsChain(this.chainEl, {
+      stockPrice: state.market.spyPrice,
+      vix: state.market.vix,
+      onSelectStrike: (strike, price) => this.handleStrikeSelection(strike, price),
+      mode: this.optionsChainMode,
+      onModeChange: (mode) => { this.optionsChainMode = mode; },
+    });
+    
+    this.leapsPanel = new LEAPSPanel(
+      this.container.querySelector('#leaps-panel')! as HTMLElement,
+      {
+        state,
+        onBuyLEAPS: () => this.openBuyLEAPSDialog(),
+        onRollLEAPS: () => this.openRollLEAPSDialog(),
+        onCloseLEAPS: () => this.closeLEAPS(),
+      }
+    );
+    
+    this.shortCallPanel = new ShortCallPanel(
+      this.container.querySelector('#shortcall-panel')! as HTMLElement,
+      {
+        state,
+        onSellCall: () => this.openSellCallDialog(),
+        onRollCall: () => this.openRollCallDialog(),
+        onBuyBackCall: () => this.buyBackCall(),
+      }
+    );
+  }
+  
+  private handleStateUpdate(state: GameState): void {
+    const isFriday = state.market.day % 5 === 4;
+    const currentWeek = Math.floor(state.market.day / 5) + 1;
+
+    if (isFriday && !this.isFridaySplashOpen && currentWeek !== this.lastSplashWeek && state.market.day > 0) {
+      this.lastSplashWeek = currentWeek;
+      this.showFridaySplash(state);
+      this.store.pause();
+    }
+
+    this.updateComponents(state);
+
+    if (this.gameMode === 'auto' && state.isPlaying && !this.isFridaySplashOpen) {
+      this.executeAutoTradeRules(state);
+    }
+  }
+  
+  private handleModeChange(mode: GameMode): void {
+    this.gameMode = mode;
+    this.store.setInterval(mode === 'slow' ? 3000 : 1000);
+    this.updateComponents(this.store.getState());
+  }
+  
+  private async handleLoadPrice(): Promise<void> {
+    if (this.isLoadingPrice) return;
+    this.isLoadingPrice = true;
+    this.updateComponents(this.store.getState());
+    
+    try {
+      const marketData = await fetchMarketData();
+      const apiStatus = getAPIStatus();
+      this.store.updateMarketPrice(marketData.spy.price, marketData.vix.price);
+      console.log(`${apiStatus.mode === 'live' ? 'Live' : 'Demo'} price loaded: SPY $${marketData.spy.price.toFixed(2)}`);
+    } catch (error) {
+      console.error('Failed to load price:', error);
+      alert('Failed to load price. Please try again.');
+    } finally {
+      this.isLoadingPrice = false;
+      this.updateComponents(this.store.getState());
+    }
+  }
+  
+  private executeAutoTradeRules(state: GameState): void {
+    const { vix } = state.market;
+    const { leaps, shortCall } = state;
+    
+    if (leaps && !shortCall && vix < 40) {
+      const strikeOffset = vix < 20 ? 3 : vix < 30 ? 0 : -2;
+      const strike = Math.round((state.market.spyPrice + strikeOffset) / 5) * 5;
+      const pricing = calculateOptionPrice({
+        stockPrice: state.market.spyPrice,
+        strike,
+        dte: 5,
+        vix,
+        isCall: true,
+      });
+      
+      this.store.dispatch({
+        type: 'SELL_SHORT_CALL',
+        payload: { strike, premium: pricing.total, dte: 5 },
+      });
+    }
+  }
+  
+  private showFridaySplash(state: GameState): void {
+    const { leaps, shortCall } = state;
+    const weekNumber = Math.floor(state.market.day / 5) + 1;
+
+    const shortCallPnL = shortCall && state.shortCallWeekStartValue !== null
+      ? state.shortCallWeekStartValue - shortCall.currentValue
+      : 0;
+    
+    const leapsPnL = leaps && state.leapsWeekStartValue !== null
+      ? leaps.currentValue - state.leapsWeekStartValue
+      : 0;
+
+    const totalPnL = shortCallPnL + leapsPnL;
+    const mondayPrice = state.priceHistory.length >= 5 
+      ? state.priceHistory[state.priceHistory.length - 5] 
+      : state.priceHistory[0];
+    const priceChange = state.market.spyPrice - mondayPrice;
+    const percentChange = (priceChange / mondayPrice) * 100;
+
+    if (this.splashEl) {
+      this.splashEl.innerHTML = `
+        <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" id="friday-splash">
+          <div class="bg-gray-900 border-2 border-matrix-green rounded-xl p-6 max-w-2xl w-full">
+            <div class="text-center mb-4">
+              <div class="text-4xl mb-1">🎉</div>
+              <h2 class="text-2xl font-bold text-matrix-green">Week ${weekNumber} Complete!</h2>
+            </div>
+            <div class="bg-gradient-to-r from-blue-900/30 to-purple-900/30 border-2 border-blue-500/50 rounded-lg p-4 mb-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs text-gray-400 mb-1">SPY Weekly Movement</div>
+                  <div class="text-2xl font-bold">
+                    <span class="text-gray-300">$${mondayPrice.toFixed(2)}</span>
+                    <span class="text-gray-500 mx-2">→</span>
+                    <span class="text-white">$${state.market.spyPrice.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-xs text-gray-400 mb-1">Change</div>
+                  <div class="text-2xl font-bold ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}">
+                    ${priceChange >= 0 ? '+' : ''}$${priceChange.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+            ${shortCall ? `
+              <div class="bg-gray-800 p-4 rounded-lg mb-3">
+                <div class="flex justify-between items-center mb-2">
+                  <span class="font-bold text-orange-400">Short Call Result</span>
+                  <span class="text-sm ${state.market.spyPrice > shortCall.strike ? 'text-red-400' : 'text-green-400'}">
+                    ${state.market.spyPrice > shortCall.strike ? 'ITM' : 'OTM - Full Profit!'}
+                  </span>
+                </div>
+                <div class="text-sm">P&L: <span class="font-mono ${getPnLColorClass(shortCallPnL)}">${shortCallPnL >= 0 ? '+' : ''}${formatCurrency(shortCallPnL)}</span></div>
+              </div>
+            ` : ''}
+            ${leaps ? `
+              <div class="bg-gray-800 p-4 rounded-lg mb-3">
+                <div class="font-bold text-matrix-green mb-2">LEAPS Result</div>
+                <div class="text-sm">Weekly P&L: <span class="font-mono ${getPnLColorClass(leapsPnL)}">${leapsPnL >= 0 ? '+' : ''}${formatCurrency(leapsPnL)}</span></div>
+              </div>
+            ` : ''}
+            <div class="bg-gradient-to-r from-gray-800 to-gray-700 p-4 rounded-lg border border-gray-600 mb-3">
+              <div class="flex justify-between items-center">
+                <span class="text-lg font-bold">Weekly Total P&L</span>
+                <span class="text-2xl font-bold font-mono ${getPnLColorClass(totalPnL)}">${totalPnL >= 0 ? '+' : ''}${formatCurrency(totalPnL)}</span>
+              </div>
+            </div>
+            <button id="close-splash-btn" class="btn-primary px-8 py-3 text-lg w-full">Continue to Next Week →</button>
+          </div>
+        </div>
+      `;
+      this.isFridaySplashOpen = true;
+
+      this.splashEl.querySelector('#close-splash-btn')?.addEventListener('click', () => {
+        this.closeFridaySplash(state);
+      });
+    }
+  }
+  
+  private closeFridaySplash(state: GameState): void {
+    this.isFridaySplashOpen = false;
+
+    if (state.shortCall) {
+      const isITM = state.market.spyPrice > state.shortCall.strike;
+      this.store.dispatch({
+        type: 'BUY_BACK_CALL',
+        payload: { cost: isITM ? state.shortCall.currentValue : 0 },
+      });
+    }
+
+    if (this.splashEl) {
+      this.splashEl.innerHTML = '';
+    }
+  }
+  
+  private updateComponents(state: GameState): void {
+    this.accountHeader?.update({ state });
+    this.gameControls?.update({
+      state,
+      gameMode: this.gameMode,
+      onStart: () => this.store.start(),
+      onPause: () => this.store.pause(),
+      onModeChange: (mode) => this.handleModeChange(mode),
+      onReset: () => this.store.reset(),
+      onScenarioChange: (scenario) => this.store.reset(scenario),
+      onLoadPrice: () => this.handleLoadPrice(),
+      isLoadingPrice: this.isLoadingPrice,
+    });
+    
+    this.candlestickChart?.updateCandles(state.market.candles, state.market.vixCandles);
+    
+    this.optionsChain?.update({
+      stockPrice: state.market.spyPrice,
+      vix: state.market.vix,
+      onSelectStrike: (strike, price) => this.handleStrikeSelection(strike, price),
+      selectedStrike: state.shortCall?.strike,
+      mode: this.optionsChainMode,
+      onModeChange: (mode) => { this.optionsChainMode = mode; },
+    });
+    
+    this.leapsPanel?.update({
+      state,
+      onBuyLEAPS: () => this.openBuyLEAPSDialog(),
+      onRollLEAPS: () => this.openRollLEAPSDialog(),
+      onCloseLEAPS: () => this.closeLEAPS(),
+    });
+    
+    this.shortCallPanel?.update({
+      state,
+      onSellCall: () => this.openSellCallDialog(),
+      onRollCall: () => this.openRollCallDialog(),
+      onBuyBackCall: () => this.buyBackCall(),
+    });
+  }
+  
+  private handleStrikeSelection(strike: number, price: OptionPriceBreakdown): void {
+    const state = this.store.getState();
+
+    if (this.optionsChainMode === 'leaps' && !state.leaps) {
+      if (confirm(`Buy LEAPS Call Option?\n\nStrike: $${strike}\nCost: $${price.total.toLocaleString()}\n\nClick OK to purchase.`)) {
+        this.store.dispatch({
+          type: 'BUY_LEAPS',
+          payload: { strike, premium: price.total, delta: price.delta, theta: price.theta, dte: 365 },
+        });
+      }
+    } else if (!state.leaps) {
+      alert('Please switch to LEAPS mode to purchase a LEAPS option first.');
+    } else if (!state.shortCall && this.optionsChainMode === 'weekly') {
+      const moneyness = strike > state.market.spyPrice ? 'OTM' : 'ATM';
+      if (confirm(`Sell Weekly Call Option?\n\nStrike: $${strike} (${moneyness})\nPremium: $${price.total.toLocaleString()}\n\nClick OK to sell this call.`)) {
+        this.store.dispatch({
+          type: 'SELL_SHORT_CALL',
+          payload: { strike, premium: price.total, dte: 5 },
+        });
+      }
+    } else if (!state.shortCall) {
+      alert('You have a LEAPS position. Switch to Weekly mode to sell short calls.');
+      this.optionsChainMode = 'weekly';
+      this.optionsChain?.setMode('weekly');
+    }
+  }
+  
+  private openBuyLEAPSDialog(): void {
+    this.optionsChainMode = 'leaps';
+    this.optionsChain?.setMode('leaps');
+    alert('Buy LEAPS - Select from Options Chain\n\nClick on any strike to purchase a LEAPS option.');
+  }
+  
+  private openSellCallDialog(): void {
+    const state = this.store.getState();
+    if (!state.leaps) {
+      alert('You need to buy LEAPS first!');
+      return;
+    }
+    this.optionsChainMode = 'weekly';
+    this.optionsChain?.setMode('weekly');
+    alert('Sell Short Call - Select from Options Chain\n\nClick on any strike to sell a covered call.');
+  }
+  
+  private buyBackCall(): void {
+    const state = this.store.getState();
+    if (!state.shortCall) return;
+
+    const currentProfit = state.shortCall.premium - state.shortCall.currentValue;
+    const profitPercent = (currentProfit / state.shortCall.premium) * 100;
+
+    if (confirm(`Buy back the $${state.shortCall.strike} call?\n\nCurrent profit: $${currentProfit.toFixed(0)} (${profitPercent.toFixed(1)}%)\n\nProceed?`)) {
+      this.store.dispatch({
+        type: 'BUY_BACK_CALL',
+        payload: { cost: state.shortCall.currentValue },
+      });
+    }
+  }
+  
+  private openRollCallDialog(): void {
+    const state = this.store.getState();
+    if (!state.shortCall) return;
+
+    if (confirm(`Roll Short Call?\n\nClose your current $${state.shortCall.strike} call for $${state.shortCall.currentValue.toFixed(0)}?`)) {
+      this.store.dispatch({
+        type: 'BUY_BACK_CALL',
+        payload: { cost: state.shortCall.currentValue },
+      });
+      this.optionsChainMode = 'weekly';
+      this.optionsChain?.setMode('weekly');
+    }
+  }
+  
+  private openRollLEAPSDialog(): void {
+    const state = this.store.getState();
+    if (!state.leaps) return;
+
+    alert('Roll LEAPS - Select New Strike\n\nThe Options Chain is now in LEAPS mode. Click on any strike to roll your LEAPS.');
+    this.optionsChainMode = 'leaps';
+    this.optionsChain?.setMode('leaps');
+  }
+  
+  private closeLEAPS(): void {
+    const state = this.store.getState();
+    if (!state.leaps) return;
+
+    const pnl = state.leaps.currentValue - state.leaps.costBasis;
+
+    if (confirm(`Close LEAPS Position?\n\nP&L: ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}\n\nProceed?`)) {
+      this.store.dispatch({ type: 'CLOSE_LEAPS' });
+    }
+  }
+  
+  destroy(): void {
+    this.unsubscribe?.();
+    this.leapsPanel?.destroy();
+    this.candlestickChart?.destroy();
+    this.store.pause();
+  }
+}

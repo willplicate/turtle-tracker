@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutorial 1: Shares vs LEAPS</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .money {
+            font-weight: bold;
+        }
+        .positive { color: green; }
+        .negative { color: red; }
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .result {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin: 15px 0;
+            border: 2px solid #333;
+        }
+        .highlight {
+            background-color: #ffffcc;
+            padding: 10px;
+            border: 1px solid #999;
+        }
+        .hidden {
+            display: none;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .comparison {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        h1 {
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .step-indicator {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tutorial 1: Shares vs LEAPS</h1>
+    <p class="step-indicator">Step <span id="current-step">1</span> of 4</p>
+
+    <!-- SCREEN 1: Own Shares -->
+    <div id="screen1">
+        <h2>Understanding Share Ownership</h2>
+
+        <div class="section">
+            <h3>YOUR PORTFOLIO</h3>
+
+            <p>Capital: <span class="money">$<span id="capital1">50,150</span></span></p>
+
+            <label>
+                Shares Owned: <span class="money" id="shares-display1">85</span>
+                <input type="range" id="shares-slider1" min="1" max="100" value="85">
+                <small>(1-100 shares)</small>
+            </label>
+
+            <p>SPY Price: <span class="money">$590</span></p>
+            <p>Total Cost: <span class="money">$<span id="total-cost1">50,150</span></span></p>
+        </div>
+
+        <button id="advance-btn1">▶ ADVANCE 7 DAYS</button>
+
+        <div id="result1" class="section hidden">
+            <h3>RESULT</h3>
+
+            <p><strong>7 Days Later...</strong></p>
+            <p>SPY: $590 → $595 (+$5)</p>
+
+            <p>Your <span id="result-shares1">85</span> shares:</p>
+            <p>$<span id="result-initial1">50,150</span> → $<span id="result-final1">50,575</span></p>
+
+            <p class="positive"><strong>Gain: +$<span id="result-gain1">425</span> ✓</strong></p>
+
+            <div class="highlight">
+                <p><strong>💡 Simple:</strong> When SPY moves $5, you make $5 × <span id="result-shares2">85</span> shares = $<span id="result-gain2">425</span></p>
+            </div>
+        </div>
+
+        <button id="next-btn1" class="hidden">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 2: Swap for LEAPS -->
+    <div id="screen2" class="hidden">
+        <h2>Introducing LEAPS</h2>
+
+        <div class="section">
+            <h3>YOUR 85 SHARES</h3>
+            <p>Cost: <span class="money">$50,150</span></p>
+            <p>Ties up all your capital!</p>
+        </div>
+
+        <button id="swap-btn">SWAP 85 SHARES → 85-DELTA LEAPS</button>
+
+        <div id="after-swap" class="section hidden">
+            <h3>AFTER SWAP</h3>
+
+            <p><strong>LEAPS Position:</strong></p>
+            <ul>
+                <li>Strike: $510 (13% ITM)</li>
+                <li>Cost: <span class="money positive">$12,900 ✓</span> (vs $50,150 for shares!)</li>
+                <li>Delta: 85% (controls 85 shares)</li>
+                <li>Theta: -$2/day (time decay cost)</li>
+                <li>DTE: 120 days</li>
+            </ul>
+
+            <p>Capital Freed: <span class="money positive">$37,250</span></p>
+        </div>
+
+        <button id="advance-btn2" class="hidden">▶ ADVANCE 7 DAYS</button>
+
+        <div id="result2" class="section hidden">
+            <h3>RESULT</h3>
+
+            <p><strong>7 Days Later: SPY $595 (+$5)</strong></p>
+
+            <p><strong>BREAKDOWN:</strong></p>
+            <ul>
+                <li>Delta Gain: $5 × 0.85 × 100 = <span class="positive">+$425 ✓</span><br>
+                    <small>(Same as shares!)</small></li>
+                <li>Theta Cost: -$2/day × 7 = <span class="negative">-$14</span><br>
+                    <small>(Your "rental fee")</small></li>
+            </ul>
+
+            <p><strong>Net Gain: <span class="positive">+$411</span></strong></p>
+            <p>LEAPS Value: $12,900 → $13,311</p>
+
+            <div class="highlight">
+                <p><strong>💡 Same upside as shares, costs $2/day to hold</strong></p>
+            </div>
+        </div>
+
+        <button id="back-btn2" class="hidden">← BACK</button>
+        <button id="next-btn2" class="hidden">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 3: Time/Cost Trade-off -->
+    <div id="screen3" class="hidden">
+        <h2>The Time/Cost Trade-off</h2>
+
+        <p>Compare two LEAPS with same delta (85%):</p>
+
+        <div class="grid">
+            <div class="comparison">
+                <h3>SHORT-TERM LEAPS</h3>
+                <p>30 DTE</p>
+                <p>Theta: <span class="negative">-$8/day</span></p>
+                <p>Cost: $10,200</p>
+                <p>Weekly cost: <span class="negative">$56</span></p>
+            </div>
+
+            <div class="comparison">
+                <h3>LONG-TERM LEAPS</h3>
+                <p>120 DTE</p>
+                <p>Theta: <span class="negative">-$2/day</span></p>
+                <p>Cost: $12,900</p>
+                <p>Weekly cost: <span class="negative">$14</span></p>
+            </div>
+        </div>
+
+        <div class="section">
+            <label>
+                <strong>DTE Slider:</strong> <span class="money" id="dte-display">120</span> days
+                <input type="range" id="dte-slider" min="30" max="365" step="5" value="120">
+                <small>(30-365 days)</small>
+            </label>
+
+            <div class="result">
+                <p>DTE: <span id="dte-result">120</span> days</p>
+                <p>Upfront Cost: <span class="money">$<span id="cost-result">12,900</span></span></p>
+                <p>Daily Theta: <span class="negative">-$<span id="theta-result">2.00</span></span></p>
+                <p>7-Day Total: <span class="negative">-$<span id="week-result">14.00</span></span></p>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <p><strong>💡 Further out in time = cheaper per day, but higher upfront cost</strong></p>
+            <p>Turtle Strategy uses 120+ DTE to minimize daily bleed</p>
+        </div>
+
+        <button id="back-btn3">← BACK</button>
+        <button id="next-btn3">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 4: Final Comparison -->
+    <div id="screen4" class="hidden">
+        <h2>Final Comparison: 30-Day Simulation</h2>
+
+        <button id="run-simulation">RUN 30-DAY TEST</button>
+
+        <div id="simulation-results" class="hidden">
+            <div class="grid">
+                <div class="comparison">
+                    <h3>85 SHARES</h3>
+                    <p>Capital: $50,150</p>
+
+                    <h4>UP SCENARIO</h4>
+                    <p>SPY +$10</p>
+                    <p>Gain: <span class="positive">+$850 ✓</span></p>
+
+                    <h4>DOWN SCENARIO</h4>
+                    <p>SPY -$10</p>
+                    <p>Loss: <span class="negative">-$850</span></p>
+                </div>
+
+                <div class="comparison">
+                    <h3>85-DELTA LEAPS</h3>
+                    <p>Capital: $12,900</p>
+
+                    <h4>UP SCENARIO</h4>
+                    <p>SPY +$10</p>
+                    <p>Delta: <span class="positive">+$850</span></p>
+                    <p>Theta: <span class="negative">-$60</span></p>
+                    <p>Net: <span class="positive">+$790 ✓</span></p>
+
+                    <h4>DOWN SCENARIO</h4>
+                    <p>SPY -$10</p>
+                    <p>Delta: <span class="negative">-$850</span></p>
+                    <p>Theta: <span class="negative">-$60</span></p>
+                    <p>Net: <span class="negative">-$910</span></p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>BONUS: CASH OPPORTUNITY</h3>
+                <p>Freed Capital: <span class="money">$37,250</span></p>
+                <p>Earning 4.5% APY = <span class="positive">~$125/month</span></p>
+            </div>
+
+            <div class="highlight">
+                <p><strong>💡 LEAPS gives you same exposure with 75% less capital.</strong></p>
+                <p>Theta cost ($60/month) is your "rental fee" for leverage.</p>
+                <p>You keep $37k working elsewhere!</p>
+            </div>
+        </div>
+
+        <button id="back-btn4">← BACK</button>
+        <button id="complete-btn" class="hidden">COMPLETE TUTORIAL →</button>
+    </div>
+
+    <!-- COMPLETION SCREEN -->
+    <div id="completion" class="hidden">
+        <h2>🎓 Tutorial Complete!</h2>
+
+        <div class="section">
+            <p><strong>What you learned:</strong></p>
+            <ul>
+                <li>Shares give you direct exposure to stock price movements</li>
+                <li>LEAPS give you the same exposure with 75% less capital</li>
+                <li>Theta decay is the cost you pay for leverage</li>
+                <li>Longer DTE = lower daily theta but higher upfront cost</li>
+                <li>The Turtle Strategy uses 120+ DTE to minimize daily bleed</li>
+            </ul>
+        </div>
+
+        <div class="highlight">
+            <p><strong>Next: Learn how to sell covered calls against your LEAPS to generate income!</strong></p>
+        </div>
+
+        <button onclick="window.location.reload()">RESTART TUTORIAL</button>
+    </div>
+
+    <script>
+        // State
+        let currentScreen = 1;
+
+        // Screen 1: Own Shares
+        const sharesSlider1 = document.getElementById('shares-slider1');
+        const sharesDisplay1 = document.getElementById('shares-display1');
+        const capital1 = document.getElementById('capital1');
+        const totalCost1 = document.getElementById('total-cost1');
+        const advanceBtn1 = document.getElementById('advance-btn1');
+        const result1 = document.getElementById('result1');
+        const nextBtn1 = document.getElementById('next-btn1');
+
+        sharesSlider1.addEventListener('input', (e) => {
+            const shares = parseInt(e.target.value);
+            sharesDisplay1.textContent = shares;
+            const cost = shares * 590;
+            capital1.textContent = cost.toLocaleString();
+            totalCost1.textContent = cost.toLocaleString();
+        });
+
+        advanceBtn1.addEventListener('click', () => {
+            const shares = parseInt(sharesSlider1.value);
+            const gain = shares * 5;
+            const initial = shares * 590;
+            const final = shares * 595;
+
+            document.getElementById('result-shares1').textContent = shares;
+            document.getElementById('result-shares2').textContent = shares;
+            document.getElementById('result-initial1').textContent = initial.toLocaleString();
+            document.getElementById('result-final1').textContent = final.toLocaleString();
+            document.getElementById('result-gain1').textContent = gain.toLocaleString();
+            document.getElementById('result-gain2').textContent = gain.toLocaleString();
+
+            result1.classList.remove('hidden');
+            nextBtn1.classList.remove('hidden');
+            advanceBtn1.disabled = true;
+        });
+
+        nextBtn1.addEventListener('click', () => {
+            showScreen(2);
+        });
+
+        // Screen 2: Swap for LEAPS
+        const swapBtn = document.getElementById('swap-btn');
+        const afterSwap = document.getElementById('after-swap');
+        const advanceBtn2 = document.getElementById('advance-btn2');
+        const result2 = document.getElementById('result2');
+        const backBtn2 = document.getElementById('back-btn2');
+        const nextBtn2 = document.getElementById('next-btn2');
+
+        swapBtn.addEventListener('click', () => {
+            afterSwap.classList.remove('hidden');
+            advanceBtn2.classList.remove('hidden');
+            swapBtn.disabled = true;
+        });
+
+        advanceBtn2.addEventListener('click', () => {
+            result2.classList.remove('hidden');
+            backBtn2.classList.remove('hidden');
+            nextBtn2.classList.remove('hidden');
+            advanceBtn2.disabled = true;
+        });
+
+        backBtn2.addEventListener('click', () => showScreen(1));
+        nextBtn2.addEventListener('click', () => showScreen(3));
+
+        // Screen 3: Time/Cost Trade-off
+        const dteSlider = document.getElementById('dte-slider');
+        const dteDisplay = document.getElementById('dte-display');
+        const dteResult = document.getElementById('dte-result');
+        const costResult = document.getElementById('cost-result');
+        const thetaResult = document.getElementById('theta-result');
+        const weekResult = document.getElementById('week-result');
+        const backBtn3 = document.getElementById('back-btn3');
+        const nextBtn3 = document.getElementById('next-btn3');
+
+        function calculateLEAPS(dte) {
+            const stockPrice = 590;
+            const strike = 510;
+            const intrinsic = (stockPrice - strike) * 100;
+            const extrinsicBase = 800;
+            const dteFactor = dte / 120;
+            const extrinsic = extrinsicBase * dteFactor;
+            const premium = intrinsic + extrinsic;
+            const theta = -(extrinsicBase / dte);
+
+            return {
+                premium: Math.round(premium),
+                theta: theta,
+                weekCost: theta * 7
+            };
+        }
+
+        dteSlider.addEventListener('input', (e) => {
+            const dte = parseInt(e.target.value);
+            const leaps = calculateLEAPS(dte);
+
+            dteDisplay.textContent = dte;
+            dteResult.textContent = dte;
+            costResult.textContent = leaps.premium.toLocaleString();
+            thetaResult.textContent = Math.abs(leaps.theta).toFixed(2);
+            weekResult.textContent = Math.abs(leaps.weekCost).toFixed(2);
+        });
+
+        backBtn3.addEventListener('click', () => showScreen(2));
+        nextBtn3.addEventListener('click', () => showScreen(4));
+
+        // Screen 4: Final Comparison
+        const runSimulation = document.getElementById('run-simulation');
+        const simulationResults = document.getElementById('simulation-results');
+        const backBtn4 = document.getElementById('back-btn4');
+        const completeBtn = document.getElementById('complete-btn');
+
+        runSimulation.addEventListener('click', () => {
+            simulationResults.classList.remove('hidden');
+            completeBtn.classList.remove('hidden');
+            runSimulation.disabled = true;
+        });
+
+        backBtn4.addEventListener('click', () => showScreen(3));
+        completeBtn.addEventListener('click', () => showScreen(5));
+
+        // Screen navigation
+        function showScreen(screenNum) {
+            document.getElementById('screen1').classList.add('hidden');
+            document.getElementById('screen2').classList.add('hidden');
+            document.getElementById('screen3').classList.add('hidden');
+            document.getElementById('screen4').classList.add('hidden');
+            document.getElementById('completion').classList.add('hidden');
+
+            if (screenNum === 5) {
+                document.getElementById('completion').classList.remove('hidden');
+                document.getElementById('current-step').textContent = '✓';
+            } else {
+                document.getElementById('screen' + screenNum).classList.remove('hidden');
+                document.getElementById('current-step').textContent = screenNum;
+            }
+
+            currentScreen = screenNum;
+            window.scrollTo(0, 0);
+        }
+    </script>
+</body>
+</html>

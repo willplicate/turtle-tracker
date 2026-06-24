@@ -46,3 +46,5 @@ venv/
 
 # Large files (images can stay for now)
 *.log
+.vercel
+.env*.local

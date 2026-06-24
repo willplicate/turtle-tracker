@@ -103,29 +103,52 @@ export function generatePrice(
 
 /**
  * Generate next VIX value based on price change
- * VIX correlates inversely with price movements
+ * Simplified model matching weekly simulation
+ *
  * @param currentVIX - Current VIX level
- * @param priceChangePercent - Percentage price change
+ * @param priceChangePercent - Daily price change as decimal (e.g., -0.015 for -1.5%)
  * @returns Next VIX value
  */
 export function generateVIX(
   currentVIX: number,
   priceChangePercent: number
 ): number {
-  // VIX tends to spike on down moves, decline on up moves
-  const volatilityOfVIX = 0.05; // VIX is quite volatile itself
-  const randomShock = gaussianRandom() * volatilityOfVIX;
-  
-  // Inverse correlation: -2x price change effect on VIX
-  const priceEffect = -priceChangePercent * 2;
-  
-  // Mean reversion toward 15 (long-term average)
-  const meanReversion = (15 - currentVIX) * 0.02;
-  
-  const nextVIX = currentVIX * (1 + priceEffect + randomShock + meanReversion);
-  
-  // Clamp VIX to realistic bounds
-  return Math.max(9, Math.min(nextVIX, 80));
+  // 1. PRICE EFFECT: Conservative asymmetric correlation
+  let priceEffect: number;
+
+  if (priceChangePercent < 0) {
+    // DOWN MOVES: VIX spikes (conservative multipliers for daily)
+    const absChange = Math.abs(priceChangePercent);
+    let multiplier: number;
+    if (absChange < 0.004) {
+      multiplier = 6; // Small daily drops
+    } else if (absChange < 0.01) {
+      multiplier = 8; // Medium daily drops
+    } else {
+      multiplier = 10; // Large daily drops (capped)
+    }
+    priceEffect = absChange * multiplier;
+  } else {
+    // UP MOVES: VIX declines
+    const absChange = Math.abs(priceChangePercent);
+    priceEffect = -absChange * 3;
+  }
+
+  // 2. MEAN REVERSION: Very strong pull toward 17
+  const target = 17;
+  const decayRate = 0.08; // Daily rate (weekly 0.35 / 5 ≈ 0.07)
+  const meanReversion = ((target - currentVIX) / currentVIX) * decayRate;
+
+  // 3. RANDOM SHOCK: Minimal noise
+  const vixVolatility = 0.02; // ~2% daily (4% weekly / sqrt(5))
+  const randomShock = gaussianRandom() * vixVolatility;
+
+  // Calculate next VIX
+  const vixChange = priceEffect + meanReversion + randomShock;
+  const nextVIX = currentVIX * (1 + vixChange);
+
+  // Clamp to realistic bounds
+  return Math.max(10, Math.min(nextVIX, 80));
 }
 
 /**
@@ -206,7 +229,7 @@ export function generateInitialCandles(
 export function generateHistoricalContextCandles(
   finalPrice: number,
   numCandles: number = 6,
-  volatility: number = 0.008
+  _volatility: number = 0.008
 ): Candle[] {
   const candles: Candle[] = [];
   let currentPrice = finalPrice;
@@ -238,12 +261,71 @@ export function generateHistoricalContextCandles(
   return candles;
 }
 
+/**
+ * Generate VIX historical candles that correlate inversely with SPY movement
+ * VIX typically spikes when SPY drops and declines when SPY rises
+ */
+export function generateVIXHistoricalContextCandles(
+  finalVIX: number,
+  spyCandles: Candle[],
+  numCandles: number = 6
+): Candle[] {
+  const vixCandles: Candle[] = [];
+  let currentVIX = finalVIX;
+
+  // Generate candles in reverse order (matching SPY candles)
+  for (let i = 0; i < numCandles; i++) {
+    const spyCandle = spyCandles[spyCandles.length - 1 - i];
+    if (!spyCandle) break;
+
+    // Calculate SPY's weekly change for this period
+    const spyChange = (spyCandle.close - spyCandle.open) / spyCandle.open;
+    
+    // VIX moves inversely to SPY (with some randomness)
+    // When SPY drops 2%, VIX might spike 10-20%
+    // When SPY rises 2%, VIX might decline 5-10%
+    let vixChangePercent: number;
+    if (spyChange < 0) {
+      // SPY dropped - VIX spikes (exaggerated move)
+      vixChangePercent = Math.abs(spyChange) * (4 + Math.random() * 4); // 4-8x multiplier
+    } else {
+      // SPY rose - VIX declines
+      vixChangePercent = -spyChange * (1.5 + Math.random() * 2); // 1.5-3.5x multiplier
+    }
+
+    // Add some random noise
+    vixChangePercent += (Math.random() - 0.5) * 0.1;
+
+    const open = currentVIX / (1 + vixChangePercent);
+    const close = currentVIX;
+
+    // VIX intraweek range is typically wider percentage-wise than SPY
+    const vol = Math.abs(vixChangePercent) + 0.05;
+    const high = Math.max(open, close) * (1 + vol * 0.8);
+    const low = Math.min(open, close) * (1 - vol * 0.5);
+
+    vixCandles.unshift({
+      time: spyCandle.time,
+      open: Math.max(10, open),
+      high: Math.max(10, high),
+      low: Math.max(10, low),
+      close: Math.max(10, close),
+      isHistorical: true,
+    });
+
+    currentVIX = open;
+  }
+
+  return vixCandles;
+}
+
 // Market state for the game
 export interface MarketState {
   spyPrice: number;
   vix: number;
   day: number;
   candles: Candle[];
+  vixCandles: Candle[]; // VIX price history
   scenario: MarketScenario;
 }
 
@@ -252,13 +334,52 @@ export interface MarketState {
  */
 export function initializeMarket(scenarioType: string = 'normal'): MarketState {
   const scenario = getScenario(scenarioType);
-  const candles = generateInitialCandles(scenario, 30);
+  
+  // Generate historical context candles (shown before game starts)
+  // These provide market context so users can see the trend before playing
+  const numHistoricalCandles = 6; // Show 6 weeks of history
+  const currentPrice = scenario.initialPrice;
+  const historicalCandles = generateHistoricalContextCandles(
+    currentPrice,
+    numHistoricalCandles,
+    scenario.volatility
+  );
+  
+  // Generate corresponding VIX historical candles
+  const currentVIX = scenario.initialVIX;
+  const vixHistoricalCandles = generateVIXHistoricalContextCandles(
+    currentVIX,
+    historicalCandles,
+    numHistoricalCandles
+  );
+  
+  // Add one initial game candle (day 0) that's not marked as historical
+  const initialGameCandle = createCandle(currentPrice, scenario.volatility);
+  initialGameCandle.time = Date.now();
+  initialGameCandle.open = currentPrice;
+  initialGameCandle.close = currentPrice; // Start at current price
+  initialGameCandle.high = currentPrice * 1.002; // Small range for visual
+  initialGameCandle.low = currentPrice * 0.998;
+  
+  const candles = [...historicalCandles, initialGameCandle];
+  
+  // Initial VIX candle
+  const initialVIXCandle: Candle = {
+    time: Date.now(),
+    open: currentVIX,
+    high: currentVIX * 1.02,
+    low: currentVIX * 0.98,
+    close: currentVIX,
+  };
+  
+  const vixCandles = [...vixHistoricalCandles, initialVIXCandle];
   
   return {
-    spyPrice: candles[candles.length - 1].close,
-    vix: scenario.initialVIX,
+    spyPrice: currentPrice,
+    vix: currentVIX,
     day: 0,
     candles,
+    vixCandles,
     scenario,
   };
 }
@@ -275,11 +396,23 @@ export function advanceMarket(state: MarketState): MarketState {
   newCandle.time = Date.now() + state.day * 86400000;
   newCandle.close = priceChange;
   
+  // Create corresponding VIX candle
+  const vixChange = newVIX - state.vix;
+  const vixVol = Math.abs(vixChange) / state.vix + 0.02;
+  const newVIXCandle: Candle = {
+    time: Date.now() + state.day * 86400000,
+    open: state.vix,
+    high: Math.max(state.vix, newVIX) * (1 + vixVol * 0.3),
+    low: Math.min(state.vix, newVIX) * (1 - vixVol * 0.2),
+    close: newVIX,
+  };
+  
   return {
     spyPrice: priceChange,
     vix: newVIX,
     day: state.day + 1,
     candles: [...state.candles.slice(-50), newCandle], // Keep last 50 candles
+    vixCandles: [...state.vixCandles.slice(-50), newVIXCandle], // Keep last 50 VIX candles
     scenario: state.scenario,
   };
 }

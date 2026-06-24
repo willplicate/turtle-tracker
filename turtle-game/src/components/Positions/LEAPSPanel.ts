@@ -1,10 +1,11 @@
-// LEAPS Position Panel - Simplified Design
+// LEAPS Position Panel - Simplified Design with Value Chart
 // Displays LEAPS position details in a clean, compact format
 
 import type { GameState } from '../../lib/game/stateManager';
 import { calculateLEAPSPnL } from '../../lib/game/positionManager';
 import { formatCurrency, getPnLColorClass } from '../../lib/game/pnlCalculator';
 import { calculateOptionPrice } from '../../lib/pricing/optionsPricing';
+import { LEAPSValueChart } from '../Chart/LEAPSValueChart';
 
 interface LEAPSPanelProps {
   state: GameState;
@@ -16,6 +17,8 @@ interface LEAPSPanelProps {
 export class LEAPSPanel {
   private container: HTMLElement;
   private props: LEAPSPanelProps;
+  private valueChart: LEAPSValueChart | null = null;
+  private chartContainer: HTMLElement | null = null;
 
   constructor(container: HTMLElement, props: LEAPSPanelProps) {
     this.container = container;
@@ -90,6 +93,9 @@ export class LEAPSPanel {
           </div>
         </div>
 
+        <!-- LEAPS Value Chart -->
+        <div id="leaps-value-chart" class="h-32 mt-4 border border-gray-700 rounded bg-gray-800/30"></div>
+
         <div class="grid grid-cols-2 gap-2 mt-4">
           <button id="roll-leaps-btn" class="btn-secondary text-sm py-2">
             Roll
@@ -100,6 +106,15 @@ export class LEAPSPanel {
         </div>
       </div>
     `;
+
+    // Initialize or update the chart
+    this.chartContainer = this.container.querySelector('#leaps-value-chart');
+    if (this.chartContainer) {
+      if (!this.valueChart) {
+        this.valueChart = new LEAPSValueChart(this.chartContainer);
+      }
+      this.valueChart.updateData(state.leapsValueHistory, leaps.costBasis);
+    }
 
     this.attachEventListeners(onRollLEAPS, onCloseLEAPS);
   }
@@ -114,6 +129,12 @@ export class LEAPSPanel {
         </button>
       </div>
     `;
+
+    // Destroy chart if it exists
+    if (this.valueChart) {
+      this.valueChart.destroy();
+      this.valueChart = null;
+    }
 
     const btn = this.container.querySelector('#buy-leaps-btn');
     if (btn) {
@@ -130,6 +151,13 @@ export class LEAPSPanel {
     }
     if (closeBtn) {
       closeBtn.addEventListener('click', onCloseLEAPS);
+    }
+  }
+  
+  destroy(): void {
+    if (this.valueChart) {
+      this.valueChart.destroy();
+      this.valueChart = null;
     }
   }
 }

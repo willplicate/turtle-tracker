@@ -169,7 +169,7 @@ export class OptionsChain {
               </tr>
             </thead>
             <tbody>
-              ${sortedChainData.map(({ strike, bid, ask, price, isATM, isITM, isOTM, itmAmount }) => {
+              ${sortedChainData.map(({ strike, bid, ask, price, isATM, isITM, isOTM: _isOTM, itmAmount }) => {
                 const isSelected = strike === selectedStrike;
                 const rowClass = isSelected
                   ? 'bg-blue-900/30 border-l-4 border-blue-500'

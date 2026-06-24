@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Covered Calls: 3 Lessons</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+/* ── Lite game additions ─────────────────────────────────────────────────── */
+
+.home-wrapper {
+    max-width: 840px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+}
+.home-hero { text-align: center; margin-bottom: 40px; }
+.home-hero h1 { font-size: 26px; font-weight: 500; margin-bottom: 8px; }
+.home-hero p  { color: var(--text-secondary); font-size: 15px; }
+
+.tutorial-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+@media (max-width: 680px) { .tutorial-grid { grid-template-columns: 1fr; } }
+
+.tutorial-card {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.15s;
+}
+.tutorial-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+
+.card-lock-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.90);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+.lock-icon { font-size: 26px; margin-bottom: 6px; }
+
+.tutorial-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px;
+    color: var(--text-tertiary);
+    line-height: 1;
+}
+.tutorial-card-title  { font-size: 17px; font-weight: 500; margin: 10px 0 6px; }
+.tutorial-card-desc   { font-size: 13px; color: var(--text-secondary); line-height: 1.5; flex: 1; margin-bottom: 12px; }
+.tutorial-card-details { font-size: 11px; color: var(--text-tertiary); }
+
+.done-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--green-light);
+    color: var(--green);
+    border: 1px solid var(--green-border);
+    margin-bottom: 8px;
+}
+
+/* Intro / summary centred wrapper */
+.tutorial-intro-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 40px 24px 80px;
+    min-height: calc(100vh - 57px);
+}
+.tutorial-intro-card { width: 100%; max-width: 540px; }
+.tutorial-intro-card .card { margin-bottom: 12px; }
+
+.intro-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.intro-big-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 42px;
+    color: var(--text-tertiary);
+    line-height: 1;
+}
+
+/* Week progress dots */
+.week-dots { display: flex; align-items: center; gap: 5px; margin-bottom: 12px; }
+.week-dot  { width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; }
+.week-dot.done    { background: var(--green); }
+.week-dot.current { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+
+/* Back button in topbar */
+.topbar-back {
+    font-size: 13px;
+    padding: 6px 12px;
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    color: var(--text-secondary);
+}
+.topbar-back:hover { background: var(--bg-secondary); }
+</style>
+</head>
+<body>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  HOME                                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+    <div class="topbar">
+        <div class="topbar-title">Covered Calls: 3 Lessons</div>
+        <div class="topbar-right" style="font-family:'IBM Plex Sans',sans-serif;font-size:13px">
+            Free intro to the Turtle Trading Strategy
+        </div>
+    </div>
+
+    <div class="home-wrapper">
+        <div class="home-hero">
+            <h1>Learn covered calls in 3 short tutorials</h1>
+            <p>Each tutorial runs 8 simulated weeks. No real money. No sign-up required.</p>
+        </div>
+
+        <div class="tutorial-grid">
+
+            <!-- Tutorial 1 -->
+            <div class="tutorial-card" id="tutorial-card-1">
+                <div class="card-lock-overlay" id="lock-t1" style="display:none">
+                    <div class="lock-icon">🔒</div>
+                    <div class="lock-msg" style="font-size:13px;color:var(--text-secondary)"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div class="tutorial-num">01</div>
+                    <span class="scenario-badge badge-green">Beginner</span>
+                </div>
+                <div id="t1-done-badge" class="done-badge" style="display:none">✓ Complete</div>
+                <div class="tutorial-card-title">The Market</div>
+                <div class="tutorial-card-desc">Own 100 shares. Watch the market move. No trading needed — just click Next week and observe.</div>
+                <div class="tutorial-card-details">8 weeks · Passive observation</div>
+                <button id="t1-start-btn" class="btn btn-primary btn-full" onclick="startTutorialFlow(1)" style="margin-top:16px">Start →</button>
+            </div>
+
+            <!-- Tutorial 2 -->
+            <div class="tutorial-card" id="tutorial-card-2">
+                <div class="card-lock-overlay" id="lock-t2">
+                    <div class="lock-icon">🔒</div>
+                    <div class="lock-msg" style="font-size:13px;color:var(--text-secondary)"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div class="tutorial-num">02</div>
+                    <span class="scenario-badge badge-amber">Intermediate</span>
+                </div>
+                <div id="t2-done-badge" class="done-badge" style="display:none">✓ Complete</div>
+                <div class="tutorial-card-title">Premium Income</div>
+                <div class="tutorial-card-desc">The market falls. You sell calls and collect premium every week. See how covered calls generate income in a decline.</div>
+                <div class="tutorial-card-details">8 weeks · Bear market · Covered calls</div>
+                <button id="t2-start-btn" class="btn btn-primary btn-full" onclick="startTutorialFlow(2)" style="margin-top:16px" disabled>Start →</button>
+            </div>
+
+            <!-- Tutorial 3 -->
+            <div class="tutorial-card" id="tutorial-card-3">
+                <div class="card-lock-overlay" id="lock-t3">
+                    <div class="lock-icon">🔒</div>
+                    <div class="lock-msg" style="font-size:13px;color:var(--text-secondary)"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div class="tutorial-num">03</div>
+                    <span class="scenario-badge badge-red">Advanced</span>
+                </div>
+                <div id="t3-done-badge" class="done-badge" style="display:none">✓ Complete</div>
+                <div class="tutorial-card-title">The Full Picture</div>
+                <div class="tutorial-card-desc">Mixed market — up, down, sideways. Experience the real covered call tradeoff: income now vs. capped upside.</div>
+                <div class="tutorial-card-details">8 weeks · Mixed market · Full tradeoff</div>
+                <button id="t3-start-btn" class="btn btn-primary btn-full" onclick="startTutorialFlow(3)" style="margin-top:16px" disabled>Start →</button>
+            </div>
+
+        </div><!-- .tutorial-grid -->
+
+        <div class="card" style="margin-top:32px;max-width:740px;margin-left:auto;margin-right:auto">
+            <div class="card-title">What is a covered call?</div>
+            <p style="color:var(--text-secondary);line-height:1.65;margin-bottom:8px">
+                You own shares. You sell someone the <em>right to buy them</em> at a specific price (the strike).
+                They pay you premium for that right upfront.
+            </p>
+            <p style="color:var(--text-secondary);line-height:1.65;margin-bottom:8px">
+                <strong>If shares stay below the strike at expiry:</strong> the option expires worthless.
+                You keep the premium and still own the shares.
+            </p>
+            <p style="color:var(--text-secondary);line-height:1.65;margin-bottom:16px">
+                <strong>If shares rise past the strike:</strong> you still keep the premium,
+                but your upside is capped at the strike price. That's the tradeoff.
+            </p>
+            <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em">
+                Profit &amp; loss at expiry — 100 shares at $100, ATM call sold for $162
+            </div>
+            <canvas id="home-diagram" height="220"></canvas>
+        </div>
+    </div>
+</div><!-- #screen-home -->
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 1 — INTRO                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t1-intro" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Covered Calls: 3 Lessons</div>
+        <button class="topbar-back" onclick="renderHome(); showScreen('screen-home')">← Back</button>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card">
+            <div class="intro-header">
+                <div class="intro-big-num">01</div>
+                <div>
+                    <span class="scenario-badge badge-green">Beginner · 8 weeks</span>
+                    <h2 style="font-size:22px;font-weight:500;margin-top:6px;margin-bottom:0">The Market</h2>
+                </div>
+            </div>
+
+            <div class="card" style="background:var(--bg-secondary)">
+                <div class="card-title">The setup</div>
+                <p style="color:var(--text-secondary);line-height:1.6">
+                    You own <strong>100 shares of DEMO</strong> at <span class="mono"><strong>$100.00</strong></span>/share —
+                    a <span class="mono"><strong>$10,000</strong></span> portfolio.
+                </p>
+                <p style="color:var(--text-secondary);line-height:1.6;margin-top:8px">
+                    Over 8 weeks the market rises +1.5%/week. <strong>No trading needed</strong> —
+                    just click "Next week" and watch what happens.
+                </p>
+            </div>
+
+            <div class="card" style="background:var(--green-light);border-color:var(--green-border)">
+                <div class="card-title" style="color:var(--green)">Key lesson</div>
+                <p style="color:var(--green);line-height:1.6">
+                    Shares move with the market. You get all the upside — but also all the downside.
+                    Tutorial 2 shows how selling calls lets you earn income even when the market falls.
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="startT1Week()">Start Tutorial 1 →</button>
+            <button class="btn btn-secondary btn-full" onclick="renderHome(); showScreen('screen-home');" style="margin-top:8px">← Back to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 1 — WEEK VIEW  (reused for weeks 1–8)                           -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t1-week" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Tutorial 1 — The Market</div>
+        <div class="topbar-right">Week <span id="t1-week-num">1</span> of 8</div>
+    </div>
+    <div class="layout">
+        <div class="left-panel">
+
+            <div class="chart-label">
+                <span>Price chart (DEMO)</span>
+                <span id="t1-current-price" class="mono">$100.00</span>
+            </div>
+            <canvas id="t1-price-chart" height="200"></canvas>
+
+            <div class="card" style="margin-top:16px">
+                <div class="card-title">This week</div>
+                <div class="price-action-row" style="margin-bottom:0">
+                    <div class="price-action-item">
+                        <div class="price-action-label">Opened</div>
+                        <div class="price-action-val mono" id="t1-open-price">$100.00</div>
+                    </div>
+                    <div class="price-action-arrow">→</div>
+                    <div class="price-action-item">
+                        <div class="price-action-label">Closed</div>
+                        <div class="price-action-val mono" id="t1-close-price">$101.50</div>
+                    </div>
+                    <div class="price-action-item">
+                        <div class="price-action-label">Change</div>
+                        <div class="price-action-change-val" id="t1-price-change">+1.50%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Share P&amp;L</div>
+                <div class="stat-row">
+                    <div class="stat-label">This week (100 shares × move)</div>
+                    <div class="stat-value" id="t1-week-share-pnl">+$150.00</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-label">Total from start</div>
+                    <div class="stat-value" id="t1-total-share-pnl">+$150.00</div>
+                </div>
+            </div>
+
+            <div class="card" style="background:var(--bg-secondary)">
+                <div class="card-title">Portfolio value</div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:500" id="t1-portfolio-value">$10,150.00</div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">100 shares × current price</div>
+            </div>
+
+            <div class="chart-label" style="margin-top:16px"><span>Portfolio value over time</span></div>
+            <canvas id="t1-pnl-chart" height="120"></canvas>
+
+        </div><!-- .left-panel -->
+
+        <div class="right-panel">
+            <div id="t1-week-dots"></div>
+
+            <div class="card" style="background:var(--accent-light);border-color:#B8D6F5">
+                <div class="card-title" style="color:var(--accent-dark)">What's happening</div>
+                <p id="t1-concept-text" style="color:var(--accent-dark);font-size:13px;line-height:1.6">
+                    The market is up. Your shares gain with it — no action required.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Running totals</div>
+                <div class="stat-row">
+                    <div class="stat-label">Starting capital</div>
+                    <div class="stat-value mono">$10,000.00</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-label">Current value</div>
+                    <div class="stat-value" id="t1-right-portfolio">$10,150.00</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-label">Total return</div>
+                    <div class="stat-value" id="t1-right-total-return">+$150.00</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-label">Return %</div>
+                    <div class="stat-value" id="t1-right-return-pct">+1.50%</div>
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" id="t1-next-btn">Next week →</button>
+            <button class="btn btn-secondary" onclick="renderHome(); showScreen('screen-home');"
+                style="margin-top:8px;width:100%;font-size:13px">← Quit to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 1 — SUMMARY                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t1-summary" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Tutorial 1 Complete!</div>
+        <div class="topbar-right"><span class="scenario-badge badge-green">1 of 3 done ✓</span></div>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card" style="max-width:580px">
+
+            <div class="final-banner final-banner-green">8 weeks complete — Tutorial 1 done!</div>
+
+            <div class="card">
+                <div class="card-title">8-week performance</div>
+                <div class="stat-row"><div class="stat-label">Starting value</div><div class="stat-value mono">$10,000.00</div></div>
+                <div class="stat-row"><div class="stat-label">Ending value</div><div class="stat-value mono" id="t1-sum-final">—</div></div>
+                <div class="stat-row"><div class="stat-label">Total return</div><div class="stat-value" id="t1-sum-return">—</div></div>
+                <div class="stat-row"><div class="stat-label">Return %</div><div class="stat-value" id="t1-sum-pct">—</div></div>
+            </div>
+
+            <div class="chart-label"><span>Portfolio value over 8 weeks</span></div>
+            <canvas id="t1-sum-chart" height="140" style="margin-bottom:16px"></canvas>
+
+            <div class="card" style="background:var(--amber-light);border-color:var(--amber-border)">
+                <div class="card-title" style="color:var(--amber)">What next?</div>
+                <p style="color:var(--amber);line-height:1.6;font-size:13px">
+                    A steady bull market is great — but if it fell instead, your portfolio would lose money with nothing to offset it.
+                </p>
+                <p style="color:var(--amber);line-height:1.6;font-size:13px;margin-top:8px">
+                    <strong>Tutorial 2</strong> shows how selling covered calls generates weekly income even in a declining market.
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="startTutorialFlow(2)">Continue to Tutorial 2 →</button>
+            <button class="btn btn-secondary btn-full" onclick="startTutorialFlow(1)" style="margin-top:8px">Play Tutorial 1 again</button>
+            <button class="btn btn-secondary btn-full" onclick="renderHome(); showScreen('screen-home');" style="margin-top:8px">← Back to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 2 — INTRO                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t2-intro" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Covered Calls: 3 Lessons</div>
+        <button class="topbar-back" onclick="renderHome(); showScreen('screen-home')">← Back</button>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card">
+            <div class="intro-header">
+                <div class="intro-big-num">02</div>
+                <div>
+                    <span class="scenario-badge badge-amber">Intermediate · 8 weeks</span>
+                    <h2 style="font-size:22px;font-weight:500;margin-top:6px;margin-bottom:0">Premium Income</h2>
+                </div>
+            </div>
+
+            <div class="card" style="background:var(--bg-secondary)">
+                <div class="card-title">The setup</div>
+                <p style="color:var(--text-secondary);line-height:1.6">
+                    You still own <strong>100 shares of DEMO</strong> at <span class="mono">$100.00</span>.
+                    This time the market falls <strong>−1% every week</strong>.
+                </p>
+                <p style="color:var(--text-secondary);line-height:1.6;margin-top:8px">
+                    Before each week starts, you pick a strike and sell a covered call.
+                    You collect the premium immediately. If the stock closes below the strike at expiry,
+                    the call expires worthless and you keep the full premium.
+                </p>
+            </div>
+
+            <div class="card" style="background:var(--amber-light);border-color:var(--amber-border)">
+                <div class="card-title" style="color:var(--amber)">New concept: intrinsic vs extrinsic</div>
+                <p style="color:var(--amber);line-height:1.6">Premium = <strong>intrinsic</strong> + <strong>extrinsic</strong>.</p>
+                <ul style="color:var(--amber);margin-top:8px;padding-left:20px;line-height:2;font-size:13px">
+                    <li><strong>Intrinsic</strong> — how far in-the-money the strike is × 100 shares</li>
+                    <li><strong>Extrinsic</strong> — time value + volatility. Decays to zero at expiry</li>
+                </ul>
+                <p style="color:var(--amber);line-height:1.6;margin-top:8px;font-size:13px">
+                    You'll see this breakdown for every strike you consider.
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="beginSellScreenFor(2)">Start Tutorial 2 →</button>
+            <button class="btn btn-secondary btn-full" onclick="renderHome(); showScreen('screen-home');" style="margin-top:8px">← Back to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 2 — SUMMARY                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t2-summary" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Tutorial 2 Complete!</div>
+        <div class="topbar-right"><span class="scenario-badge badge-green">2 of 3 done ✓</span></div>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card" style="max-width:580px">
+
+            <div class="final-banner final-banner-green">8 weeks done — bear market survived!</div>
+
+            <div class="card">
+                <div class="card-title">8-week performance</div>
+                <div class="stat-row"><div class="stat-label">Starting value</div><div class="stat-value mono">$10,000.00</div></div>
+                <div class="stat-row"><div class="stat-label">Ending value</div><div class="stat-value mono" id="t2-sum-final">—</div></div>
+                <div class="stat-row"><div class="stat-label">Premium collected</div><div class="stat-value" id="t2-sum-premium">—</div></div>
+                <div class="stat-row"><div class="stat-label">Share P&amp;L</div><div class="stat-value" id="t2-sum-share-pnl">—</div></div>
+                <div class="stat-row"><div class="stat-label">Total return</div><div class="stat-value" id="t2-sum-return">—</div></div>
+                <div class="stat-row"><div class="stat-label">Return %</div><div class="stat-value" id="t2-sum-pct">—</div></div>
+            </div>
+
+            <div class="chart-label"><span>Portfolio value over 8 weeks</span></div>
+            <canvas id="t2-sum-chart" height="140" style="margin-bottom:16px"></canvas>
+
+            <div class="card" style="background:var(--amber-light);border-color:var(--amber-border)">
+                <div class="card-title" style="color:var(--amber)">What next?</div>
+                <p style="color:var(--amber);line-height:1.6;font-size:13px">
+                    In a pure bear market, calls almost always expire worthless — straightforward income.
+                    But a mixed market is different: sometimes the call goes ITM and caps a rally you wanted.
+                </p>
+                <p style="color:var(--amber);line-height:1.6;font-size:13px;margin-top:8px">
+                    <strong>Tutorial 3</strong> puts you in a realistic market where the tradeoff cuts both ways.
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="startTutorialFlow(3)">Continue to Tutorial 3 →</button>
+            <button class="btn btn-secondary btn-full" onclick="startTutorialFlow(2)" style="margin-top:8px">Play Tutorial 2 again</button>
+            <button class="btn btn-secondary btn-full" onclick="renderHome(); showScreen('screen-home');" style="margin-top:8px">← Back to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 3 — INTRO                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t3-intro" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">Covered Calls: 3 Lessons</div>
+        <button class="topbar-back" onclick="renderHome(); showScreen('screen-home')">← Back</button>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card">
+            <div class="intro-header">
+                <div class="intro-big-num">03</div>
+                <div>
+                    <span class="scenario-badge badge-red">Advanced · 8 weeks</span>
+                    <h2 style="font-size:22px;font-weight:500;margin-top:6px;margin-bottom:0">The Full Picture</h2>
+                </div>
+            </div>
+
+            <div class="card" style="background:var(--bg-secondary)">
+                <div class="card-title">The setup</div>
+                <p style="color:var(--text-secondary);line-height:1.6">
+                    Same 100 shares of DEMO at <span class="mono">$100.00</span>. The market is now <strong>mixed</strong> —
+                    some weeks up, some down, some flat. The sequence is seeded so it's the same every time you play.
+                </p>
+                <p style="color:var(--text-secondary);line-height:1.6;margin-top:8px">
+                    Each week you decide: sell ITM for max income, ATM for balance, OTM for upside room,
+                    or go uncovered and keep full participation.
+                </p>
+            </div>
+
+            <div class="card" style="background:var(--purple-light);border-color:var(--purple-border)">
+                <div class="card-title" style="color:var(--purple)">The tradeoff</div>
+                <p style="color:var(--purple);line-height:1.6;font-size:13px">
+                    When shares rally past your strike, the call goes ITM — you owe the buyer the intrinsic difference.
+                    You still keep the premium you collected, but your upside above the strike is gone.
+                </p>
+                <p style="color:var(--purple);line-height:1.6;font-size:13px;margin-top:8px">
+                    The question isn't "which strike is right?" It's "which tradeoff can I live with this week?"
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="beginSellScreenFor(3)">Start Tutorial 3 →</button>
+            <button class="btn btn-secondary btn-full" onclick="renderHome(); showScreen('screen-home');" style="margin-top:8px">← Back to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  TUTORIAL 3 — SUMMARY                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-t3-summary" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">All Tutorials Complete!</div>
+        <div class="topbar-right"><span class="scenario-badge badge-purple">All 3 done ✓</span></div>
+    </div>
+    <div class="tutorial-intro-wrapper">
+        <div class="tutorial-intro-card" style="max-width:580px">
+
+            <div class="final-banner final-banner-green">All 3 tutorials complete!</div>
+
+            <div class="card">
+                <div class="card-title">Tutorial 3 — 8-week performance</div>
+                <div class="stat-row"><div class="stat-label">Starting value</div><div class="stat-value mono">$10,000.00</div></div>
+                <div class="stat-row"><div class="stat-label">Ending value</div><div class="stat-value mono" id="t3-sum-final">—</div></div>
+                <div class="stat-row"><div class="stat-label">Premium collected</div><div class="stat-value" id="t3-sum-premium">—</div></div>
+                <div class="stat-row"><div class="stat-label">Share P&amp;L</div><div class="stat-value" id="t3-sum-share-pnl">—</div></div>
+                <div class="stat-row"><div class="stat-label">Total return</div><div class="stat-value" id="t3-sum-return">—</div></div>
+                <div class="stat-row"><div class="stat-label">Win rate</div><div class="stat-value" id="t3-sum-winrate">—</div></div>
+            </div>
+
+            <div class="chart-label"><span>Portfolio value over 8 weeks</span></div>
+            <canvas id="t3-sum-chart" height="140" style="margin-bottom:16px"></canvas>
+
+            <div class="card" style="background:var(--purple-light);border-color:var(--purple-border)">
+                <div class="card-title" style="color:var(--purple)">You understand covered calls</div>
+                <p style="color:var(--purple);line-height:1.6;font-size:13px">
+                    You've seen shares-only exposure (T1), premium offsetting a falling market (T2),
+                    and the real tradeoff in a mixed market (T3). That's the covered call in full.
+                </p>
+                <p style="color:var(--purple);line-height:1.6;font-size:13px;margin-top:8px">
+                    The Turtle Trading Strategy takes this further — using a LEAPS call instead of shares,
+                    giving you the same exposure at a fraction of the capital.
+                </p>
+            </div>
+
+            <button class="btn btn-primary btn-full" onclick="renderHome(); showScreen('screen-home')">← Back to all tutorials</button>
+            <button class="btn btn-secondary btn-full" onclick="startTutorialFlow(3)" style="margin-top:8px">Play Tutorial 3 again</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  SHARED — SELL CALL  (T2 & T3)                                             -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-sell" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">
+            Tutorial <span id="sell-tutorial-num">2</span> —
+            <span id="sell-tutorial-name">Premium Income</span>
+        </div>
+        <div class="topbar-right">Week <span id="sell-week-num">1</span> of 8</div>
+    </div>
+    <div class="layout">
+        <div class="left-panel">
+
+            <div class="chart-label">
+                <span>Price chart (DEMO)</span>
+                <span class="mono" id="sell-current-price-chart"></span>
+            </div>
+            <canvas id="sell-price-chart" height="180"></canvas>
+
+            <div class="card" style="margin-top:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div class="card-title" style="margin-bottom:0">Pick a strike for this week</div>
+                    <div id="sell-week-dots" style="margin-bottom:0"></div>
+                </div>
+                <div id="sell-strike-table"><!-- populated by JS --></div>
+            </div>
+
+        </div>
+
+        <div class="right-panel">
+
+            <div class="card">
+                <div class="card-title">Your position</div>
+                <div class="stat-row">
+                    <div class="stat-label">100 shares of DEMO</div>
+                    <div class="stat-value mono" id="sell-shares-value">$10,000.00</div>
+                </div>
+                <div class="stat-row">
+                    <div class="stat-label">Current price</div>
+                    <div class="stat-value mono" id="sell-share-price-right">$100.00</div>
+                </div>
+            </div>
+
+            <div id="sell-premium-preview">
+                <div style="font-size:12px;color:var(--text-tertiary);padding:12px 14px;
+                    text-align:center;border:1px dashed var(--border);border-radius:8px;margin-bottom:12px">
+                    Select a strike above to see the premium breakdown
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-full" id="sell-run-btn" disabled>Run this week →</button>
+            <button class="btn btn-secondary" onclick="renderHome(); showScreen('screen-home');"
+                style="margin-top:8px;width:100%;font-size:13px">← Quit to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!--  SHARED — RESULTS  (T2 & T3)                                               -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div id="screen-results" class="screen">
+    <div class="topbar">
+        <div class="topbar-title">
+            Tutorial <span id="results-tutorial-num">2</span> —
+            <span id="results-tutorial-name">Premium Income</span>
+        </div>
+        <div class="topbar-right" id="results-week-num-topbar">Week 1 of 8</div>
+    </div>
+    <div class="layout">
+        <div class="left-panel">
+
+            <div class="outcome-banner outcome-green" id="results-banner">
+                Call expired worthless — you keep the full premium
+            </div>
+
+            <div class="card">
+                <div class="card-title">Price this week</div>
+                <div class="price-action-row" style="margin-bottom:0">
+                    <div class="price-action-item">
+                        <div class="price-action-label">Opened</div>
+                        <div class="price-action-val mono" id="results-open-price">$100.00</div>
+                    </div>
+                    <div class="price-action-arrow">→</div>
+                    <div class="price-action-item">
+                        <div class="price-action-label">Closed</div>
+                        <div class="price-action-val mono" id="results-close-price">$99.00</div>
+                    </div>
+                    <div class="price-action-item">
+                        <div class="price-action-label">Change</div>
+                        <div class="price-action-change-val" id="results-price-change">−1.00%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P&L breakdown table — populated by JS -->
+            <div id="results-breakdown"></div>
+
+            <div class="chart-label" style="margin-top:16px"><span>Portfolio value over time</span></div>
+            <canvas id="results-pnl-chart" height="120"></canvas>
+
+            <div class="chart-label" style="margin-top:16px"><span>Price chart</span></div>
+            <canvas id="results-price-chart" height="160"></canvas>
+
+        </div>
+
+        <div class="right-panel">
+            <div id="results-week-dots"></div>
+
+            <div class="card">
+                <div class="card-title">Running totals</div>
+                <div class="stat-row"><div class="stat-label">Premium collected</div><div class="stat-value" id="results-total-premium">$0.00</div></div>
+                <div class="stat-row"><div class="stat-label">Share P&amp;L</div><div class="stat-value" id="results-total-share-pnl">$0.00</div></div>
+                <div class="stat-row"><div class="stat-label">Net P&amp;L</div><div class="stat-value" id="results-total-net">$0.00</div></div>
+                <div class="stat-row"><div class="stat-label">Portfolio value</div><div class="stat-value mono" id="results-portfolio-value">$10,000.00</div></div>
+            </div>
+
+            <!-- Educational explanation — populated by JS -->
+            <div id="results-explanation"></div>
+
+            <button class="btn btn-primary btn-full" id="results-next-btn">Next week →</button>
+            <button class="btn btn-secondary" onclick="renderHome(); showScreen('screen-home');"
+                style="margin-top:8px;width:100%;font-size:13px">← Quit to home</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ── JS ──────────────────────────────────────────────────────────────────── -->
+<script src="js/engine.js"></script>
+<script src="js/scenarios.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/tutorial-state.js"></script>
+<script src="js/tutorial-ui.js"></script>
+
+</body>
+</html>

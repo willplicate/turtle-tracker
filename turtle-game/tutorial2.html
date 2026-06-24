@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutorial 2: Covered Calls</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .money {
+            font-weight: bold;
+        }
+        .positive { color: green; }
+        .negative { color: red; }
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .result {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin: 15px 0;
+            border: 2px solid #333;
+        }
+        .highlight {
+            background-color: #ffffcc;
+            padding: 10px;
+            border: 1px solid #999;
+            margin: 15px 0;
+        }
+        .hidden {
+            display: none;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .scenario {
+            border: 2px solid #333;
+            padding: 10px;
+        }
+        .scenario.best {
+            border-color: green;
+            background-color: #f0fff0;
+        }
+        h1 {
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        h2 {
+            margin-top: 0;
+        }
+        .step-indicator {
+            color: #666;
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f0f0f0;
+        }
+        .quiz-option {
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #ccc;
+            cursor: pointer;
+        }
+        .quiz-option:hover {
+            background-color: #f5f5f5;
+        }
+        .quiz-option.selected {
+            border-color: #333;
+            background-color: #e0e0e0;
+        }
+        .quiz-option.correct {
+            border-color: green;
+            background-color: #f0fff0;
+        }
+        .quiz-option.incorrect {
+            border-color: red;
+            background-color: #fff0f0;
+        }
+        .chart {
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tutorial 2: Covered Calls</h1>
+    <p class="step-indicator">Step <span id="current-step">1</span> of 7</p>
+
+    <!-- SCREEN 1: Your First Covered Call -->
+    <div id="screen1">
+        <h2>Your First Covered Call (Shares Only)</h2>
+
+        <div class="section">
+            <h3>YOUR SETUP</h3>
+            <p>You own: <span class="money">100 shares</span> of SPY at <span class="money">$600/share</span></p>
+            <p>Capital invested: <span class="money">$60,000</span></p>
+            <p><strong>You sell:</strong> 1 call contract at <span class="money">$605 strike</span> (7 days)</p>
+            <p>Premium collected: <span class="positive money">+$450</span></p>
+        </div>
+
+        <h3>What Can Happen? (All 3 Scenarios)</h3>
+
+        <div class="grid-3">
+            <div class="scenario">
+                <h4>SCENARIO 1: DOWN ↓</h4>
+                <p>SPY: $600 → $595 (-$5)</p>
+                <hr>
+                <p>Shares P&L: <span class="negative">-$500</span></p>
+                <p>Call premium: <span class="positive">+$450</span></p>
+                <p><strong>Net P&L: <span class="negative">-$50</span></strong></p>
+                <div class="highlight">
+                    💡 You lost money, but the premium softened the blow
+                </div>
+            </div>
+
+            <div class="scenario best">
+                <h4>SCENARIO 2: GOLDILOCKS ✓</h4>
+                <p>SPY: $600 → $604 (+$4)</p>
+                <hr>
+                <p>Shares P&L: <span class="positive">+$400</span></p>
+                <p>Call premium: <span class="positive">+$450</span></p>
+                <p><strong>Net P&L: <span class="positive">+$850 ✓✓</span></strong></p>
+                <div class="highlight">
+                    💡 You keep shares AND full premium. Best case!
+                </div>
+            </div>
+
+            <div class="scenario">
+                <h4>SCENARIO 3: UP (Capped) ↑</h4>
+                <p>SPY: $600 → $610 (+$10)</p>
+                <hr>
+                <p><strong>You must give up shares at $605!</strong></p>
+                <p>Shares P&L: <span class="positive">+$500</span></p>
+                <p>Call premium: <span class="positive">+$450</span></p>
+                <p><strong>Net P&L: <span class="positive">+$950</span></strong></p>
+                <p><small class="negative">But you missed $5 extra move! (Lost potential: $500)</small></p>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> You collect rent ($450/week), but cap your upside at the strike price.
+        </div>
+
+        <button id="next-btn1">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 2: How Far Should You Sell? -->
+    <div id="screen2" class="hidden">
+        <h2>How Far Should You Sell?</h2>
+
+        <div class="section">
+            <p>Current SPY: <span class="money">$605</span></p>
+            <p>Question: Which strike should you choose?</p>
+
+            <label>
+                <strong>Strike Price:</strong> <span class="money">$<span id="strike-display">605</span></span>
+                <input type="range" id="strike-slider" min="605" max="620" step="1" value="605">
+                <small>($605 ATM - $620 OTM)</small>
+            </label>
+
+            <p>Premium collected: <span class="money positive">$<span id="premium-display">450</span></span></p>
+            <p>Distance from current price: <span class="money">$<span id="distance-display">0</span></span> (<span id="money-display">ATM</span>)</p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Strike</th>
+                    <th>Distance</th>
+                    <th>Premium</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody id="premium-table">
+                <!-- Populated by JavaScript -->
+            </tbody>
+        </table>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> Further away = less premium, but more room for stock to grow before you cap out.
+        </div>
+
+        <button id="back-btn2">← BACK</button>
+        <button id="next-btn2">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 3: When Price Crosses Your Strike -->
+    <div id="screen3" class="hidden">
+        <h2>When Price Crosses Your Strike</h2>
+
+        <div class="section">
+            <h3>EXAMPLE: Getting Assigned</h3>
+            <p>You bought shares at: <span class="money">$600</span></p>
+            <p>You sold $610 call for: <span class="money positive">$450</span> premium</p>
+            <p>Week ends at: <span class="money">$615</span></p>
+        </div>
+
+        <div class="result">
+            <h3>CALCULATION:</h3>
+            <p>Share profit: ($610 - $600) × 100 = <span class="positive money">+$1,000</span></p>
+            <p>Call premium collected: <span class="positive money">+$450</span></p>
+            <hr>
+            <p><strong>Total profit: <span class="positive money">$1,450 ✓</span></strong></p>
+
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #ccc;">
+                <p><strong>But you gave up shares at $610!</strong></p>
+                <p>If you kept shares: ($615 - $600) × 100 = <span class="money">$1,500</span></p>
+                <p>Opportunity cost: <span class="negative money">$50</span></p>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> You profit, but leave money on the table in big upward moves.
+        </div>
+
+        <button id="back-btn3">← BACK</button>
+        <button id="next-btn3">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 4: Rolling Your Option -->
+    <div id="screen4" class="hidden">
+        <h2>Rolling Your Option</h2>
+
+        <div class="section">
+            <h3>KEEP SHARES BY ROLLING</h3>
+            <p>Instead of giving up your shares, you can "buy back" the contract and sell another one.</p>
+        </div>
+
+        <div class="chart">Contract Value Over Time (Theta Decay)
+
+$450 │●
+     │ ●
+     │  ●
+     │   ●
+     │    ●
+     │     ●●
+     │       ●●●
+$0   │          ●●●
+     └────────────────────
+     Mon  Tue Wed Thu Fri
+
+Theta decay accelerates near expiration!</div>
+
+        <div class="result">
+            <h3>ROLLING EXAMPLE:</h3>
+            <p><strong>Monday (Week 1):</strong> Sold call for <span class="positive">+$450</span></p>
+            <p><strong>Thursday (Week 1):</strong> Buy back call for <span class="negative">-$100</span></p>
+            <p><strong>Thursday (Week 1):</strong> Sell new call (Week 2) for <span class="positive">+$420</span></p>
+            <hr>
+            <p><strong>Net for 2 weeks:</strong> $450 - $100 + $420 = <span class="positive money">$770</span></p>
+            <p><strong>Result: <span class="positive">You kept the shares! ✓</span></strong></p>
+        </div>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> Rolling lets you keep collecting rent indefinitely without giving up shares.
+        </div>
+
+        <button id="back-btn4">← BACK</button>
+        <button id="next-btn4">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 5: Understanding Contract Value -->
+    <div id="screen5" class="hidden">
+        <h2>Understanding Contract Value at Expiration</h2>
+
+        <div class="section">
+            <p>Your strike: <span class="money">$605</span></p>
+            <p>Premium you collected: <span class="money">$450</span></p>
+
+            <label>
+                <strong>Final SPY Price:</strong> <span class="money">$<span id="final-price-display">605</span></span>
+                <input type="range" id="final-price-slider" min="595" max="615" step="1" value="605">
+                <small>($595 - $615)</small>
+            </label>
+
+            <div class="result">
+                <p>Status: <strong><span id="status-display">ATM</span></strong></p>
+                <p>Contract value at expiration: <span class="money">$<span id="contract-value-display">0</span></span></p>
+                <p>Your P&L as seller: <span class="money" id="seller-pnl-display">+$450</span></p>
+                <p id="explanation-display">Expires exactly at strike</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Final Price</th>
+                    <th>Status</th>
+                    <th>Contract Value</th>
+                    <th>Why?</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>$599</td>
+                    <td>OTM</td>
+                    <td>$0</td>
+                    <td>Expires worthless ✓</td>
+                </tr>
+                <tr>
+                    <td>$604</td>
+                    <td>OTM</td>
+                    <td>$0</td>
+                    <td>Expires worthless ✓</td>
+                </tr>
+                <tr>
+                    <td>$605</td>
+                    <td>ATM</td>
+                    <td>$0</td>
+                    <td>Exactly at strike</td>
+                </tr>
+                <tr>
+                    <td>$606</td>
+                    <td>ITM</td>
+                    <td>$100</td>
+                    <td>$1 × 100 shares</td>
+                </tr>
+                <tr>
+                    <td>$610</td>
+                    <td>ITM</td>
+                    <td>$500</td>
+                    <td>$5 × 100 shares</td>
+                </tr>
+                <tr>
+                    <td>$615</td>
+                    <td>ITM</td>
+                    <td>$1,000</td>
+                    <td>$10 × 100 shares</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> You want the option to expire worthless (OTM) to keep the full premium!
+        </div>
+
+        <button id="back-btn5">← BACK</button>
+        <button id="next-btn5">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 6: Income vs Capital Gain -->
+    <div id="screen6" class="hidden">
+        <h2>Income vs Capital Gain</h2>
+
+        <h3>30-Day Comparison (4 Weeks)</h3>
+
+        <div class="grid">
+            <div class="section">
+                <h3>SHARES ONLY</h3>
+                <p>Capital: <span class="money">$60,000</span></p>
+                <hr>
+                <p>Week 1: SPY flat → $0</p>
+                <p>Week 2: SPY +$2 → <span class="positive">+$200</span></p>
+                <p>Week 3: SPY -$3 → <span class="negative">-$300</span></p>
+                <p>Week 4: SPY +$1 → <span class="positive">+$100</span></p>
+                <hr>
+                <p>Call premium income: <span class="money">$0</span></p>
+                <p>Share P&L: <span class="money">$0 + $200 - $300 + $100 = $0</span></p>
+                <p><strong>Combined Total: $0</strong></p>
+                <p><strong>Return over this period: 0%</strong></p>
+            </div>
+
+            <div class="section">
+                <h3>SHARES + CALLS</h3>
+                <p>Capital: <span class="money">$60,000</span></p>
+                <hr>
+                <p>Week 1: SPY flat → <span class="positive">+$450</span> (call) ✓</p>
+                <p>Week 2: SPY +$2 → <span class="positive">+$200</span> (shares) + <span class="positive">$420</span> (call) = <span class="positive">+$620</span></p>
+                <p>Week 3: SPY -$3 → <span class="negative">-$300</span> (shares) + <span class="positive">$430</span> (call) = <span class="positive">+$130</span></p>
+                <p>Week 4: SPY +$1 → <span class="positive">+$100</span> (shares) + <span class="positive">$440</span> (call) = <span class="positive">+$540</span></p>
+                <hr>
+                <p>Call premium income: <span class="positive money">$1,740</span></p>
+                <p>Share P&L: <span class="money">$0 + $200 - $300 + $100 = $0</span></p>
+                <p><strong>Combined Total: <span class="positive">$1,740</span></strong></p>
+                <p><strong>Return over this period: 2.9%</strong></p>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <strong>Key Insight:</strong> Covered calls = income strategy for sideways markets. You generate consistent returns even when the stock goes nowhere!
+        </div>
+
+        <button id="back-btn6">← BACK</button>
+        <button id="next-btn6">NEXT →</button>
+    </div>
+
+    <!-- SCREEN 7: Adding LEAPS (Quiz) -->
+    <div id="screen7" class="hidden">
+        <h2>Adding LEAPS (The Turtle Way)</h2>
+
+        <div class="section">
+            <p>Remember Tutorial 1? LEAPS with 85 delta function like 85 shares, but you "pay theta" (like interest on a mortgage).</p>
+        </div>
+
+        <h3>Side-by-Side Comparison</h3>
+
+        <div class="grid">
+            <div class="section">
+                <h3>COVERED SHARES</h3>
+                <p>85 shares @ $600 = <span class="money">$51,000</span></p>
+                <p>Sell $610 call: <span class="positive">+$450</span></p>
+                <p>Theta cost: $0</p>
+                <hr>
+                <p>Weekly net: <span class="positive">+$450</span></p>
+                <p>Monthly (4 weeks): <span class="positive">+$1,800</span></p>
+                <p><strong>Return over this period: 3.5%</strong></p>
+            </div>
+
+            <div class="section">
+                <h3>COVERED LEAPS</h3>
+                <p>1 LEAPS (85 delta) = <span class="money">$12,900</span></p>
+                <p>Freed capital: <span class="positive money">$38,100</span></p>
+                <p>Sell $610 call: <span class="positive">+$450</span></p>
+                <p>Theta cost: <span class="negative">-$14/week</span></p>
+                <hr>
+                <p>Weekly net: <span class="positive">+$436</span></p>
+                <p>Monthly (4 weeks): <span class="positive">+$1,744</span></p>
+                <p><strong>Return over this period: 13.5%</strong></p>
+            </div>
+        </div>
+
+        <div class="highlight">
+            <p><strong>Notice:</strong> Same income (~$1,750/month), but LEAPS uses <strong>75% less capital!</strong></p>
+        </div>
+
+        <h3>Quiz Time!</h3>
+
+        <!-- Question 1 -->
+        <div class="section">
+            <p><strong>Q1: SPY goes from $600 → $605. Which gains more?</strong></p>
+            <div class="quiz-option" data-question="1" data-answer="A">
+                <strong>A)</strong> 85 shares<br>
+                <small>Share gain: 85 × $5 = <span class="positive">+$425</span></small>
+            </div>
+            <div class="quiz-option" data-question="1" data-answer="B">
+                <strong>B)</strong> 85-delta LEAPS<br>
+                <small>Delta gain: $5 × 0.85 × 100 = +$425, Theta: -$14 = <span class="positive">+$411</span></small>
+            </div>
+            <div id="answer1" class="hidden result">
+                <strong>Answer: A (85 shares)</strong><br>
+                Shares earn more because LEAPS has to pay the "theta cost" (-$14). However, LEAPS uses <strong>$38,100 less capital!</strong>
+            </div>
+        </div>
+
+        <!-- Question 2 -->
+        <div class="section">
+            <p><strong>Q2: SPY stays flat at $600 for 4 weeks. Which performs better?</strong></p>
+            <div class="quiz-option" data-question="2" data-answer="A">
+                <strong>A)</strong> Covered shares<br>
+                <small>Share gain: $0, Call premium: 4 × $450 = <span class="positive">+$1,800</span></small>
+            </div>
+            <div class="quiz-option" data-question="2" data-answer="B">
+                <strong>B)</strong> Covered LEAPS<br>
+                <small>Delta gain: $0, Call premium: +$1,800, Theta: 4 × -$14 = <span class="positive">+$1,744</span></small>
+            </div>
+            <div id="answer2" class="hidden result">
+                <strong>Answer: A (Covered shares)</strong><br>
+                Shares win in flat markets because there's no theta cost. But the difference is only $56/month while using $38k less capital!
+            </div>
+        </div>
+
+        <!-- Question 3 -->
+        <div class="section">
+            <p><strong>Q3: Which has better capital efficiency?</strong></p>
+            <div class="quiz-option" data-question="3" data-answer="B">
+                <strong>A)</strong> Covered shares<br>
+                <small>$1,800/month on $51,000 = 42% annual return</small>
+            </div>
+            <div class="quiz-option" data-question="3" data-answer="B">
+                <strong>B)</strong> Covered LEAPS<br>
+                <small>$1,744/month on $12,900 = 162% annual return</small>
+            </div>
+            <div id="answer3" class="hidden result">
+                <strong>Answer: B (Covered LEAPS)</strong><br>
+                Same income, way less capital! This is the <strong>Turtle Strategy</strong>: use LEAPS for capital efficiency, sell calls for income.
+            </div>
+        </div>
+
+        <div id="quiz-complete" class="hidden highlight">
+            <h3>🎓 Quiz Complete!</h3>
+            <p><strong>You understand covered calls!</strong></p>
+            <p>The Turtle Strategy = LEAPS covered calls for maximum capital efficiency.</p>
+        </div>
+
+        <button id="back-btn7">← BACK</button>
+        <button id="complete-btn7" class="hidden">COMPLETE TUTORIAL →</button>
+    </div>
+
+    <!-- COMPLETION SCREEN -->
+    <div id="completion" class="hidden">
+        <h2>🎓 Tutorial 2 Complete!</h2>
+
+        <div class="section">
+            <p><strong>What you learned:</strong></p>
+            <ul>
+                <li>Covered calls = collect "rent" on your shares</li>
+                <li>3 scenarios: down (softens loss), goldilocks (best), up (capped gains)</li>
+                <li>Further strikes = less premium, more upside room</li>
+                <li>Getting assigned = you profit but cap out</li>
+                <li>Rolling = keep shares, keep collecting rent</li>
+                <li>ITM options = worth intrinsic value at expiration</li>
+                <li>Covered calls = income strategy for sideways markets</li>
+                <li>LEAPS covered calls = Turtle Strategy = capital efficiency</li>
+            </ul>
+        </div>
+
+        <div class="highlight">
+            <p><strong>Next: Learn about VIX and how to adjust your strategy based on market volatility!</strong></p>
+        </div>
+
+        <button onclick="window.location.reload()">RESTART TUTORIAL</button>
+        <button onclick="window.location.href='tutorial1.html'">← TUTORIAL 1</button>
+    </div>
+
+    <script>
+        // Premium calculation (simplified)
+        function calculatePremium(strike, spot, dte = 7) {
+            const intrinsic = Math.max(0, spot - strike);
+            const distance = strike - spot;
+            const atm = spot;
+
+            // Base premium for ATM with 7 DTE
+            const baseATM = 450;
+
+            // Decay based on distance
+            const decayRate = 0.15; // 15% decay per dollar
+            const extrinsic = baseATM * Math.exp(-decayRate * Math.abs(distance));
+
+            return Math.round(intrinsic * 100 + extrinsic);
+        }
+
+        // Screen 2: Premium slider
+        const strikeSlider = document.getElementById('strike-slider');
+        const strikeDisplay = document.getElementById('strike-display');
+        const premiumDisplay = document.getElementById('premium-display');
+        const distanceDisplay = document.getElementById('distance-display');
+        const moneyDisplay = document.getElementById('money-display');
+        const premiumTable = document.getElementById('premium-table');
+
+        function updatePremiumTable() {
+            const spot = 605;
+            const strikes = [605, 606, 607, 608, 610, 615, 620];
+            const notes = {
+                605: 'ATM - Most premium',
+                606: '',
+                607: '',
+                608: '',
+                610: 'Common choice',
+                615: 'Far OTM',
+                620: 'Very unlikely'
+            };
+
+            premiumTable.innerHTML = '';
+            strikes.forEach(strike => {
+                const premium = calculatePremium(strike, spot);
+                const distance = strike - spot;
+                const row = premiumTable.insertRow();
+                row.innerHTML = `
+                    <td>$${strike}</td>
+                    <td>+$${distance}</td>
+                    <td class="positive">$${premium}</td>
+                    <td><small>${notes[strike] || ''}</small></td>
+                `;
+            });
+        }
+
+        if (strikeSlider) {
+            strikeSlider.addEventListener('input', (e) => {
+                const strike = parseInt(e.target.value);
+                const spot = 605;
+                const distance = strike - spot;
+                const premium = calculatePremium(strike, spot);
+
+                strikeDisplay.textContent = strike;
+                premiumDisplay.textContent = premium;
+                distanceDisplay.textContent = distance;
+
+                if (distance === 0) moneyDisplay.textContent = 'ATM';
+                else if (distance < 0) moneyDisplay.textContent = 'ITM';
+                else moneyDisplay.textContent = 'OTM';
+            });
+
+            updatePremiumTable();
+        }
+
+        // Screen 5: Contract value slider
+        const finalPriceSlider = document.getElementById('final-price-slider');
+        const finalPriceDisplay = document.getElementById('final-price-display');
+        const statusDisplay = document.getElementById('status-display');
+        const contractValueDisplay = document.getElementById('contract-value-display');
+        const sellerPnlDisplay = document.getElementById('seller-pnl-display');
+        const explanationDisplay = document.getElementById('explanation-display');
+
+        if (finalPriceSlider) {
+            finalPriceSlider.addEventListener('input', (e) => {
+                const finalPrice = parseInt(e.target.value);
+                const strike = 605;
+                const premiumCollected = 450;
+                const contractValue = Math.max(0, (finalPrice - strike) * 100);
+                const sellerPnl = premiumCollected - contractValue;
+
+                finalPriceDisplay.textContent = finalPrice;
+                contractValueDisplay.textContent = contractValue;
+
+                if (finalPrice < strike) {
+                    statusDisplay.textContent = 'OTM';
+                    explanationDisplay.textContent = 'Expires worthless ✓';
+                } else if (finalPrice === strike) {
+                    statusDisplay.textContent = 'ATM';
+                    explanationDisplay.textContent = 'Expires exactly at strike';
+                } else {
+                    statusDisplay.textContent = 'ITM';
+                    const diff = finalPrice - strike;
+                    explanationDisplay.textContent = `$${diff} × 100 shares = $${contractValue} intrinsic value`;
+                }
+
+                sellerPnlDisplay.textContent = sellerPnl >= 0 ? `+$${sellerPnl}` : `-$${Math.abs(sellerPnl)}`;
+                sellerPnlDisplay.className = sellerPnl >= 0 ? 'money positive' : 'money negative';
+            });
+        }
+
+        // Quiz logic
+        let quizAnswers = { 1: null, 2: null, 3: null };
+
+        document.querySelectorAll('.quiz-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const question = this.dataset.question;
+                const answer = this.dataset.answer;
+
+                // Deselect all options for this question
+                document.querySelectorAll(`[data-question="${question}"]`).forEach(opt => {
+                    opt.classList.remove('selected', 'correct', 'incorrect');
+                });
+
+                // Select this option
+                this.classList.add('selected');
+                quizAnswers[question] = answer;
+
+                // Show answer
+                const answerDiv = document.getElementById(`answer${question}`);
+                answerDiv.classList.remove('hidden');
+
+                // Mark correct/incorrect
+                const correctAnswers = { 1: 'A', 2: 'A', 3: 'B' };
+                if (answer === correctAnswers[question]) {
+                    this.classList.add('correct');
+                } else {
+                    this.classList.add('incorrect');
+                }
+
+                // Check if all questions answered
+                if (quizAnswers[1] && quizAnswers[2] && quizAnswers[3]) {
+                    document.getElementById('quiz-complete').classList.remove('hidden');
+                    document.getElementById('complete-btn7').classList.remove('hidden');
+                }
+            });
+        });
+
+        // Navigation
+        function showScreen(screenNum) {
+            for (let i = 1; i <= 7; i++) {
+                document.getElementById('screen' + i).classList.add('hidden');
+            }
+            document.getElementById('completion').classList.add('hidden');
+
+            if (screenNum === 8) {
+                document.getElementById('completion').classList.remove('hidden');
+                document.getElementById('current-step').textContent = '✓';
+            } else {
+                document.getElementById('screen' + screenNum).classList.remove('hidden');
+                document.getElementById('current-step').textContent = screenNum;
+            }
+
+            window.scrollTo(0, 0);
+        }
+
+        // Screen 1
+        document.getElementById('next-btn1').addEventListener('click', () => showScreen(2));
+
+        // Screen 2
+        document.getElementById('back-btn2').addEventListener('click', () => showScreen(1));
+        document.getElementById('next-btn2').addEventListener('click', () => showScreen(3));
+
+        // Screen 3
+        document.getElementById('back-btn3').addEventListener('click', () => showScreen(2));
+        document.getElementById('next-btn3').addEventListener('click', () => showScreen(4));
+
+        // Screen 4
+        document.getElementById('back-btn4').addEventListener('click', () => showScreen(3));
+        document.getElementById('next-btn4').addEventListener('click', () => showScreen(5));
+
+        // Screen 5
+        document.getElementById('back-btn5').addEventListener('click', () => showScreen(4));
+        document.getElementById('next-btn5').addEventListener('click', () => showScreen(6));
+
+        // Screen 6
+        document.getElementById('back-btn6').addEventListener('click', () => showScreen(5));
+        document.getElementById('next-btn6').addEventListener('click', () => showScreen(7));
+
+        // Screen 7
+        document.getElementById('back-btn7').addEventListener('click', () => showScreen(6));
+        document.getElementById('complete-btn7').addEventListener('click', () => showScreen(8));
+    </script>
+</body>
+</html>

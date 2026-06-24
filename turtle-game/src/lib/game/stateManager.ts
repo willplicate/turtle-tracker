@@ -12,66 +12,45 @@ import { calculateOptionPrice } from '../pricing/optionsPricing';
  */
 function estimateDeltaFromMoneyness(percentITM: number): number {
   if (percentITM >= 15) {
-    // Very deep ITM: approach 0.95
     return 0.95;
   } else if (percentITM >= 10) {
-    // Deep ITM: 0.90 to 0.95
     return 0.90 + (percentITM - 10) / 5 * 0.05;
   } else if (percentITM >= 5) {
-    // Moderate ITM: 0.75 to 0.90
     return 0.75 + (percentITM - 5) / 5 * 0.15;
   } else if (percentITM >= 1) {
-    // Slight ITM: 0.60 to 0.75
     return 0.60 + (percentITM - 1) / 4 * 0.15;
   } else if (percentITM >= 0) {
-    // Just barely ITM: 0.52 to 0.60
     return 0.52 + percentITM * 0.08;
   } else if (percentITM >= -1) {
-    // Just barely OTM: 0.44 to 0.52
     return 0.52 + percentITM * 0.08;
   } else if (percentITM >= -5) {
-    // Moderate OTM: 0.30 to 0.44
     return 0.44 + (percentITM + 1) / 4 * 0.14;
   } else {
-    // Deep OTM: 0.10 to 0.30
     return Math.max(0.10, 0.30 + (percentITM + 5) / 5 * 0.20);
   }
 }
 
 export interface GameState {
-  // Account
   cash: number;
   initialCash: number;
-
-  // Market
   market: MarketState;
-
-  // Positions
   leaps: LEAPSPosition | null;
   shortCall: ShortCallPosition | null;
-
-  // P&L Tracking
   realizedPnL: number;
   unrealizedPnL: number;
   weeklyPnL: number;
   totalTrades: number;
   winningTrades: number;
-
-  // Weekly tracking for splash screen
   leapsWeekStartValue: number | null;
   shortCallWeekStartValue: number | null;
-
-  // Game status
   isPlaying: boolean;
-  gameSpeed: number; // 1 = 1 sec/day, 2 = 0.5 sec/day, etc.
+  gameSpeed: number;
   currentWeek: number;
-
-  // History for charts
   priceHistory: number[];
   pnlHistory: number[];
+  leapsValueHistory: { day: number; value: number; date: Date }[];
 }
 
-// Initial state factory
 export function createInitialState(scenario: string = 'normal'): GameState {
   const initialCash = 25000;
   const market = initializeMarket(scenario);
@@ -94,6 +73,7 @@ export function createInitialState(scenario: string = 'normal'): GameState {
     currentWeek: 1,
     priceHistory: [market.spyPrice],
     pnlHistory: [0],
+    leapsValueHistory: [],
   };
 }
 
@@ -103,6 +83,7 @@ type GameAction =
   | { type: 'PAUSE_GAME' }
   | { type: 'SET_SPEED'; payload: number }
   | { type: 'ADVANCE_DAY' }
+  | { type: 'UPDATE_MARKET_PRICE'; payload: { spyPrice: number; vix?: number } }
   | { type: 'BUY_LEAPS'; payload: { strike: number; premium: number; delta: number; theta: number; dte: number } }
   | { type: 'SELL_SHORT_CALL'; payload: { strike: number; premium: number; dte: number } }
   | { type: 'CLOSE_LEAPS' }
@@ -123,18 +104,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_SPEED':
       return { ...state, gameSpeed: action.payload };
       
+    case 'UPDATE_MARKET_PRICE': {
+      const { spyPrice, vix } = action.payload;
+      return {
+        ...state,
+        market: {
+          ...state.market,
+          spyPrice,
+          vix: vix ?? state.market.vix,
+        },
+        priceHistory: [...state.priceHistory.slice(-100), spyPrice],
+      };
+    }
+      
     case 'ADVANCE_DAY': {
       const newMarket = advanceMarket(state.market);
       const newWeek = Math.floor(newMarket.day / 7) + 1;
       const isNewWeek = newWeek !== state.currentWeek;
 
-      // IMPORTANT: Capture week start values BEFORE updating positions
-      // This must happen when entering a new week, using CURRENT position values
       let newLeapsWeekStartValue = state.leapsWeekStartValue;
       let newShortCallWeekStartValue = state.shortCallWeekStartValue;
 
       if (isNewWeek) {
-        // New week starting - capture current values as week start values
         if (state.leaps) {
           newLeapsWeekStartValue = state.leaps.currentValue;
         }
@@ -143,41 +134,24 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Track old position values for P&L calculation
       let dailyPnLChange = 0;
       let updatedLeaps = state.leaps;
       let updatedShortCall = state.shortCall;
 
-      // Update LEAPS position value using delta-based updates
       if (state.leaps) {
         const newDte = Math.max(0, state.leaps.dte - 1);
         const oldValue = state.leaps.currentValue;
-
-        // DELTA-BASED UPDATE: Calculate stock price change
         const stockChange = newMarket.spyPrice - state.leaps.lastStockPrice;
-
-        // Calculate value changes from delta and theta
         const stockImpact = stockChange * state.leaps.delta * 100;
-        const thetaImpact = state.leaps.theta * 1; // 1 day
-
-        // Update value
+        const thetaImpact = state.leaps.theta * 1;
         const newValue = oldValue + stockImpact + thetaImpact;
-
-        // Update extrinsic (decays with theta)
-        const newExtrinsic = Math.max(0, state.leaps.extrinsic + thetaImpact); // theta is negative
-
-        // Calculate new delta based on updated moneyness
+        const newExtrinsic = Math.max(0, state.leaps.extrinsic + thetaImpact);
         const percentITM = ((newMarket.spyPrice - state.leaps.strike) / newMarket.spyPrice) * 100;
         const newDelta = estimateDeltaFromMoneyness(percentITM);
-
-        // Recalculate theta based on remaining extrinsic
         const newTheta = newDte > 0 ? -newExtrinsic / newDte : 0;
-
-        // Calculate daily P&L change
         const valueDiff = newValue - oldValue;
         dailyPnLChange += valueDiff;
 
-        // Update LEAPS with new values
         updatedLeaps = {
           ...state.leaps,
           dte: newDte,
@@ -186,22 +160,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           theta: newTheta,
           premium: newValue,
           extrinsic: newExtrinsic,
-          lastStockPrice: newMarket.spyPrice, // Track for next update
+          lastStockPrice: newMarket.spyPrice,
         };
 
-        // Handle LEAPS expiration (shouldn't normally happen, but just in case)
         if (newDte <= 0) {
-          // LEAPS expired - auto-close at intrinsic value
           console.warn('LEAPS expired at DTE 0');
         }
       }
 
-      // Recalculate short call position value with new market price and DTE
       if (state.shortCall) {
         const newDte = Math.max(0, state.shortCall.dte - 1);
         const oldValue = state.shortCall.currentValue;
 
-        // Recalculate option price with new market conditions
         const pricing = calculateOptionPrice({
           stockPrice: newMarket.spyPrice,
           strike: state.shortCall.strike,
@@ -210,27 +180,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           isCall: true,
         });
 
-        // Check for expiration and force value to 0 if expired OTM
         let finalValue = pricing.total;
         if (newDte <= 0) {
-          // Option expired
           if (newMarket.spyPrice > state.shortCall.strike) {
-            // ITM - would be assigned, use intrinsic value
             finalValue = Math.max(0, newMarket.spyPrice - state.shortCall.strike) * 100;
             console.warn('Short call expired ITM - assignment at intrinsic value');
           } else {
-            // OTM - expires worthless (good for seller)
             finalValue = 0;
             console.log('Short call expired OTM - full profit captured');
           }
         }
 
-        // For short positions, we profit when value decreases
-        // (we sold it, so if it becomes cheaper to buy back, we profit)
-        const valueDiff = oldValue - finalValue; // Note: reversed for short position
+        const valueDiff = oldValue - finalValue;
         dailyPnLChange += valueDiff;
 
-        // Update short call with new values
         updatedShortCall = {
           ...state.shortCall,
           dte: newDte,
@@ -240,10 +203,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         };
       }
 
-      // Update weekly P&L (reset to 0 at start of new week)
       const newWeeklyPnL = isNewWeek ? 0 : state.weeklyPnL + dailyPnLChange;
-
-      // Calculate new total unrealized P&L
       const newUnrealizedPnL = state.unrealizedPnL + dailyPnLChange;
 
       return {
@@ -256,16 +216,20 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         pnlHistory: [...state.pnlHistory.slice(-100), newUnrealizedPnL],
         leaps: updatedLeaps,
         shortCall: updatedShortCall,
-        // Update week start values at week boundaries
         leapsWeekStartValue: newLeapsWeekStartValue,
         shortCallWeekStartValue: newShortCallWeekStartValue,
+        leapsValueHistory: updatedLeaps 
+          ? [...state.leapsValueHistory.slice(-200), { 
+              day: newMarket.day, 
+              value: updatedLeaps.currentValue,
+              date: new Date() 
+            }]
+          : state.leapsValueHistory,
       };
     }
       
     case 'BUY_LEAPS': {
       const { strike, premium, delta, theta, dte } = action.payload;
-
-      // Calculate extrinsic value (total - intrinsic)
       const intrinsic = Math.max(0, state.market.spyPrice - strike) * 100;
       const extrinsic = premium - intrinsic;
 
@@ -280,15 +244,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         theta,
         premium,
         extrinsic,
-        lastStockPrice: state.market.spyPrice, // Initialize for delta-based updates
+        lastStockPrice: state.market.spyPrice,
       };
 
       return {
         ...state,
         cash: state.cash - premium,
         leaps,
-        leapsWeekStartValue: premium, // Set week start value when opening position
+        leapsWeekStartValue: premium,
         totalTrades: state.totalTrades + 1,
+        leapsValueHistory: [{ day: state.market.day, value: premium, date: new Date() }],
       };
     }
       
@@ -296,8 +261,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const { strike, premium, dte } = action.payload;
       const shortCall: ShortCallPosition = {
         type: 'short-call',
-        quantity: -1, // Short position
-        costBasis: -premium, // Negative cost = credit received
+        quantity: -1,
+        costBasis: -premium,
         currentValue: premium,
         strike,
         dte,
@@ -308,7 +273,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         cash: state.cash + premium,
         shortCall,
-        shortCallWeekStartValue: premium, // Set week start value when opening position
+        shortCallWeekStartValue: premium,
         totalTrades: state.totalTrades + 1,
       };
     }
@@ -323,7 +288,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         cash: state.cash + state.leaps.currentValue,
         leaps: null,
-        leapsWeekStartValue: null, // Reset week start value when closing
+        leapsWeekStartValue: null,
+        leapsValueHistory: [],
         realizedPnL: state.realizedPnL + pnl,
         unrealizedPnL: state.unrealizedPnL - (state.leaps.currentValue - state.leaps.costBasis),
         winningTrades: isWin ? state.winningTrades + 1 : state.winningTrades,
@@ -340,7 +306,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         cash: state.cash - action.payload.cost,
         shortCall: null,
-        shortCallWeekStartValue: null, // Reset week start value when closing
+        shortCallWeekStartValue: null,
         realizedPnL: state.realizedPnL + pnl,
         winningTrades: isWin ? state.winningTrades + 1 : state.winningTrades,
       };
@@ -350,15 +316,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.leaps) return state;
 
       const { newStrike, newPremium, newDelta, newTheta, newDte, cost } = action.payload;
-
-      // Close old position
       const closePnl = state.leaps.currentValue - state.leaps.costBasis;
-
-      // Calculate extrinsic value for new position
       const intrinsic = Math.max(0, state.market.spyPrice - newStrike) * 100;
       const extrinsic = newPremium - intrinsic;
 
-      // Open new position
       const newLeaps: LEAPSPosition = {
         type: 'leaps',
         quantity: 1,
@@ -377,7 +338,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         cash: state.cash + state.leaps.currentValue - cost,
         leaps: newLeaps,
-        leapsWeekStartValue: newPremium, // Set new week start value when rolling
+        leapsWeekStartValue: newPremium,
+        leapsValueHistory: [{ day: state.market.day, value: newPremium, date: new Date() }],
         realizedPnL: state.realizedPnL + closePnl,
         totalTrades: state.totalTrades + 1,
       };
@@ -387,11 +349,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       if (!state.shortCall) return state;
 
       const { newStrike, newPremium, newDte, cost } = action.payload;
-
-      // Close old position
       const closePnl = state.shortCall.costBasis + state.shortCall.premium;
 
-      // Open new position
       const newShortCall: ShortCallPosition = {
         type: 'short-call',
         quantity: -1,
@@ -406,7 +365,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         cash: state.cash - cost + newPremium,
         shortCall: newShortCall,
-        shortCallWeekStartValue: newPremium, // Set new week start value when rolling
+        shortCallWeekStartValue: newPremium,
         realizedPnL: state.realizedPnL + closePnl,
         totalTrades: state.totalTrades + 1,
       };
@@ -420,12 +379,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
   }
 }
 
-// Simple store implementation (can be replaced with Zustand later)
+// Simple store implementation
 export class GameStore {
   private state: GameState;
   private listeners: Set<(state: GameState) => void> = new Set();
   private intervalId: number | null = null;
-  private intervalMs: number = 1000; // Default 1x speed
+  private intervalMs: number = 1000;
   
   constructor(scenario: string = 'normal') {
     this.state = createInitialState(scenario);
@@ -448,7 +407,6 @@ export class GameStore {
     this.state = gameReducer(this.state, action);
     this.notify();
     
-    // Auto-advance if playing
     if (action.type === 'START_GAME') {
       this.startAutoAdvance();
     } else if (action.type === 'PAUSE_GAME') {
@@ -483,7 +441,6 @@ export class GameStore {
     }
   }
   
-  // Convenience methods
   start() {
     this.dispatch({ type: 'START_GAME' });
   }
@@ -502,5 +459,9 @@ export class GameStore {
   
   advanceDay() {
     this.dispatch({ type: 'ADVANCE_DAY' });
+  }
+  
+  updateMarketPrice(spyPrice: number, vix?: number) {
+    this.dispatch({ type: 'UPDATE_MARKET_PRICE', payload: { spyPrice, vix } });
   }
 }

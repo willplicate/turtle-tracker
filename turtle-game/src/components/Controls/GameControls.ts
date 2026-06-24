@@ -13,6 +13,8 @@ interface GameControlsProps {
   onModeChange: (mode: GameMode) => void;
   onReset: () => void;
   onScenarioChange: (scenario: string) => void;
+  onLoadPrice?: () => void;
+  isLoadingPrice?: boolean;
 }
 
 export class GameControls {
@@ -31,7 +33,7 @@ export class GameControls {
   }
   
   private render(): void {
-    const { state, gameMode, onStart, onPause, onModeChange, onReset, onScenarioChange } = this.props;
+    const { state, gameMode, onStart, onPause, onModeChange, onReset, onScenarioChange, onLoadPrice, isLoadingPrice } = this.props;
     const { isPlaying, market, currentWeek } = state;
     
     // Trading days: Mon=0, Tue=1, Wed=2, Thu=3, Fri=4
@@ -116,11 +118,21 @@ export class GameControls {
         
         <!-- Market Info -->
         <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div class="flex justify-between bg-gray-800/50 p-2 rounded">
+          <div class="flex justify-between items-center bg-gray-800/50 p-2 rounded">
             <span class="text-gray-400">SPY Price:</span>
-            <span class="font-mono font-bold">$${market.spyPrice.toFixed(2)}</span>
+            <div class="flex items-center gap-2">
+              <span class="font-mono font-bold">$${market.spyPrice.toFixed(2)}</span>
+              <button 
+                id="load-price-btn" 
+                class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded transition-colors ${isLoadingPrice ? 'opacity-50 cursor-not-allowed' : ''}"
+                ${isLoadingPrice ? 'disabled' : ''}
+                title="Load/Update stock price"
+              >
+                ${isLoadingPrice ? '⏳' : '🔄'}
+              </button>
+            </div>
           </div>
-          <div class="flex justify-between bg-gray-800/50 p-2 rounded">
+          <div class="flex justify-between items-center bg-gray-800/50 p-2 rounded">
             <span class="text-gray-400">VIX:</span>
             <span class="font-mono font-bold ${this.getVIXColorClass(market.vix)}">${market.vix.toFixed(2)}</span>
           </div>
@@ -138,7 +150,7 @@ export class GameControls {
       </div>
     `;
     
-    this.attachEventListeners(onStart, onPause, onModeChange, onReset, onScenarioChange);
+    this.attachEventListeners(onStart, onPause, onModeChange, onReset, onScenarioChange, onLoadPrice);
   }
   
   private attachEventListeners(
@@ -146,11 +158,13 @@ export class GameControls {
     onPause: () => void,
     onModeChange: (mode: GameMode) => void,
     onReset: () => void,
-    onScenarioChange: (scenario: string) => void
+    onScenarioChange: (scenario: string) => void,
+    onLoadPrice?: () => void
   ): void {
     const startBtn = this.container.querySelector('#start-btn');
     const pauseBtn = this.container.querySelector('#pause-btn');
     const resetBtn = this.container.querySelector('#reset-btn');
+    const loadPriceBtn = this.container.querySelector('#load-price-btn');
     const modeBtns = this.container.querySelectorAll('.mode-btn');
     const scenarioSelect = this.container.querySelector('#scenario-select') as HTMLSelectElement;
     
@@ -162,6 +176,10 @@ export class GameControls {
     }
     if (resetBtn) {
       resetBtn.addEventListener('click', onReset);
+    }
+    
+    if (loadPriceBtn && onLoadPrice) {
+      loadPriceBtn.addEventListener('click', onLoadPrice);
     }
     
     modeBtns.forEach(btn => {
