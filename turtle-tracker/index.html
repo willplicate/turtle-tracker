@@ -899,10 +899,13 @@
                 const returnPct = totalAllocation > 0 ? (netRealized / totalAllocation) * 100 : 0;
 
                 // Annualized
-                const openDate = new Date(leaps.openDate);
+                const openDate = leaps.openDate ? new Date(leaps.openDate) : null;
                 const today = new Date();
-                const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
-                const annReturn = (returnPct / daysHeld) * 365;
+                let annReturn = 0;
+                if (openDate && !isNaN(openDate.getTime())) {
+                    const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
+                    annReturn = (returnPct / daysHeld) * 365;
+                }
                 const contractsLabel = n > 1 ? ` (${n}x)` : '';
 
                 return `
@@ -914,7 +917,7 @@
                         <td>${formatMoney(totalAllocation)}</td>
                         <td class="${netRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}">${formatMoney(netRealized)}</td>
                         <td class="${returnPct >= 0 ? 'pnl-positive' : 'pnl-negative'}">${returnPct.toFixed(2)}%</td>
-                        <td class="${annReturn >= 0 ? 'pnl-positive' : 'pnl-negative'}">${annReturn.toFixed(1)}%</td>
+                        <td class="${!openDate || isNaN(openDate.getTime()) ? '' : annReturn >= 0 ? 'pnl-positive' : 'pnl-negative'}">${!openDate || isNaN(openDate.getTime()) ? '—' : annReturn.toFixed(1) + '%'}</td>
                         <td style="font-weight: bold; color: ${leaps.status === 'closed' ? '#888' : '#00cc00'};">${leaps.status === 'closed' ? 'Closed' : 'Active'}</td>
                     </tr>
                 `;
@@ -1032,11 +1035,15 @@
             const potentialReturnPct = totalAllocation > 0 ? (maxPotentialNet / totalAllocation) * 100 : 0;
             
             // Calculate annualized return (days since openDate)
-            const openDate = new Date(leaps.openDate);
+            const openDate = leaps.openDate ? new Date(leaps.openDate) : null;
             const today = new Date();
-            const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
-            const annualizedRealized = (realizedReturnPct / daysHeld) * 365;
-            const annualizedPotential = (potentialReturnPct / daysHeld) * 365;
+            let annualizedRealized = 0;
+            let annualizedPotential = 0;
+            if (openDate && !isNaN(openDate.getTime())) {
+                const daysHeld = Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24)));
+                annualizedRealized = (realizedReturnPct / daysHeld) * 365;
+                annualizedPotential = (potentialReturnPct / daysHeld) * 365;
+            }
             
             // Get LEAPS health status
             const statusInfo = getLEAPSStatus(leaps);
@@ -1092,16 +1099,16 @@
                             <div class="stat-box" style="background: #ffffcc; border: 2px solid #008000;">
                                 <div class="stat-label">NET REALIZED P&L</div>
                                 <div class="stat-value ${netRealizedPnl >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-size: 16px;">${formatMoney(netRealizedPnl)}</div>
-                                <div style="font-size: 10px; margin-top: 2px;">${realizedReturnPct.toFixed(2)}% | ${annualizedRealized.toFixed(1)}% ann.</div>
+                                <div style="font-size: 10px; margin-top: 2px;">${realizedReturnPct.toFixed(2)}% | ${openDate && !isNaN(openDate.getTime()) ? annualizedRealized.toFixed(1) + '% ann.' : '— ann.'}</div>
                             </div>
                             <div class="stat-box" style="background: #f0f0f0; border: 1px dashed #808080;">
                                 <div class="stat-label" style="color: #666;">Max Potential ※</div>
                                 <div class="stat-value ${maxPotentialNet >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="color: #666;">${formatMoney(maxPotentialNet)}</div>
-                                <div style="font-size: 10px; margin-top: 2px; color: #666;">${potentialReturnPct.toFixed(2)}% | ${annualizedPotential.toFixed(1)}% ann.</div>
+                                <div style="font-size: 10px; margin-top: 2px; color: #666;">${potentialReturnPct.toFixed(2)}% | ${openDate && !isNaN(openDate.getTime()) ? annualizedPotential.toFixed(1) + '% ann.' : '— ann.'}</div>
                             </div>
                         </div>
                         <div style="margin-top: 8px; font-size: 10px; color: #666; text-align: right;">
-                            Position opened: ${leaps.openDate} (${daysHeld} days held)
+                            Position opened: ${leaps.openDate || '—'} ${openDate && !isNaN(openDate.getTime()) ? '(' + Math.max(1, Math.floor((today - openDate) / (1000 * 60 * 60 * 24))) + ' days held)' : '(date not set)'}
                         </div>
                         <hr>
                         ${leaps.status !== 'closed' ? `
