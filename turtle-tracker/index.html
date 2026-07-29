@@ -1205,6 +1205,13 @@
         
         // ==================== UTILITIES ====================
         
+        // Sorts history most-recent-first. Ties on date (same-day updates) are broken by
+        // insertion order — the entry added last (highest original index) wins.
+        function sortHistoryDesc(history) {
+            return history.map((h, i) => ({ ...h, _origIdx: i }))
+                           .sort((a, b) => new Date(b.date) - new Date(a.date) || b._origIdx - a._origIdx);
+        }
+
         function getCurrentLEAPSValue(leapsId) {
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return 0;
@@ -1214,8 +1221,7 @@
 
             const history = portfolio.history[leapsId] || [];
             if (history.length > 0) {
-                const sorted = [...history].sort((a,b) => new Date(b.date) - new Date(a.date));
-                return sorted[0].value * n;
+                return sortHistoryDesc(history)[0].value * n;
             }
             return (leaps.currentValue || leaps.openPremium) * n;
         }
@@ -1607,8 +1613,7 @@
             if (!leaps) return;
             const history = portfolio.history[leapsId] || [];
             const nc = getContracts(leaps);
-            const sorted = [...history].map((h, i) => ({ ...h, _origIdx: i }))
-                                       .sort((a, b) => new Date(b.date) - new Date(a.date));
+            const sorted = sortHistoryDesc(history);
 
             const rows = sorted.length === 0
                 ? '<tr><td colspan="5" style="text-align:center; color:#666;"><em>No history entries</em></td></tr>'
@@ -1657,8 +1662,7 @@
             // Sync currentValue to most recent remaining entry
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (leaps && history.length > 0) {
-                const sorted = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
-                leaps.currentValue = sorted[0].value;
+                leaps.currentValue = sortHistoryDesc(history)[0].value;
             }
             saveData();
             updateDisplay();
@@ -1984,11 +1988,24 @@
             leaps.contracts = parseInt(document.getElementById('edit-contracts').value) || 1;
             leaps.openPremium = cost;
             leaps.currentValue = current;
-            
+
+            // getCurrentLEAPSValue() prefers history over leaps.currentValue whenever
+            // history exists, so record this edit there too or it'll appear to have no effect.
+            if (!isNaN(current)) {
+                if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
+                portfolio.history[leapsId].push({
+                    date: new Date().toISOString().split('T')[0],
+                    iwmPrice: 0,
+                    value: current,
+                    delta: leaps.delta,
+                    notes: 'Edited via Edit LEAPS Position'
+                });
+            }
+
             saveData();
             updateDisplay();
             document.getElementById('edit-leaps-modal').remove();
-            
+
             console.log(`LEAPS ${leapsId} updated`);
         }
         
