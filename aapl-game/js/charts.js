@@ -82,6 +82,23 @@ function drawPriceChart(canvas, ohlcData, emaData) {
         ctx.stroke();
     }
 
+    // Daily close line — threads the real daily closes between weekly candles
+    ctx.beginPath();
+    let started = false;
+    data.forEach((d, i) => {
+        if (!d.dailyCloses || d.dailyCloses.length === 0) return;
+        const slotStart = pad.left + (slotOffset + i) * spacing;
+        d.dailyCloses.forEach((close, di) => {
+            const x = slotStart + spacing * (di + 1) / d.dailyCloses.length;
+            const y = priceToY(close);
+            if (!started) { ctx.moveTo(x, y); started = true; }
+            else ctx.lineTo(x, y);
+        });
+    });
+    ctx.strokeStyle = 'rgba(120, 90, 170, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
     // Candlesticks — seed candles (week<=0) at reduced opacity
     data.forEach((d, i) => {
         const x = pad.left + (slotOffset + i) * spacing + spacing / 2;

@@ -288,7 +288,7 @@ function seedHistoricalData() {
 
     for (let i = 0; i < SEED; i++) {
         const wk = AAPL_WEEKLY_DATA[firstIdx + i];
-        ohlcs.push({ open: wk.open, high: wk.high, low: wk.low, close: wk.close, week: -(SEED - i) }); // -6, -5, -4, -3, -2, -1
+        ohlcs.push({ open: wk.open, high: wk.high, low: wk.low, close: wk.close, dailyCloses: wk.dailyCloses, week: -(SEED - i) }); // -6, -5, -4, -3, -2, -1
         prices.push(wk.close);
         vixes.push(wk.vix);
     }

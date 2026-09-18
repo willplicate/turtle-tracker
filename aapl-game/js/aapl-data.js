@@ -183,7 +183,7 @@ function getAaplMove(absoluteIndex, currentPrice) {
         newPrice,
         priceChangePct: (newPrice - currentPrice) / currentPrice * 100,
         newVix: wk.vix,
-        ohlc: { open: wk.open, high: wk.high, low: wk.low, close: wk.close },
+        ohlc: { open: wk.open, high: wk.high, low: wk.low, close: wk.close, dailyCloses: wk.dailyCloses },
     };
 }
 
