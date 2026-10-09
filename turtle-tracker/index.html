@@ -239,9 +239,12 @@
         <div style="font-size: 11px; color: #ffff00;">[ Multi-Account LEAPS Strategy ] <span id="api-status" class="api-status api-disconnected">API: Not Connected</span></div>
     </div>
     
+    <div id="backup-banner" onclick="exportData()" style="display:none; cursor:pointer; background:#331a00; color:#ffaa00; border:1px solid #ffaa00; padding:6px 10px; margin:6px 0; font-size:12px;"></div>
+
     <div class="nav">
         <a href="#" onclick="showTab('combined')">[ 📊 Combined Dashboard ]</a>
         <a href="#" onclick="showTab('positions')">[ 📈 Individual Positions ]</a>
+        <a href="#" onclick="showTab('monthly')">[ 📅 Monthly P&L ]</a>
         <a href="#" onclick="showTab('data')">[ 💾 Data / Import ]</a>
         <a href="#" onclick="showTab('simulator')">[ 🎮 Simulator ]</a>
         <a href="#" onclick="showRulesCheatsheet()">[ 📋 Rules Cheatsheet ]</a>
@@ -285,6 +288,10 @@
                             <div class="stat-value" id="total-leaps-count">0</div>
                         </div>
                         <div class="stat-box">
+                            <div class="stat-label">Total Account Value</div>
+                            <div class="stat-value" id="total-account-value">$0</div>
+                        </div>
+                        <div class="stat-box">
                             <div class="stat-label">Total LEAPS Cost</div>
                             <div class="stat-value" id="total-leaps-cost">$0</div>
                         </div>
@@ -320,7 +327,7 @@
                                 <th>Cost</th>
                                 <th>Reserve</th>
                                 <th>Allocation</th>
-                                <th>Realized P&L</th>
+                                <th>P&L</th>
                                 <th>Return %</th>
                                 <th>Ann. Return</th>
                                 <th>Status</th>
@@ -352,6 +359,27 @@
             </div>
         </div>
         
+        <!-- MONTHLY P&L TAB -->
+        <div id="tab-monthly" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">📅 Monthly Realized P&L</div>
+                <div class="panel-body">
+                    Account:
+                    <select id="monthly-account" onchange="renderMonthlyPnl()"></select>
+                    <button onclick="downloadMonthlyCSV()" style="margin-left: 10px;">[ Download CSV ]</button>
+                    <div style="font-size: 11px; color: #444; margin-top: 6px;">Realized only: short calls and closed LEAPS, by close date (net of commissions). Open LEAPS gains are shown separately below.</div>
+                    <canvas id="monthly-chart" width="900" height="220" style="width: 100%; max-width: 900px; background: #000; margin-top: 10px; display: block;"></canvas>
+                    <table style="margin-top: 10px;">
+                        <thead>
+                            <tr><th>Month</th><th>Short Calls</th><th>LEAPS</th><th>Total</th><th>Cumulative</th></tr>
+                        </thead>
+                        <tbody id="monthly-tbody"></tbody>
+                    </table>
+                    <div id="monthly-unrealized" style="margin-top: 10px; font-size: 12px;"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- DATA / IMPORT TAB -->
         <div id="tab-data" class="tab-content">
             <div class="panel">
@@ -732,6 +760,7 @@
                 <div class="form-row"><label>Current Value:</label><input type="number" id="new-current" step="0.01"></div>
                 <div class="form-row"><label>Current Delta:</label><input type="number" id="new-delta" step="0.01" min="0" max="1" placeholder="0.75" style="width: 80px;"><small style="color: #666; margin-left: 10px;">LEAPS delta (0.00-1.00)</small></div>
                 <div class="form-row"><label>Contracts:</label><input type="number" id="new-contracts" value="1" min="1" step="1" style="width: 60px;"><small style="color: #666; margin-left: 10px;">Number of contracts (cost &amp; value are <strong>per contract</strong>)</small></div>
+                <div class="form-row"><label>Commission:</label><input type="number" id="new-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"><small style="color:#666; margin-left:8px;">Total $, optional</small></div>
                 <div class="form-row"><label>Cash Reserve:</label><input type="number" id="new-cash-reserve" step="0.01" placeholder="e.g., 5000"><small style="color: #666; margin-left: 10px;">Cash set aside for this position (total, not per contract)</small></div>
             </div>
             <div class="modal-footer">
@@ -810,11 +839,93 @@
 
         // Load data
         function loadData() {
-            const saved = localStorage.getItem('turtlePortfolio');
-            if (saved) {
-                portfolio = JSON.parse(saved);
+            try {
+                const saved = localStorage.getItem('turtlePortfolio');
+                if (saved) {
+                    portfolio = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('Could not parse saved portfolio', e);
             }
+            if (!portfolio || typeof portfolio !== 'object') portfolio = {};
+            if (!Array.isArray(portfolio.leaps)) portfolio.leaps = [];
+            if (!Array.isArray(portfolio.calls)) portfolio.calls = [];
+            if (!portfolio.history || typeof portfolio.history !== 'object') portfolio.history = {};
+            if (repairBlankHistoryDates()) saveData();
             updateDisplay();
+        }
+
+        // Local (not UTC) YYYY-MM-DD
+        function localToday() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function isValidDateStr(s) {
+            return typeof s === 'string' && s !== '' && !isNaN(new Date(s).getTime());
+        }
+
+        // Back-fill history points with a blank/invalid date (caused "NaN/NaN" on the chart).
+        // Returns true if anything changed.
+        function repairBlankHistoryDates() {
+            let changed = false;
+            portfolio.leaps.forEach(leaps => {
+                (portfolio.history[leaps.id] || []).forEach(h => {
+                    if (!isValidDateStr(h.date)) {
+                        h.date = isValidDateStr(leaps.openDate) ? leaps.openDate : localToday();
+                        changed = true;
+                    }
+                });
+            });
+            return changed;
+        }
+
+        // Commissions/fees are total dollars (not per contract), default 0.
+        function callNetPnl(c) {
+            return (c.openPremium || 0) - (c.closePremium || 0) - (c.openCommission || 0) - (c.closeCommission || 0);
+        }
+        function leapsFees(l) {
+            return (l.openCommission || 0) + (l.closeCommission || 0);
+        }
+
+        const STALE_MARK_DAYS = 7;
+
+        // Date of the most recent mark: explicit markedAt, else latest valid history date
+        function getLastMarkDate(leaps) {
+            if (isValidDateStr(leaps.markedAt)) return leaps.markedAt;
+            const dates = (portfolio.history[leaps.id] || []).map(h => h.date).filter(isValidDateStr).sort();
+            return dates.length ? dates[dates.length - 1] : (isValidDateStr(leaps.openDate) ? leaps.openDate : null);
+        }
+
+        function getMarkAgeDays(leaps) {
+            const last = getLastMarkDate(leaps);
+            if (!last) return null;
+            return Math.floor((new Date(localToday()) - new Date(last)) / 86400000);
+        }
+
+        // ==================== BACKUP REMINDER ====================
+        const BACKUP_REMINDER_DAYS = 7;
+
+        function getBackupAgeDays() {
+            let last = null;
+            try { last = localStorage.getItem('turtleLastBackupAt'); } catch (e) {}
+            if (!last) return null;
+            return Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+        }
+
+        function updateBackupBanner() {
+            const el = document.getElementById('backup-banner');
+            if (!el) return;
+            const age = getBackupAgeDays();
+            const hasData = portfolio.leaps.length > 0;
+            if (hasData && (age === null || age >= BACKUP_REMINDER_DAYS)) {
+                el.textContent = age === null
+                    ? 'No backup downloaded yet. Click here to download a JSON backup.'
+                    : 'Last backup was ' + age + ' days ago. Click here to download a JSON backup.';
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
         }
 
         function saveData() {
@@ -824,9 +935,11 @@
         // ==================== DISPLAY ====================
         
         function updateDisplay() {
+            updateBackupBanner();
             updateCombinedDashboard();
             updateAccountCards();
             updatePositionSelector();
+            renderMonthlyPnl();
             if (selectedAccountId) {
                 showPositionDetail();
             }
@@ -838,32 +951,51 @@
             let totalLeapsValue = 0;
             let totalCallsRealized = 0;
             let totalOpenPremium = 0;
-            
+            let totalActiveAllocation = 0;
+            const oneYearAgo = new Date();
+            oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+            let callsRealized365 = 0;
+            let leapsRealized365 = 0;
+
             portfolio.leaps.forEach(leaps => {
-                const currentVal = getCurrentLEAPSValue(leaps.id);
-                totalLeapsCost += leaps.openPremium * getContracts(leaps);
-                totalLeapsValue += currentVal;
-                
+                const n = getContracts(leaps);
+                if (leaps.status !== 'closed') {
+                    const currentVal = getCurrentLEAPSValue(leaps.id);
+                    totalLeapsCost += leaps.openPremium * n;
+                    totalLeapsValue += currentVal;
+                    totalActiveAllocation += leaps.openPremium * n + (leaps.cashReserve || 0);
+                } else if (leaps.closeDate && new Date(leaps.closeDate) >= oneYearAgo) {
+                    leapsRealized365 += ((leaps.closePremium || 0) - leaps.openPremium) * n - leapsFees(leaps);
+                }
+
                 const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
                 calls.forEach(c => {
                     if (c.status === 'closed') {
-                        totalCallsRealized += (c.openPremium - c.closePremium);
+                        const pnl = callNetPnl(c);
+                        totalCallsRealized += pnl;
+                        if (c.closeDate && new Date(c.closeDate) >= oneYearAgo) {
+                            callsRealized365 += pnl;
+                        }
                     } else {
                         totalOpenPremium += c.openPremium;
                     }
                 });
             });
-            
+
             const leapsUnrealized = totalLeapsValue - totalLeapsCost;
-            const combinedPnl = leapsUnrealized + totalCallsRealized;
-            
+            // "Last 365 days" P&L = current unrealized gain on active LEAPS (a live mark-to-market
+            // figure) plus anything actually realized (calls or LEAPS closed) within the trailing year.
+            // Older realized gains (e.g. positions closed years ago) are excluded so this reflects
+            // recent performance rather than all-time cumulative P&L.
+            const combinedPnl365 = leapsUnrealized + callsRealized365 + leapsRealized365;
+
             // Update combined box
-            document.getElementById('combined-total-pnl').textContent = formatMoney(combinedPnl);
-            document.getElementById('combined-total-pnl').className = 'combined-amount ' + (combinedPnl >= 0 ? 'pnl-positive' : 'pnl-negative');
-            document.getElementById('combined-leaps-pnl').textContent = `LEAPS: ${formatMoney(leapsUnrealized)}`;
-            document.getElementById('combined-calls-pnl').textContent = `Calls: ${formatMoney(totalCallsRealized)}`;
+            document.getElementById('combined-total-pnl').textContent = formatMoney(combinedPnl365);
+            document.getElementById('combined-total-pnl').className = 'combined-amount ' + (combinedPnl365 >= 0 ? 'pnl-positive' : 'pnl-negative');
+            document.getElementById('combined-leaps-pnl').textContent = `LEAPS Unrealized: ${formatMoney(leapsUnrealized)}`;
+            document.getElementById('combined-calls-pnl').textContent = `Calls Realized (365d): ${formatMoney(callsRealized365)}`;
             document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
-            
+
             // Update stats
             document.getElementById('total-leaps-count').textContent = portfolio.leaps.filter(l => l.status !== 'closed').length;
             document.getElementById('total-leaps-cost').textContent = formatMoney(totalLeapsCost);
@@ -871,25 +1003,27 @@
             document.getElementById('total-leaps-unrealized').textContent = formatMoney(leapsUnrealized);
             document.getElementById('total-calls-realized').textContent = formatMoney(totalCallsRealized);
             document.getElementById('total-open-premium').textContent = formatMoney(totalOpenPremium);
-            
+            document.getElementById('total-account-value').textContent = formatMoney(totalActiveAllocation);
+
             // Update breakdown table
             const tbody = document.getElementById('breakdown-tbody');
-            if (portfolio.leaps.length === 0) {
+            const visibleLeaps = portfolio.leaps.filter(l => showArchive || l.status !== 'closed');
+            if (visibleLeaps.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9"><em>No positions loaded</em></td></tr>';
                 return;
             }
-            
-            tbody.innerHTML = portfolio.leaps.map(leaps => {
+
+            tbody.innerHTML = visibleLeaps.map(leaps => {
                 const n = getContracts(leaps);
                 const currentVal = getCurrentLEAPSValue(leaps.id);
                 const totalCost = leaps.openPremium * n;
-                const leapsPnl = currentVal - totalCost;
+                const leapsPnl = currentVal - totalCost - leapsFees(leaps);
 
                 const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
                 let callsRealized = 0;
                 calls.forEach(c => {
                     if (c.status === 'closed') {
-                        callsRealized += (c.openPremium - c.closePremium);
+                        callsRealized += callNetPnl(c);
                     }
                 });
 
@@ -924,6 +1058,127 @@
             }).join('');
         }
         
+        // ==================== MONTHLY P&L ====================
+
+        function nextMonth(m) {
+            let [y, mo] = m.split('-').map(Number);
+            mo++;
+            if (mo > 12) { mo = 1; y++; }
+            return y + '-' + String(mo).padStart(2, '0');
+        }
+
+        // Realized P&L by close month (YYYY-MM). accountId '' = all accounts.
+        function computeMonthlyPnl(accountId) {
+            const buckets = {};
+            const add = (date, key, amt) => {
+                if (!isValidDateStr(date)) return;
+                const m = date.slice(0, 7);
+                if (!buckets[m]) buckets[m] = { calls: 0, leaps: 0 };
+                buckets[m][key] += amt;
+            };
+            portfolio.leaps.forEach(l => {
+                if (accountId && l.id !== accountId) return;
+                if (l.status === 'closed') {
+                    add(l.closeDate, 'leaps', ((l.closePremium || 0) - l.openPremium) * getContracts(l) - leapsFees(l));
+                }
+            });
+            portfolio.calls.forEach(c => {
+                if (accountId && c.parentLeapsId !== accountId) return;
+                if (c.status === 'closed') add(c.closeDate, 'calls', callNetPnl(c));
+            });
+            const months = Object.keys(buckets).sort();
+            if (months.length === 0) return [];
+            const rows = [];
+            let cum = 0;
+            for (let m = months[0]; m <= months[months.length - 1]; m = nextMonth(m)) {
+                const b = buckets[m] || { calls: 0, leaps: 0 };
+                const total = b.calls + b.leaps;
+                cum += total;
+                rows.push({ month: m, calls: b.calls, leaps: b.leaps, total: total, cumulative: cum });
+            }
+            return rows;
+        }
+
+        function pnlClass(v) { return v >= 0 ? 'pnl-positive' : 'pnl-negative'; }
+
+        function renderMonthlyPnl() {
+            const sel = document.getElementById('monthly-account');
+            if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = '<option value="">All accounts</option>' + portfolio.leaps.map(l =>
+                `<option value="${l.id}">${l.accountName || 'Account'} - ${l.symbol} $${l.strike} ${(l.expiration || '').slice(0, 7)}</option>`
+            ).join('');
+            if (portfolio.leaps.some(l => l.id === prev)) sel.value = prev;
+            const accountId = sel.value;
+
+            const rows = computeMonthlyPnl(accountId);
+            const tbody = document.getElementById('monthly-tbody');
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5"><em>No closed trades yet</em></td></tr>';
+            } else {
+                const sum = k => rows.reduce((a, r) => a + r[k], 0);
+                const cell = v => `<td class="${pnlClass(v)}">${formatMoney(v)}</td>`;
+                tbody.innerHTML = rows.slice().reverse().map(r =>
+                    `<tr><td>${r.month}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}</tr>`
+                ).join('') +
+                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td></tr>`;
+            }
+
+            let unrealized = 0;
+            portfolio.leaps.forEach(l => {
+                if (l.status === 'closed' || (accountId && l.id !== accountId)) return;
+                unrealized += getCurrentLEAPSValue(l.id) - l.openPremium * getContracts(l);
+            });
+            document.getElementById('monthly-unrealized').innerHTML =
+                `Unrealized (open LEAPS, not in table): <span class="${pnlClass(unrealized)}">${formatMoney(unrealized)}</span>`;
+
+            drawMonthlyChart(rows);
+        }
+
+        function drawMonthlyChart(rows) {
+            const canvas = document.getElementById('monthly-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+            if (rows.length === 0) return;
+            const padL = 70, padR = 10, padT = 15, padB = 28;
+            const max = Math.max(0, ...rows.map(r => r.total));
+            const min = Math.min(0, ...rows.map(r => r.total));
+            const span = (max - min) || 1;
+            const y = v => padT + (max - v) / span * (H - padT - padB);
+            const slot = (W - padL - padR) / rows.length;
+            ctx.font = '11px "Courier New", monospace';
+            ctx.strokeStyle = '#444';
+            ctx.beginPath(); ctx.moveTo(padL, y(0)); ctx.lineTo(W - padR, y(0)); ctx.stroke();
+            ctx.fillStyle = '#aaa'; ctx.textAlign = 'right';
+            ctx.fillText(formatMoney(max), padL - 4, y(max) + 4);
+            ctx.fillText('$0', padL - 4, y(0) + 4);
+            if (min < 0) ctx.fillText(formatMoney(min), padL - 4, y(min) + 4);
+            const labelEvery = Math.ceil(rows.length / 12);
+            rows.forEach((r, i) => {
+                const x = padL + i * slot + slot * 0.15;
+                const w = slot * 0.7;
+                ctx.fillStyle = r.total >= 0 ? '#00cc00' : '#ff4444';
+                ctx.fillRect(x, Math.min(y(0), y(r.total)), w, Math.max(1, Math.abs(y(r.total) - y(0))));
+                if (i % labelEvery === 0) {
+                    ctx.fillStyle = '#aaa'; ctx.textAlign = 'center';
+                    ctx.fillText(r.month.slice(2), x + w / 2, H - 10);
+                }
+            });
+        }
+
+        function downloadMonthlyCSV() {
+            const rows = computeMonthlyPnl(document.getElementById('monthly-account').value);
+            const csv = 'Month,Short Calls,LEAPS,Total,Cumulative\n' + rows.map(r =>
+                [r.month, r.calls, r.leaps, r.total, r.cumulative].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
+            ).join('\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            a.download = `turtle-monthly-pnl-${localToday()}.csv`;
+            a.click();
+        }
+
         function toggleArchive() {
             showArchive = !showArchive;
             const btn = document.getElementById('archive-toggle-btn');
@@ -932,26 +1187,32 @@
                 btn.textContent = showArchive ? '[ Hide Archive ]' : '[ Archive ]';
             }
             updateAccountCards();
+            updateCombinedDashboard();
         }
 
         function buildCard(leaps) {
             const currentVal = getCurrentLEAPSValue(leaps.id);
-            const leapsPnl = currentVal - leaps.openPremium * getContracts(leaps);
+            const leapsPnl = currentVal - leaps.openPremium * getContracts(leaps) - leapsFees(leaps);
             const calls = portfolio.calls.filter(c => c.parentLeapsId === leaps.id);
             let callsRealized = 0;
             calls.forEach(c => {
-                if (c.status === 'closed') callsRealized += (c.openPremium - c.closePremium);
+                if (c.status === 'closed') callsRealized += callNetPnl(c);
             });
             const total = leapsPnl + callsRealized;
             const isActive = selectedAccountId === leaps.id ? 'active' : '';
             const statusInfo = getLEAPSStatus(leaps);
             const statusEmoji = statusInfo.status === 'closed' ? '⬛' : (statusInfo.status === 'green' ? '🟢' : (statusInfo.status === 'orange' ? '🟠' : '🔴'));
-            const statusTitle = statusInfo.warnings.length ? statusInfo.warnings.join(' | ') : 'LEAPS Healthy';
+            const markAge = leaps.status === 'closed' ? null : getMarkAgeDays(leaps);
+            const isStale = markAge !== null && markAge > STALE_MARK_DAYS;
+            const warnList = statusInfo.warnings.slice();
+            if (isStale) warnList.push(`Mark is ${markAge} days old`);
+            const statusTitle = warnList.length ? warnList.join(' | ') : 'LEAPS Healthy';
+            const staleBadge = isStale ? ` <span style="color:#ff8800;" title="Last mark ${getLastMarkDate(leaps)}">⏱ stale ${markAge}d</span>` : '';
             return `
                 <div class="account-card ${isActive}" onclick="selectAccount('${leaps.id}')">
                     <div style="font-weight: bold;">
                         ${leaps.accountName || 'Account'}
-                        <span title="${statusTitle}" style="cursor: help;">${statusEmoji}</span>
+                        <span title="${statusTitle}" style="cursor: help;">${statusEmoji}</span>${staleBadge}
                         <button onclick="event.stopPropagation(); editLEAPS('${leaps.id}')" style="float: right; font-size: 10px; padding: 2px 6px; background: #c0c0c0; border: 1px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer;" title="Edit LEAPS">✏️</button>
                     </div>
                     <div style="font-size: 11px; color: #666;">${leaps.symbol} $${leaps.strike}${getContracts(leaps) > 1 ? ` ×${getContracts(leaps)}` : ''} | ${leaps.status === 'closed' ? `CLOSED ${leaps.closeDate}` : `DTE ${statusInfo.dte}d | Δ ${(statusInfo.delta * 100).toFixed(0)}%`}</div>
@@ -1009,7 +1270,7 @@
             const n = getContracts(leaps);
             const totalCost = leaps.openPremium * n;
             const currentVal = getCurrentLEAPSValue(leaps.id);
-            const leapsPnl = currentVal - totalCost;
+            const leapsPnl = currentVal - totalCost - leapsFees(leaps);
             const calls = portfolio.calls.filter(c => c.parentLeapsId === id).sort((a,b) => new Date(a.openDate) - new Date(b.openDate));
 
             // Calculate totals
@@ -1017,7 +1278,7 @@
             let openPremium = 0;
             calls.forEach(c => {
                 if (c.status === 'closed') {
-                    realizedCallsPnl += (c.openPremium - c.closePremium);
+                    realizedCallsPnl += callNetPnl(c);
                 } else {
                     openPremium += c.openPremium;
                 }
@@ -1131,7 +1392,7 @@
             
             let runningRealized = 0;
             calls.forEach((c, i) => {
-                const pnl = c.status === 'closed' ? c.openPremium - c.closePremium : null;
+                const pnl = c.status === 'closed' ? callNetPnl(c) : null;
                 // Running total only includes REALIZED (closed) calls
                 if (c.status === 'closed') {
                     runningRealized += pnl;
@@ -1209,7 +1470,7 @@
         // insertion order — the entry added last (highest original index) wins.
         function sortHistoryDesc(history) {
             return history.map((h, i) => ({ ...h, _origIdx: i }))
-                           .sort((a, b) => new Date(b.date) - new Date(a.date) || b._origIdx - a._origIdx);
+                           .sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0) || b._origIdx - a._origIdx);
         }
 
         function getCurrentLEAPSValue(leapsId) {
@@ -1331,20 +1592,81 @@
             reader.readAsText(file);
         }
         
+        // Merge-by-id import. Accepts { leaps, calls, history } or a flat array of
+        // LEAPS / SHORT_CALL objects. Existing records win on id conflicts.
+        function normalizeImport(data) {
+            if (Array.isArray(data)) {
+                return {
+                    leaps: data.filter(x => x && x.type === 'LEAPS'),
+                    calls: data.filter(x => x && x.type === 'SHORT_CALL'),
+                    history: {}
+                };
+            }
+            if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls))) {
+                return {
+                    leaps: Array.isArray(data.leaps) ? data.leaps : [],
+                    calls: Array.isArray(data.calls) ? data.calls : [],
+                    history: data.history && typeof data.history === 'object' ? data.history : {}
+                };
+            }
+            return null;
+        }
+
+        function mergeIntoPortfolio(incoming) {
+            const stats = { leaps: 0, calls: 0, points: 0 };
+            const leapsIds = new Set(portfolio.leaps.map(l => l.id));
+            const callIds = new Set(portfolio.calls.map(c => c.id));
+
+            incoming.leaps.forEach(l => {
+                if (!l || !l.id || leapsIds.has(l.id)) return;
+                portfolio.leaps.push(l);
+                leapsIds.add(l.id);
+                stats.leaps++;
+            });
+            incoming.calls.forEach(c => {
+                if (!c || !c.id || callIds.has(c.id)) return;
+                portfolio.calls.push(c);
+                callIds.add(c.id);
+                stats.calls++;
+            });
+            Object.keys(incoming.history).forEach(id => {
+                if (!Array.isArray(incoming.history[id])) return;
+                const existing = portfolio.history[id] || (portfolio.history[id] = []);
+                const haveDates = new Set(existing.map(h => h.date));
+                incoming.history[id].forEach(h => {
+                    if (!h || !isValidDateStr(h.date) || haveDates.has(h.date)) return;
+                    existing.push(h);
+                    haveDates.add(h.date);
+                    stats.points++;
+                });
+            });
+            repairBlankHistoryDates();
+            return stats;
+        }
+
         function importJSON(jsonText) {
             try {
-                const data = JSON.parse(jsonText);
-                
-                if (data.leaps && Array.isArray(data.leaps)) {
-                    if (confirm(`Import ${data.leaps.length} LEAPS position(s) and ${data.calls?.length || 0} short call(s)?`)) {
-                        portfolio = data;
-                        saveData();
-                        updateDisplay();
-                        alert('Portfolio imported successfully!');
-                    }
-                } else {
-                    alert('Invalid JSON format. Expected { leaps: [], calls: [], history: {} }');
+                const incoming = normalizeImport(JSON.parse(jsonText));
+                if (!incoming) {
+                    alert('Invalid JSON format. Expected { leaps: [], calls: [], history: {} } or an array of LEAPS / SHORT_CALL objects.');
+                    return;
                 }
+                const summary = `${incoming.leaps.length} LEAPS, ${incoming.calls.length} short call(s)`;
+                const replace = portfolio.leaps.length > 0 &&
+                    confirm(`File contains ${summary}.\n\nOK = REPLACE everything currently stored.\nCancel = choose merge instead.`);
+                if (replace) {
+                    portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history };
+                    repairBlankHistoryDates();
+                    saveData();
+                    updateDisplay();
+                    alert('Portfolio replaced.');
+                    return;
+                }
+                if (!confirm(`MERGE ${summary} into your existing data?\nExisting records with the same id are kept; only new ones are added.`)) return;
+                const stats = mergeIntoPortfolio(incoming);
+                saveData();
+                updateDisplay();
+                alert(`Merged: ${stats.leaps} new LEAPS, ${stats.calls} new call(s), ${stats.points} new history point(s).`);
             } catch (e) {
                 alert('Error parsing JSON: ' + e.message);
             }
@@ -1522,7 +1844,7 @@
             const closedCalls = shortCalls.filter(c => c.status === 'closed').length;
             const openCalls = shortCalls.filter(c => c.status === 'open').length;
             const totalPnl = shortCalls.reduce((sum, c) => {
-                return sum + (c.status === 'closed' ? c.openPremium - c.closePremium : 0);
+                return sum + (c.status === 'closed' ? callNetPnl(c) : 0);
             }, 0);
             
             alert(`Imported Successfully!\n\nLEAPS: IWM $${leapsMatch.strike} ${leapsMatch.expiration}\nCost: $${Math.abs(leapsMatch.net).toFixed(2)}\n\nShort Calls: ${shortCalls.length} total\n- ${closedCalls} closed\n- ${openCalls} open\n\nRealized P&L: $${totalPnl.toFixed(2)}`);
@@ -1548,7 +1870,7 @@
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return;
             
-            const today = new Date().toISOString().split('T')[0];
+            const today = localToday();
             
             // Create modal dynamically
             const modalHtml = `
@@ -1584,10 +1906,15 @@
                 alert('Please enter a valid LEAPS value');
                 return;
             }
+            if (!isValidDateStr(date)) {
+                alert('Please enter a valid date');
+                return;
+            }
             
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (leaps) {
                 leaps.currentValue = value;
+                leaps.markedAt = date;
                 if (!isNaN(delta)) {
                     leaps.delta = delta;
                 }
@@ -1715,15 +2042,10 @@
                 const oldReserve = leaps.cashReserve || 0;
                 leaps.cashReserve = amount;
                 
-                // Log to history
-                if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
-                portfolio.history[leapsId].push({
-                    date: new Date().toISOString().split('T')[0],
-                    iwmPrice: 0,
-                    value: leaps.currentValue || leaps.openPremium,
-                    notes: `Cash reserve: ${formatMoney(oldReserve)} → ${formatMoney(amount)}${notes ? ' - ' + notes : ''}`
-                });
-                
+                // Cash reserve changes are not LEAPS marks, so they no longer add a
+                // value row to history (that row could override a newer real mark).
+                console.log(`Cash reserve ${leapsId}: ${oldReserve} -> ${amount}${notes ? ' - ' + notes : ''}`);
+
                 saveData();
                 updateDisplay();
             }
@@ -1752,6 +2074,7 @@
                             <div class="form-row"><label>Strike:</label><input type="number" id="call-strike" step="0.01"></div>
                             <div class="form-row"><label>Expiration:</label><input type="date" id="call-exp"></div>
                             <div class="form-row"><label>Premium:</label><input type="number" id="call-premium" step="0.01"></div>
+                            <div class="form-row"><label>Commission:</label><input type="number" id="call-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"><small style="color:#666; margin-left:8px;">Total $, optional</small></div>
                         </div>
                         <div class="modal-footer">
                             <button onclick="saveNewCall('${leapsId}')" class="primary">[ Save ]</button>
@@ -1770,6 +2093,7 @@
             const strike = parseFloat(document.getElementById('call-strike').value);
             const expiration = document.getElementById('call-exp').value;
             const premium = parseFloat(document.getElementById('call-premium').value);
+            const commission = Math.abs(parseFloat(document.getElementById('call-commission').value)) || 0;
             
             if (action === 'open') {
                 // New short call
@@ -1783,6 +2107,7 @@
                     openDate: date,
                     openStockPrice: 0,
                     openPremium: premium,
+                    openCommission: commission,
                     status: 'open'
                 });
             } else {
@@ -1796,6 +2121,7 @@
                 if (openCall) {
                     openCall.closeDate = date;
                     openCall.closePremium = premium;
+                    openCall.closeCommission = commission;
                     openCall.status = 'closed';
                 } else {
                     alert('No open call found for that strike');
@@ -1992,9 +2318,10 @@
             // getCurrentLEAPSValue() prefers history over leaps.currentValue whenever
             // history exists, so record this edit there too or it'll appear to have no effect.
             if (!isNaN(current)) {
+                leaps.markedAt = localToday();
                 if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
                 portfolio.history[leapsId].push({
-                    date: new Date().toISOString().split('T')[0],
+                    date: localToday(),
                     iwmPrice: 0,
                     value: current,
                     delta: leaps.delta,
@@ -2035,6 +2362,7 @@
                                 <input type="number" id="close-leaps-price" step="0.01" value="${currentValPerContract.toFixed(2)}" style="width: 150px;">
                                 <small style="color: #666; margin-left: 8px;">Per contract${n > 1 ? ` (×${n} contracts)` : ''}</small>
                             </div>
+                            <div class="form-row"><label>Commission:</label><input type="number" id="close-leaps-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"><small style="color:#666; margin-left:8px;">Total $, optional</small></div>
                             <div class="form-row"><label>Notes:</label><input type="text" id="close-leaps-notes" placeholder="e.g., Sold to close, rolling to new position"></div>
                             <div style="margin-top: 10px; padding: 8px; background: #f0f0f0; border: 1px solid #c0c0c0; font-size: 11px;">
                                 Cost Basis: <strong>${formatMoney(totalCostDisplay)}</strong>${n > 1 ? ` (${n}× ${formatMoney(leaps.openPremium)})` : ''} &nbsp;→&nbsp;
@@ -2080,6 +2408,8 @@
             leaps.status = 'closed';
             leaps.closeDate = closeDate;
             leaps.closePremium = closePremium;
+            leaps.closeCommission = Math.abs(parseFloat(document.getElementById('close-leaps-commission').value)) || 0;
+            leaps.markedAt = closeDate;
 
             if (!portfolio.history[leapsId]) portfolio.history[leapsId] = [];
             portfolio.history[leapsId].push({
@@ -2106,6 +2436,7 @@
             leaps.status = 'open';
             delete leaps.closeDate;
             delete leaps.closePremium;
+            delete leaps.closeCommission;
             saveData();
             updateDisplay();
         }
@@ -2119,7 +2450,7 @@
                 symbol: document.getElementById('new-symbol').value.toUpperCase(),
                 strike: parseFloat(document.getElementById('new-strike').value),
                 expiration: document.getElementById('new-expiration').value,
-                openDate: document.getElementById('new-open-date').value,
+                openDate: document.getElementById('new-open-date').value || localToday(),
                 openStockPrice: parseFloat(document.getElementById('new-stock-price').value) || 0,
                 openPremium: parseFloat(document.getElementById('new-cost').value),
                 currentValue: parseFloat(document.getElementById('new-current').value) || parseFloat(document.getElementById('new-cost').value),
@@ -2127,7 +2458,9 @@
                 contracts: parseInt(document.getElementById('new-contracts').value) || 1,
                 cashReserve: parseFloat(document.getElementById('new-cash-reserve').value) || 0,
                 quantity: 1,
-                status: 'open'
+                status: 'open',
+                openCommission: Math.abs(parseFloat(document.getElementById('new-commission').value)) || 0,
+                markedAt: localToday()
             };
             
             portfolio.leaps.push(newLeaps);
@@ -2149,8 +2482,10 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `turtle-portfolio-${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `turtle-portfolio-${localToday()}.json`;
             a.click();
+            try { localStorage.setItem('turtleLastBackupAt', new Date().toISOString()); } catch (e) {}
+            updateBackupBanner();
         }
         
         function clearAllData() {
@@ -2956,7 +3291,8 @@
             }
             
             // Sort by date
-            const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sorted = history.filter(h => isValidDateStr(h.date)).sort((a, b) => new Date(a.date) - new Date(b.date));
+            if (sorted.length === 0) return;
             
             // Calculate min/max values
             let minValue = Infinity;
@@ -3133,6 +3469,7 @@
         
         function formatShortDate(dateStr) {
             const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
             return (d.getMonth() + 1) + '/' + d.getDate();
         }
 
