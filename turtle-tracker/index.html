@@ -1734,7 +1734,8 @@
                 if (replace) {
                     // A backup from before the ledger existed must not wipe the ledger.
                     portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history,
-                        ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger };
+                        ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger,
+                        ledgerMarks: incoming.ledgerMarks || portfolio.ledgerMarks || {} };
                     repairBlankHistoryDates();
                     saveData();
                     updateDisplay();
@@ -2987,6 +2988,34 @@
             a.click();
         }
 
+        let ledgerOpenKeys = [];
+
+        // Per-share mark for an open ledger position: a saved manual mark wins; a past-expiry position is
+        // assumed worthless; a long call that matches a tracker LEAPS (strike + expiry) uses its latest value.
+        function ledgerMarkFor(o, today) {
+            const saved = portfolio.ledgerMarks && portfolio.ledgerMarks[o.key];
+            if (typeof saved === 'number') return saved;
+            if (o.expiry && o.expiry < today) return 0;
+            if (o.instrument === 'option' && o.qty > 0 && Array.isArray(portfolio.leaps)) {
+                const l = portfolio.leaps.find(x => x.status !== 'closed' && Number(x.strike) === Number(o.strike) && x.expiration === o.expiry);
+                if (l) {
+                    const v = getCurrentLEAPSValue(l.id), n = getContracts(l);
+                    if (v > 0 && n > 0) return v / n / (o.mult || 100);
+                }
+            }
+            return null;
+        }
+
+        function setLedgerMark(idx, val) {
+            const key = ledgerOpenKeys[idx];
+            if (!key) return;
+            if (!portfolio.ledgerMarks) portfolio.ledgerMarks = {};
+            const v = parseFloat(val);
+            if (isNaN(v)) delete portfolio.ledgerMarks[key]; else portfolio.ledgerMarks[key] = v;
+            saveData();
+            renderLedger();
+        }
+
         function renderLedger() {
             const statsEl = document.getElementById('ledger-stats');
             if (!statsEl) return;
@@ -3016,23 +3045,44 @@
             const raw = scoped.filter(r => !und || r.underlying === und);
             const today = localToday();
 
-            // Stats
+            // Stats. Interest / fees / VAT are account-wide, so they are shown in full even when an underlying
+            // filter is set (they only join the headline total when no underlying filter is applied).
             const sum = cat => closed.filter(c => ledgerCategory(c) === cat).reduce((s, c) => s + c.pnl, 0);
             const premium = sum('shortOptions'), longOpt = sum('longOptions'), eq = sum('equity');
-            const interest = und ? 0 : res.cash.interest, fees = und ? 0 : res.cash.fees;
-            const total = premium + longOpt + eq + interest + fees;
+            const interest = res.cash.interest, fees = res.cash.fees + res.cash.other;
+            const total = premium + longOpt + eq + (und ? 0 : interest + fees);
             const dates = scoped.map(r => r.date).sort();
+
+            // All-in view (ignores the underlying filter): realized incl. interest/fees + unrealized on open positions.
+            const realizedAll = res.closed.reduce((s, c) => s + c.pnl, 0) + interest + fees;
+            ledgerOpenKeys = res.open.map(o => o.key);
+            let unrealized = 0, unmarked = 0;
+            const unrealizedFor = o => {
+                const m = ledgerMarkFor(o, today);
+                return m === null ? null : o.cashBasis + o.qty * m * (o.mult || 1);
+            };
+            res.open.forEach(o => { const u = unrealizedFor(o); if (u === null) unmarked++; else unrealized += u; });
+            const netPnl = realizedAll + unrealized;
+            const netDeposits = res.cash.deposits + res.cash.withdrawals;
             const box = (label, val, cls) => `<div class="stat-box"><div class="stat-label">${label}</div><div class="stat-value ${cls || ''}">${val}</div></div>`;
             statsEl.innerHTML = `<div class="stats-grid">` +
-                box('Realized P&L (net of fees)', fmtSigned(total), pnlClass(total)) +
+                box('Realized P&L' + (und ? ' (' + escHtml(und) + ' only)' : ' (net of fees)'), fmtSigned(total), pnlClass(total)) +
                 box('Short options (premium)', fmtSigned(premium), pnlClass(premium)) +
                 box('Long options (LEAPS etc.)', fmtSigned(longOpt), pnlClass(longOpt)) +
                 box('Shares', fmtSigned(eq), pnlClass(eq)) +
-                box('Interest', und ? 'n/a' : fmtSigned(interest), und ? '' : pnlClass(interest)) +
-                box('Reg. fee adjustments', und ? 'n/a' : fmtSigned(fees), und ? '' : pnlClass(fees)) +
-                box('Deposits − withdrawals', und ? 'n/a' : fmtSigned(res.cash.deposits + res.cash.withdrawals)) +
+                box('Interest' + (und ? ' (account)' : ''), fmtSigned(interest), pnlClass(interest)) +
+                box('Fees, VAT &amp; adj.' + (und ? ' (account)' : ''), fmtSigned(fees), pnlClass(fees)) +
+                box('Deposits − withdrawals' + (und ? ' (account)' : ''), fmtSigned(netDeposits)) +
                 box('Rows / date range', `${scoped.length}<div style="font-size:10px;font-weight:normal">${dates[0]} → ${dates[dates.length - 1]}</div>`) +
-                `</div>`;
+                `</div>` +
+                `<div style="margin:10px 0 4px;font-size:11px"><strong>All-in (all underlyings, incl. fees &amp; interest):</strong></div>` +
+                `<div class="stats-grid">` +
+                box('Realized, all-in', fmtSigned(realizedAll), pnlClass(realizedAll)) +
+                box('Unrealized (open positions)' + (unmarked ? `<br><span style="color:#b36b00">${unmarked} unmarked – enter marks below</span>` : ''), fmtSigned(unrealized), pnlClass(unrealized)) +
+                box('Net P&L (realized + unrealized)', fmtSigned(netPnl), pnlClass(netPnl)) +
+                box('Net deposits in file', fmtSigned(netDeposits)) +
+                `</div>` +
+                `<div style="font-size:10px;margin-top:4px">Deposits only cover transfers inside the imported files; money already in the account before the first row isn't counted.</div>`;
 
             // Monthly
             const monthly = ledgerMonthly(res, und);
@@ -3045,14 +3095,19 @@
                 }).join('') + `</tbody></table>` : '<em>No closed trades yet.</em>';
 
             // Open positions
-            document.getElementById('ledger-open').innerHTML = open.length ? `<table><thead><tr><th>Broker</th><th>Position</th><th>Qty</th><th>Opened</th><th>DTE</th><th>Cash paid (−) / received (+)</th><th>Notes</th></tr></thead><tbody>` +
+            document.getElementById('ledger-open').innerHTML = open.length ? `<table><thead><tr><th>Broker</th><th>Position</th><th>Qty</th><th>Opened</th><th>DTE</th><th>Cash paid (−) / received (+)</th><th>Mark / share</th><th>Unrealized</th><th>Notes</th></tr></thead><tbody>` +
                 open.sort((a, b) => (a.expiry || '') < (b.expiry || '') ? -1 : 1).map(o => {
                     const dte = o.expiry ? daysBetween(today, o.expiry) : '';
                     const notes = [];
                     if (o.instrument === 'option' && o.right === 'C' && o.qty > 0 && dte > 180) notes.push('LEAPS');
                     if (o.instrument === 'option' && o.qty < 0) notes.push('short');
-                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files</span>');
-                    return `<tr><td>${o.broker === 'ibkr' ? 'IBKR' : 'Tastytrade'}</td><td>${escHtml(ledgerInstrumentLabel(o))}</td><td>${o.qty > 0 ? '+' : ''}${o.qty}</td><td>${o.openDate}</td><td>${dte}</td><td>${fmtSigned(o.cashBasis)}</td><td>${notes.join(', ')}</td></tr>`;
+                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files; marked at $0</span>');
+                    const mark = ledgerMarkFor(o, today);
+                    const saved = portfolio.ledgerMarks && typeof portfolio.ledgerMarks[o.key] === 'number';
+                    const u = mark === null ? null : o.cashBasis + o.qty * mark * (o.mult || 1);
+                    if (mark !== null && !saved && !(o.expiry && o.expiry < today)) notes.push('mark from tracker');
+                    const idx = ledgerOpenKeys.indexOf(o.key);
+                    return `<tr><td>${o.broker === 'ibkr' ? 'IBKR' : 'Tastytrade'}</td><td>${escHtml(ledgerInstrumentLabel(o))}</td><td>${o.qty > 0 ? '+' : ''}${o.qty}</td><td>${o.openDate}</td><td>${dte}</td><td>${fmtSigned(o.cashBasis)}</td><td><input type="number" step="0.01" style="width:80px" value="${mark === null ? '' : round2(mark)}" placeholder="mark" onchange="setLedgerMark(${idx}, this.value)"></td><td>${u === null ? '–' : pnlCell(u)}</td><td>${notes.join(', ')}</td></tr>`;
                 }).join('') + `</tbody></table>` : '<em>No open positions in the ledger.</em>';
 
             // Closed trades
