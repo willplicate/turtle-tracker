@@ -362,16 +362,16 @@
         <!-- MONTHLY P&L TAB -->
         <div id="tab-monthly" class="tab-content">
             <div class="panel">
-                <div class="panel-header">📅 Monthly Realized P&L</div>
+                <div class="panel-header">📅 Monthly P&L</div>
                 <div class="panel-body">
                     Account:
                     <select id="monthly-account" onchange="renderMonthlyPnl()"></select>
                     <button onclick="downloadMonthlyCSV()" style="margin-left: 10px;">[ Download CSV ]</button>
-                    <div style="font-size: 11px; color: #444; margin-top: 6px;">Realized only: short calls and closed LEAPS, by close date (net of commissions). Open LEAPS gains are shown separately below.</div>
+                    <div style="font-size: 11px; color: #444; margin-top: 6px;">Realized = short calls and closed LEAPS by close date (net of commissions). Unrealized = current mark on open LEAPS vs cost, shown in the current month. Total P&L includes both.</div>
                     <canvas id="monthly-chart" width="900" height="220" style="width: 100%; max-width: 900px; background: #000; margin-top: 10px; display: block;"></canvas>
                     <table style="margin-top: 10px;">
                         <thead>
-                            <tr><th>Month</th><th>Short Calls</th><th>LEAPS</th><th>Total</th><th>Cumulative</th></tr>
+                            <tr><th>Month</th><th>Short Calls (realized)</th><th>LEAPS (realized)</th><th>LEAPS (unrealized, open)</th><th>Total P&L</th><th>Cumulative</th></tr>
                         </thead>
                         <tbody id="monthly-tbody"></tbody>
                     </table>
@@ -1073,7 +1073,7 @@
             const add = (date, key, amt) => {
                 if (!isValidDateStr(date)) return;
                 const m = date.slice(0, 7);
-                if (!buckets[m]) buckets[m] = { calls: 0, leaps: 0 };
+                if (!buckets[m]) buckets[m] = { calls: 0, leaps: 0, unrealized: 0 };
                 buckets[m][key] += amt;
             };
             portfolio.leaps.forEach(l => {
@@ -1086,15 +1086,23 @@
                 if (accountId && c.parentLeapsId !== accountId) return;
                 if (c.status === 'closed') add(c.closeDate, 'calls', callNetPnl(c));
             });
+            // Open LEAPS mark-to-market is a running figure since open, so it is shown in the current month.
+            let unrealized = 0, hasOpen = false;
+            portfolio.leaps.forEach(l => {
+                if (l.status === 'closed' || (accountId && l.id !== accountId)) return;
+                hasOpen = true;
+                unrealized += getCurrentLEAPSValue(l.id) - l.openPremium * getContracts(l);
+            });
+            if (hasOpen) add(localToday(), 'unrealized', unrealized);
             const months = Object.keys(buckets).sort();
             if (months.length === 0) return [];
             const rows = [];
             let cum = 0;
             for (let m = months[0]; m <= months[months.length - 1]; m = nextMonth(m)) {
-                const b = buckets[m] || { calls: 0, leaps: 0 };
-                const total = b.calls + b.leaps;
+                const b = buckets[m] || { calls: 0, leaps: 0, unrealized: 0 };
+                const total = b.calls + b.leaps + b.unrealized;
                 cum += total;
-                rows.push({ month: m, calls: b.calls, leaps: b.leaps, total: total, cumulative: cum });
+                rows.push({ month: m, calls: b.calls, leaps: b.leaps, unrealized: b.unrealized, total: total, cumulative: cum });
             }
             return rows;
         }
@@ -1114,23 +1122,20 @@
             const rows = computeMonthlyPnl(accountId);
             const tbody = document.getElementById('monthly-tbody');
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5"><em>No closed trades yet</em></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6"><em>No trades yet</em></td></tr>';
             } else {
                 const sum = k => rows.reduce((a, r) => a + r[k], 0);
                 const cell = v => `<td class="${pnlClass(v)}">${formatMoney(v)}</td>`;
                 tbody.innerHTML = rows.slice().reverse().map(r =>
-                    `<tr><td>${r.month}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}</tr>`
+                    `<tr><td>${r.month}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.unrealized)}${cell(r.total)}${cell(r.cumulative)}</tr>`
                 ).join('') +
-                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td></tr>`;
+                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('unrealized'))}${cell(sum('total'))}<td></td></tr>`;
             }
 
-            let unrealized = 0;
-            portfolio.leaps.forEach(l => {
-                if (l.status === 'closed' || (accountId && l.id !== accountId)) return;
-                unrealized += getCurrentLEAPSValue(l.id) - l.openPremium * getContracts(l);
-            });
+            const realized = rows.reduce((a, r) => a + r.calls + r.leaps, 0);
+            const unreal = rows.reduce((a, r) => a + r.unrealized, 0);
             document.getElementById('monthly-unrealized').innerHTML =
-                `Unrealized (open LEAPS, not in table): <span class="${pnlClass(unrealized)}">${formatMoney(unrealized)}</span>`;
+                `Realized <span class="${pnlClass(realized)}">${formatMoney(realized)}</span> + Unrealized (open LEAPS) <span class="${pnlClass(unreal)}">${formatMoney(unreal)}</span> = Total P&L <span class="${pnlClass(realized + unreal)}">${formatMoney(realized + unreal)}</span>`;
 
             drawMonthlyChart(rows);
         }
@@ -1170,8 +1175,8 @@
 
         function downloadMonthlyCSV() {
             const rows = computeMonthlyPnl(document.getElementById('monthly-account').value);
-            const csv = 'Month,Short Calls,LEAPS,Total,Cumulative\n' + rows.map(r =>
-                [r.month, r.calls, r.leaps, r.total, r.cumulative].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
+            const csv = 'Month,Short Calls (realized),LEAPS (realized),LEAPS (unrealized),Total,Cumulative\n' + rows.map(r =>
+                [r.month, r.calls, r.leaps, r.unrealized, r.total, r.cumulative].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
             ).join('\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
