@@ -2775,7 +2775,7 @@
                 } else if (/deposit/i.test(type)) row.kind = 'deposit';
                 else if (/withdraw/i.test(type)) row.kind = 'withdrawal';
                 else if (/interest/i.test(type)) row.kind = 'interest';
-                else if (/fee/i.test(type)) row.kind = 'fee';
+                else if (/fee|\btax\b/i.test(type)) row.kind = 'fee';
                 else { row.kind = 'other'; notes.push('Unrecognised IBKR transaction type: ' + type); }
                 out.push(row);
             });
