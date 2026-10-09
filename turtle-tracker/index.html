@@ -2775,7 +2775,7 @@
                 } else if (/deposit/i.test(type)) row.kind = 'deposit';
                 else if (/withdraw/i.test(type)) row.kind = 'withdrawal';
                 else if (/interest/i.test(type)) row.kind = 'interest';
-                else if (/fee|\btax\b/i.test(type)) row.kind = 'fee';
+                else if (/fee|\btax\b|\bVAT\b/i.test(type)) row.kind = 'fee';
                 else { row.kind = 'other'; notes.push('Unrecognised IBKR transaction type: ' + type); }
                 out.push(row);
             });
@@ -2799,6 +2799,14 @@
         // Adds new rows to portfolio.ledger, skipping ids already present.
         function addToLedger(rows) {
             if (!Array.isArray(portfolio.ledger)) portfolio.ledger = [];
+            // IBKR tax rows (VAT / Sales Tax on market-data fees) used to import as kind 'other'. The id embeds
+            // the kind, so reclassify saved rows and rewrite their ids or a re-import would double-count them.
+            portfolio.ledger.forEach(r => {
+                if (r.broker === 'ibkr' && r.kind === 'other' && /\bVAT\b|\btax\b/i.test(r.desc || '')) {
+                    r.id = r.id.replace('|other|', '|fee|');
+                    r.kind = 'fee';
+                }
+            });
             const have = new Set(portfolio.ledger.map(r => r.id));
             let added = 0, dup = 0;
             rows.forEach(r => {
