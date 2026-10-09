@@ -245,6 +245,7 @@
         <a href="#" onclick="showTab('combined')">[ 📊 Combined Dashboard ]</a>
         <a href="#" onclick="showTab('positions')">[ 📈 Individual Positions ]</a>
         <a href="#" onclick="showTab('monthly')">[ 📅 Monthly P&L ]</a>
+        <a href="#" onclick="showTab('ledger')">[ 📒 Ledger ]</a>
         <a href="#" onclick="showTab('data')">[ 💾 Data / Import ]</a>
         <a href="#" onclick="showTab('simulator')">[ 🎮 Simulator ]</a>
         <a href="#" onclick="showRulesCheatsheet()">[ 📋 Rules Cheatsheet ]</a>
@@ -378,6 +379,40 @@
                     <div id="monthly-unrealized" style="margin-top: 10px; font-size: 12px;"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- BROKER LEDGER TAB -->
+        <div id="tab-ledger" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">📒 Broker Trade Ledger</div>
+                <div class="panel-body">
+                    <div style="font-size: 11px; color: #444; margin-bottom: 8px;">Import raw broker exports; positions and realized P&L below are derived from the fills (FIFO, net of commissions and fees). Supports the <strong>Tastytrade Transactions CSV</strong> and the <strong>IBKR Transaction History statement</strong>. Import as many files as you like: overlapping rows are recognised and skipped, so re-importing is safe. The ledger is separate from your hand-entered LEAPS / call records and is included in the JSON backup.</div>
+                    <input type="file" id="ledger-files" accept=".csv" multiple>
+                    <button onclick="importLedgerFiles()" class="primary">[ Import Files ]</button>
+                    <div id="ledger-import-msg" style="margin-top: 8px; font-size: 12px;"></div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Summary</div>
+                <div class="panel-body">
+                    Broker:
+                    <select id="ledger-broker" onchange="renderLedger()">
+                        <option value="">All</option>
+                        <option value="tastytrade">Tastytrade</option>
+                        <option value="ibkr">IBKR</option>
+                    </select>
+                    Underlying: <select id="ledger-underlying" onchange="renderLedger()"></select>
+                    <label style="margin-left: 10px;"><input type="checkbox" onchange="toggleLedgerShowAll(this.checked)"> show all rows</label>
+                    <button onclick="downloadLedgerCSV()" style="margin-left: 10px;">[ Download Ledger CSV ]</button>
+                    <button onclick="clearLedger()" style="background: #800000; color: #fff;">[ Clear Ledger ]</button>
+                    <div id="ledger-stats" style="margin-top: 10px;"></div>
+                </div>
+            </div>
+            <div class="panel"><div class="panel-header">Realized P&L by month (by close date)</div><div class="panel-body" id="ledger-monthly"></div></div>
+            <div class="panel"><div class="panel-header">Open positions (derived)</div><div class="panel-body" id="ledger-open"></div></div>
+            <div class="panel"><div class="panel-header">Closed trades</div><div class="panel-body" id="ledger-closed"></div></div>
+            <div class="panel"><div class="panel-header">Unmatched closes</div><div class="panel-body" id="ledger-orphans"></div></div>
+            <div class="panel"><div class="panel-header">Raw transactions</div><div class="panel-body" id="ledger-raw"></div></div>
         </div>
 
         <!-- DATA / IMPORT TAB -->
@@ -823,12 +858,13 @@
     <script>
         // ==================== DATA STORE ====================
         
-        // Structure: { leaps: [], calls: [], history: {} }
+        // Structure: { leaps: [], calls: [], history: {}, ledger: [] }
         // Each LEAPS has an ID, calls reference their parent LEAPS ID
         let portfolio = {
             leaps: [],
             calls: [],
-            history: {}  // keyed by leapsId
+            history: {},  // keyed by leapsId
+            ledger: []    // normalized broker transactions (see BROKER TRADE LEDGER)
         };
         let apiKey = 'VAD1Q74JGQ6JTG42';
         let currentIWM = null;
@@ -851,6 +887,7 @@
             if (!Array.isArray(portfolio.leaps)) portfolio.leaps = [];
             if (!Array.isArray(portfolio.calls)) portfolio.calls = [];
             if (!portfolio.history || typeof portfolio.history !== 'object') portfolio.history = {};
+            if (!Array.isArray(portfolio.ledger)) portfolio.ledger = [];
             if (repairBlankHistoryDates()) saveData();
             updateDisplay();
         }
@@ -940,6 +977,7 @@
             updateAccountCards();
             updatePositionSelector();
             renderMonthlyPnl();
+            renderLedger();
             if (selectedAccountId) {
                 showPositionDetail();
             }
@@ -1634,21 +1672,23 @@
                 return {
                     leaps: data.filter(x => x && x.type === 'LEAPS'),
                     calls: data.filter(x => x && x.type === 'SHORT_CALL'),
-                    history: {}
+                    history: {},
+                    ledger: []
                 };
             }
-            if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls))) {
+            if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls) || Array.isArray(data.ledger))) {
                 return {
                     leaps: Array.isArray(data.leaps) ? data.leaps : [],
                     calls: Array.isArray(data.calls) ? data.calls : [],
-                    history: data.history && typeof data.history === 'object' ? data.history : {}
+                    history: data.history && typeof data.history === 'object' ? data.history : {},
+                    ledger: Array.isArray(data.ledger) ? data.ledger.filter(r => r && r.id) : []
                 };
             }
             return null;
         }
 
         function mergeIntoPortfolio(incoming) {
-            const stats = { leaps: 0, calls: 0, points: 0 };
+            const stats = { leaps: 0, calls: 0, points: 0, ledger: 0 };
             const leapsIds = new Set(portfolio.leaps.map(l => l.id));
             const callIds = new Set(portfolio.calls.map(c => c.id));
 
@@ -1675,6 +1715,7 @@
                     stats.points++;
                 });
             });
+            if (incoming.ledger && incoming.ledger.length) stats.ledger = addToLedger(incoming.ledger).added;
             repairBlankHistoryDates();
             return stats;
         }
@@ -1686,11 +1727,14 @@
                     alert('Invalid JSON format. Expected { leaps: [], calls: [], history: {} } or an array of LEAPS / SHORT_CALL objects.');
                     return;
                 }
-                const summary = `${incoming.leaps.length} LEAPS, ${incoming.calls.length} short call(s)`;
+                const summary = `${incoming.leaps.length} LEAPS, ${incoming.calls.length} short call(s)` +
+                    (incoming.ledger.length ? `, ${incoming.ledger.length} ledger row(s)` : '');
                 const replace = portfolio.leaps.length > 0 &&
                     confirm(`File contains ${summary}.\n\nOK = REPLACE everything currently stored.\nCancel = choose merge instead.`);
                 if (replace) {
-                    portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history };
+                    // A backup from before the ledger existed must not wipe the ledger.
+                    portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history,
+                        ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger };
                     repairBlankHistoryDates();
                     saveData();
                     updateDisplay();
@@ -1701,7 +1745,7 @@
                 const stats = mergeIntoPortfolio(incoming);
                 saveData();
                 updateDisplay();
-                alert(`Merged: ${stats.leaps} new LEAPS, ${stats.calls} new call(s), ${stats.points} new history point(s).`);
+                alert(`Merged: ${stats.leaps} new LEAPS, ${stats.calls} new call(s), ${stats.points} new history point(s), ${stats.ledger} new ledger row(s).`);
             } catch (e) {
                 alert('Error parsing JSON: ' + e.message);
             }
@@ -2525,12 +2569,505 @@
         
         function clearAllData() {
             if (confirm('Delete ALL data?')) {
-                portfolio = { leaps: [], calls: [], history: {} };
+                portfolio = { leaps: [], calls: [], history: {}, ledger: [] };
                 saveData();
                 updateDisplay();
             }
         }
         
+        // ==================== BROKER TRADE LEDGER ====================
+        // portfolio.ledger = array of normalized broker transactions (one row per fill / cash movement).
+        // Positions and realized P&L are DERIVED from it by computeLedger(); nothing derived is stored.
+        //
+        // Row shape:
+        //  { id, broker:'tastytrade'|'ibkr', date:'YYYY-MM-DD', ts, seq, kind, side:'BUY'|'SELL'|'',
+        //    openClose:'open'|'close'|'', instrument:'option'|'equity'|'', underlying, right:'C'|'P'|'',
+        //    strike, expiry, qty, mult, price, value, commission, fees, net, orderId, desc }
+        // kind: trade | expire | assign | exercise | deposit | withdrawal | interest | fee | other
+        // Cash fields are signed from the account's view (credit +, debit -): net = value + commission + fees.
+
+        function ledgerNum(s) {
+            if (s === undefined || s === null) return 0;
+            const t = String(s).replace(/[,$\s]/g, '');
+            if (t === '' || t === '--') return 0;
+            const n = parseFloat(t);
+            return isNaN(n) ? 0 : n;
+        }
+
+        function round2(n) { return Math.round(n * 100) / 100; }
+
+        function escHtml(s) {
+            return String(s === undefined || s === null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // CSV parser: quoted fields, escaped quotes, CRLF, BOM.
+        function parseCSVRows(text) {
+            const rows = [];
+            let row = [], field = '', inQ = false;
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                if (inQ) {
+                    if (ch === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false;
+                    } else field += ch;
+                } else if (ch === '"') inQ = true;
+                else if (ch === ',') { row.push(field); field = ''; }
+                else if (ch === '\n' || ch === '\r') {
+                    if (ch === '\r' && text[i + 1] === '\n') i++;
+                    row.push(field); field = '';
+                    if (row.length > 1 || row[0] !== '') rows.push(row);
+                    row = [];
+                } else field += ch;
+            }
+            row.push(field);
+            if (row.length > 1 || row[0] !== '') rows.push(row);
+            return rows;
+        }
+
+        // 'IWM   261009C00280000' -> { underlying:'IWM', expiry:'2026-10-09', right:'C', strike:280 }
+        function parseOccSymbol(sym) {
+            const m = String(sym || '').replace(/\s+/g, '').match(/^([A-Z.]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/);
+            if (!m) return null;
+            return { underlying: m[1], expiry: `20${m[2]}-${m[3]}-${m[4]}`, right: m[5], strike: parseInt(m[6], 10) / 1000 };
+        }
+
+        function detectLedgerFormat(text) {
+            const head = text.replace(/^﻿/, '').slice(0, 4000);
+            if (head.includes('Transaction History,Header')) return 'ibkr';
+            if (/(^|\n)Date,Type,Sub Type,Action,Symbol/.test(head)) return 'tastytrade';
+            return null;
+        }
+
+        // Tastytrade timestamps carry a local UTC offset that differs between exports ('+0100' vs '+0000'),
+        // so the same fill must be keyed by its UTC instant. Trade dates are the US market (New York) date.
+        function normalizeTastyTimestamp(ts) {
+            const d = new Date(ts.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+            if (isNaN(d.getTime())) return { iso: ts, date: ts.slice(0, 10) };
+            const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+            return { iso: d.toISOString(), date };
+        }
+
+        function blankLedgerRow(broker) {
+            return {
+                id: '', broker, date: '', ts: '', seq: 0, kind: 'other', side: '', openClose: '',
+                instrument: '', underlying: '', right: '', strike: 0, expiry: '', qty: 0, mult: 1,
+                price: 0, value: 0, commission: 0, fees: 0, net: 0, orderId: '', desc: ''
+            };
+        }
+
+        // Tastytrade "Transactions" export. Trade rows carry an Order #; Receive Deliver rows
+        // (expiration / assignment / exercise / delivered shares) do not.
+        function parseTastytradeLedger(text) {
+            const rows = parseCSVRows(text);
+            const col = {};
+            rows[0].forEach((h, i) => { col[h.trim()] = i; });
+            const missing = ['Date', 'Type', 'Sub Type', 'Symbol', 'Total'].filter(n => !(n in col));
+            if (missing.length) throw new Error('Tastytrade CSV is missing columns: ' + missing.join(', '));
+            const out = [], notes = [];
+            const body = rows.slice(1);
+            const dcol = col['Date'];
+            const descending = body.length > 1 && body[0][dcol] > body[body.length - 1][dcol];
+
+            body.forEach((r, i) => {
+                const idx = descending ? body.length - i : i;
+                const g = name => (name in col ? (r[col[name]] || '').trim() : '');
+                const ts = g('Date');
+                if (!ts) return;
+                const type = g('Type'), sub = g('Sub Type');
+                const row = blankLedgerRow('tastytrade');
+                const when = normalizeTastyTimestamp(ts);
+                row.date = when.date;
+                row.ts = when.iso;
+                row.seq = idx;
+                row.value = ledgerNum(g('Value'));
+                row.commission = ledgerNum(g('Commissions'));
+                row.fees = ledgerNum(g('Fees'));
+                row.net = ledgerNum(g('Total'));
+                row.orderId = g('Order #');
+                row.desc = g('Description');
+
+                if (type === 'Money Movement') {
+                    if (sub === 'Deposit') row.kind = 'deposit';
+                    else if (sub === 'Withdrawal') row.kind = 'withdrawal';
+                    else if (/Interest/i.test(sub)) row.kind = 'interest';
+                    else if (sub === 'Balance Adjustment') row.kind = 'fee';
+                    else { row.kind = 'other'; notes.push('Unrecognised money movement: ' + sub); }
+                    row.desc = row.desc || sub;
+                } else if (type === 'Trade' || type === 'Receive Deliver') {
+                    const symbol = g('Symbol');
+                    const instType = g('Instrument Type');
+                    const occ = parseOccSymbol(symbol);
+                    const isOption = /Option/i.test(instType) || !!occ;
+                    row.instrument = isOption ? 'option' : 'equity';
+                    row.underlying = (occ && occ.underlying) || g('Underlying Symbol') || symbol;
+                    if (isOption) {
+                        row.right = occ ? occ.right : (g('Call or Put').toUpperCase().startsWith('P') ? 'P' : 'C');
+                        row.strike = occ ? occ.strike : ledgerNum(g('Strike Price'));
+                        row.expiry = occ ? occ.expiry : '';
+                        row.mult = ledgerNum(g('Multiplier')) || 100;
+                    }
+                    row.qty = Math.abs(ledgerNum(g('Quantity')));
+                    row.price = row.qty ? Math.abs(row.value) / (row.qty * row.mult) : 0;
+
+                    if (sub === 'Expiration' || sub === 'Assignment' || sub === 'Exercise') {
+                        row.kind = sub === 'Expiration' ? 'expire' : sub === 'Assignment' ? 'assign' : 'exercise';
+                        // Assignment removes a short; exercise removes a long; expiration carries its own Action.
+                        const action = g('Action');
+                        row.side = sub === 'Assignment' ? 'BUY' : sub === 'Exercise' ? 'SELL'
+                            : (action.startsWith('SELL') ? 'SELL' : 'BUY');
+                        row.openClose = 'close';
+                    } else if (/^(Buy|Sell) to (Open|Close)$/.test(sub)) {
+                        row.kind = 'trade';
+                        row.side = sub.startsWith('Buy') ? 'BUY' : 'SELL';
+                        row.openClose = sub.endsWith('Open') ? 'open' : 'close';
+                    } else {
+                        row.kind = 'other';
+                        notes.push('Unrecognised trade sub-type: ' + sub);
+                    }
+                } else {
+                    row.kind = 'other';
+                    notes.push('Unrecognised row type: ' + type);
+                }
+                out.push(row);
+            });
+            return { rows: out, notes };
+        }
+
+        // IBKR "Transaction History" statement. It has no trade id, so duplicates are caught by a
+        // composite key. It also doesn't say open vs close; computeLedger infers that from the book.
+        function parseIBKRLedger(text) {
+            const rows = parseCSVRows(text);
+            const hdr = rows.find(r => r[0] === 'Transaction History' && r[1] === 'Header');
+            if (!hdr) throw new Error('No "Transaction History" section found in this IBKR file.');
+            const col = {};
+            hdr.forEach((h, i) => { col[h.trim()] = i; });
+            const missing = ['Date', 'Transaction Type', 'Symbol', 'Quantity', 'Price', 'Gross Amount', 'Commission', 'Net Amount']
+                .filter(n => !(n in col));
+            if (missing.length) throw new Error('IBKR CSV is missing columns: ' + missing.join(', '));
+
+            const data = rows.filter(r => r[0] === 'Transaction History' && r[1] === 'Data');
+            // Statements list newest first; make seq follow real time order within a day.
+            const descending = data.length > 1 && data[0][col['Date']] > data[data.length - 1][col['Date']];
+            const out = [], notes = [];
+            data.forEach((r, idx) => {
+                const g = name => (name in col ? (r[col[name]] || '').trim() : '');
+                const row = blankLedgerRow('ibkr');
+                row.date = g('Date').slice(0, 10);
+                row.ts = g('Date');
+                row.seq = descending ? data.length - idx : idx;
+                row.desc = g('Description');
+                row.value = ledgerNum(g('Gross Amount'));
+                row.commission = ledgerNum(g('Commission'));
+                row.net = ledgerNum(g('Net Amount'));
+                row.fees = round2(row.net - row.value - row.commission) === 0 ? 0 : row.net - row.value - row.commission;
+                const type = g('Transaction Type');
+                const occ = parseOccSymbol(g('Symbol'));
+                if (type === 'Buy' || type === 'Sell') {
+                    row.kind = 'trade';
+                    row.side = type === 'Buy' ? 'BUY' : 'SELL';
+                    row.instrument = occ ? 'option' : 'equity';
+                    row.underlying = occ ? occ.underlying : g('Symbol');
+                    if (occ) { row.right = occ.right; row.strike = occ.strike; row.expiry = occ.expiry; row.mult = 100; }
+                    row.qty = Math.abs(ledgerNum(g('Quantity')));
+                    row.price = ledgerNum(g('Price'));
+                } else if (/deposit/i.test(type)) row.kind = 'deposit';
+                else if (/withdraw/i.test(type)) row.kind = 'withdrawal';
+                else if (/interest/i.test(type)) row.kind = 'interest';
+                else if (/fee/i.test(type)) row.kind = 'fee';
+                else { row.kind = 'other'; notes.push('Unrecognised IBKR transaction type: ' + type); }
+                out.push(row);
+            });
+            return { rows: out, notes };
+        }
+
+        // Stable ids so re-importing overlapping files is a no-op. The occurrence counter keeps two genuinely
+        // identical fills (same second / price / size) apart within one file.
+        function assignLedgerIds(rows) {
+            const seen = {};
+            rows.forEach(r => {
+                const k = r.broker === 'tastytrade'
+                    ? ['tt', r.ts, r.orderId, r.kind, r.side, r.underlying, r.right, r.strike, r.expiry, r.qty, r.value, r.net, r.desc].join('|')
+                    : ['ib', r.ts, r.kind, r.side, r.underlying, r.right, r.strike, r.expiry, r.qty, r.price, r.value, r.net, r.desc].join('|');
+                seen[k] = (seen[k] || 0) + 1;
+                r.id = k + '#' + seen[k];
+            });
+            return rows;
+        }
+
+        // Adds new rows to portfolio.ledger, skipping ids already present.
+        function addToLedger(rows) {
+            if (!Array.isArray(portfolio.ledger)) portfolio.ledger = [];
+            const have = new Set(portfolio.ledger.map(r => r.id));
+            let added = 0, dup = 0;
+            rows.forEach(r => {
+                if (have.has(r.id)) { dup++; return; }
+                portfolio.ledger.push(r);
+                have.add(r.id);
+                added++;
+            });
+            return { added, dup };
+        }
+
+        // ---- Position / P&L engine --------------------------------------------------------------
+        // FIFO lot matching per (broker, instrument). A trade first closes opposite-side lots, any
+        // remainder opens a new lot. Cash per unit includes commissions + fees, so realized P&L is net.
+        // Expiration/assignment/exercise close lots at $0 (the share leg of an assignment is its own row).
+        function ledgerAssetKey(r) {
+            return r.instrument === 'option'
+                ? `${r.broker}|${r.underlying} ${r.expiry} ${r.right}${r.strike}`
+                : `${r.broker}|${r.underlying} shares`;
+        }
+
+        function computeLedger(txs) {
+            const rows = txs.slice().sort((a, b) =>
+                a.date < b.date ? -1 : a.date > b.date ? 1 : (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) || (a.seq - b.seq));
+            const books = {};
+            const closed = [], orphans = [];
+            const cash = { deposits: 0, withdrawals: 0, interest: 0, fees: 0, other: 0 };
+            const cashByMonth = {};
+            const addCash = (r, bucket) => {
+                cash[bucket] += r.net;
+                const m = r.date.slice(0, 7);
+                (cashByMonth[m] = cashByMonth[m] || { interest: 0, fees: 0 });
+                if (bucket === 'interest' || bucket === 'fees') cashByMonth[m][bucket] += r.net;
+            };
+
+            rows.forEach(r => {
+                if (r.kind === 'deposit') return addCash(r, 'deposits');
+                if (r.kind === 'withdrawal') return addCash(r, 'withdrawals');
+                if (r.kind === 'interest') return addCash(r, 'interest');
+                if (r.kind === 'fee') return addCash(r, 'fees');
+                if (r.kind === 'other') return addCash(r, 'other');
+                if (!r.qty) return;
+
+                const key = ledgerAssetKey(r);
+                const lots = books[key] || (books[key] = []);
+                const sgn = r.side === 'BUY' ? 1 : -1;
+                const closeCashPer = r.net / r.qty;
+                let remaining = r.qty;
+
+                while (remaining > 1e-9 && lots.length && Math.sign(lots[0].qty) === -sgn) {
+                    const lot = lots[0];
+                    const m = Math.min(remaining, Math.abs(lot.qty));
+                    const openCash = lot.unitCash * m, closeCash = closeCashPer * m;
+                    closed.push({
+                        broker: r.broker, key, underlying: r.underlying, instrument: r.instrument,
+                        right: r.right, strike: r.strike, expiry: r.expiry,
+                        dir: lot.qty < 0 ? 'short' : 'long', qty: m, mult: r.mult,
+                        openDate: lot.date, closeDate: r.date, how: r.kind === 'trade' ? 'closed' : r.kind,
+                        openCash, closeCash, pnl: openCash + closeCash
+                    });
+                    lot.qty -= Math.sign(lot.qty) * m;
+                    remaining -= m;
+                    if (Math.abs(lot.qty) < 1e-9) lots.shift();
+                }
+                if (remaining <= 1e-9) return;
+
+                // Leftover. A close-type row with nothing to close means the position was opened before
+                // the imported history started; keep it out of P&L and flag it.
+                if (r.openClose === 'close') {
+                    orphans.push({ row: r, qty: remaining, cash: closeCashPer * remaining });
+                    return;
+                }
+                lots.push({ date: r.date, qty: sgn * remaining, unitCash: closeCashPer, row: r });
+            });
+
+            // Open positions
+            const open = [];
+            Object.keys(books).forEach(key => {
+                const lots = books[key];
+                if (!lots.length) return;
+                const r = lots[0].row;
+                const qty = lots.reduce((s, l) => s + l.qty, 0);
+                const cashBasis = lots.reduce((s, l) => s + l.unitCash * Math.abs(l.qty), 0);
+                open.push({
+                    key, broker: r.broker, underlying: r.underlying, instrument: r.instrument, right: r.right,
+                    strike: r.strike, expiry: r.expiry, mult: r.mult, qty, cashBasis,
+                    openDate: lots[0].date, lots: lots.length
+                });
+            });
+
+            return { closed, open, orphans, cash, cashByMonth, rows };
+        }
+
+        function ledgerCategory(c) {
+            if (c.instrument === 'equity') return 'equity';
+            return c.dir === 'short' ? 'shortOptions' : 'longOptions';
+        }
+
+        // { 'YYYY-MM': { shortOptions, longOptions, equity, interest, fees, total } }.
+        // Interest and fee adjustments are account-wide, so they only appear when no underlying filter is set.
+        function ledgerMonthly(res, underlying) {
+            const out = {};
+            const slot = m => out[m] || (out[m] = { shortOptions: 0, longOptions: 0, equity: 0, interest: 0, fees: 0, total: 0 });
+            res.closed.filter(c => !underlying || c.underlying === underlying)
+                .forEach(c => { slot(c.closeDate.slice(0, 7))[ledgerCategory(c)] += c.pnl; });
+            if (!underlying) {
+                Object.keys(res.cashByMonth).forEach(m => {
+                    slot(m).interest += res.cashByMonth[m].interest;
+                    slot(m).fees += res.cashByMonth[m].fees;
+                });
+            }
+            Object.keys(out).forEach(m => {
+                const s = out[m];
+                s.total = s.shortOptions + s.longOptions + s.equity + s.interest + s.fees;
+            });
+            return out;
+        }
+
+        // ---- Ledger UI -----------------------------------------------------------------------------
+        let ledgerShowAll = false;
+
+        function fmtSigned(n) {
+            const v = round2(n);
+            return (v < 0 ? '-$' : '$') + Math.abs(v).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        function pnlCell(n) { return `<span class="${pnlClass(n)}">${fmtSigned(n)}</span>`; }
+
+        function ledgerInstrumentLabel(x) {
+            if (x.instrument === 'option') return `${x.underlying} ${x.expiry} $${x.strike} ${x.right === 'C' ? 'Call' : 'Put'}`;
+            return `${x.underlying} shares`;
+        }
+
+        function daysBetween(a, b) {
+            return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+        }
+
+        async function importLedgerFiles() {
+            const input = document.getElementById('ledger-files');
+            const msg = document.getElementById('ledger-import-msg');
+            if (!input.files || !input.files.length) { msg.innerHTML = '<span style="color:#800000">Choose one or more CSV files first.</span>'; return; }
+            const lines = [];
+            for (const file of Array.from(input.files)) {
+                try {
+                    const text = await file.text();
+                    const fmt = detectLedgerFormat(text);
+                    if (!fmt) { lines.push(`<span style="color:#800000">✗ ${escHtml(file.name)}: not a Tastytrade Transactions CSV or an IBKR Transaction History statement.</span>`); continue; }
+                    const parsed = fmt === 'ibkr' ? parseIBKRLedger(text) : parseTastytradeLedger(text);
+                    assignLedgerIds(parsed.rows);
+                    const r = addToLedger(parsed.rows);
+                    const notes = Array.from(new Set(parsed.notes));
+                    lines.push(`✓ ${escHtml(file.name)} (${fmt === 'ibkr' ? 'IBKR' : 'Tastytrade'}): ${parsed.rows.length} rows, <strong>${r.added} new</strong>, ${r.dup} already in ledger` +
+                        (notes.length ? `<br><span style="color:#b36b00">&nbsp;&nbsp;⚠ ${notes.map(escHtml).join('; ')}</span>` : ''));
+                } catch (e) {
+                    lines.push(`<span style="color:#800000">✗ ${escHtml(file.name)}: ${escHtml(e.message)}</span>`);
+                }
+            }
+            input.value = '';
+            msg.innerHTML = lines.join('<br>');
+            saveData();
+            renderLedger();
+        }
+
+        function clearLedger() {
+            if (!confirm(`Delete all ${portfolio.ledger.length} ledger rows? Your LEAPS and short-call records are not affected. You can re-import the broker files.`)) return;
+            portfolio.ledger = [];
+            saveData();
+            renderLedger();
+        }
+
+        function downloadLedgerCSV() {
+            const cols = ['date', 'broker', 'kind', 'side', 'openClose', 'underlying', 'right', 'strike', 'expiry', 'qty', 'price', 'value', 'commission', 'fees', 'net', 'orderId', 'desc'];
+            const q = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+            const rows = portfolio.ledger.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+            const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => q(r[c])).join(','))).join('\n');
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            a.download = `turtle-ledger-${localToday()}.csv`;
+            a.click();
+        }
+
+        function renderLedger() {
+            const statsEl = document.getElementById('ledger-stats');
+            if (!statsEl) return;
+            const all = Array.isArray(portfolio.ledger) ? portfolio.ledger : [];
+
+            // Filters (rebuild underlying list but keep selection)
+            const brokerSel = document.getElementById('ledger-broker');
+            const undSel = document.getElementById('ledger-underlying');
+            const broker = brokerSel.value;
+            const prevUnd = undSel.value;
+            const unds = Array.from(new Set(all.filter(r => r.underlying && (!broker || r.broker === broker)).map(r => r.underlying))).sort();
+            undSel.innerHTML = '<option value="">All underlyings</option>' + unds.map(u => `<option value="${escHtml(u)}">${escHtml(u)}</option>`).join('');
+            undSel.value = unds.includes(prevUnd) ? prevUnd : '';
+            const und = undSel.value;
+
+            if (!all.length) {
+                statsEl.innerHTML = '<em>No broker transactions yet. Import a Tastytrade Transactions CSV and/or an IBKR Transaction History statement above.</em>';
+                ['ledger-monthly', 'ledger-open', 'ledger-closed', 'ledger-orphans', 'ledger-raw'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+                return;
+            }
+
+            const scoped = all.filter(r => !broker || r.broker === broker);
+            const res = computeLedger(scoped);
+            const closed = res.closed.filter(c => !und || c.underlying === und);
+            const open = res.open.filter(o => !und || o.underlying === und);
+            const orphans = res.orphans.filter(o => !und || o.row.underlying === und);
+            const raw = scoped.filter(r => !und || r.underlying === und);
+            const today = localToday();
+
+            // Stats
+            const sum = cat => closed.filter(c => ledgerCategory(c) === cat).reduce((s, c) => s + c.pnl, 0);
+            const premium = sum('shortOptions'), longOpt = sum('longOptions'), eq = sum('equity');
+            const interest = und ? 0 : res.cash.interest, fees = und ? 0 : res.cash.fees;
+            const total = premium + longOpt + eq + interest + fees;
+            const dates = scoped.map(r => r.date).sort();
+            const box = (label, val, cls) => `<div class="stat-box"><div class="stat-label">${label}</div><div class="stat-value ${cls || ''}">${val}</div></div>`;
+            statsEl.innerHTML = `<div class="stats-grid">` +
+                box('Realized P&L (net of fees)', fmtSigned(total), pnlClass(total)) +
+                box('Short options (premium)', fmtSigned(premium), pnlClass(premium)) +
+                box('Long options (LEAPS etc.)', fmtSigned(longOpt), pnlClass(longOpt)) +
+                box('Shares', fmtSigned(eq), pnlClass(eq)) +
+                box('Interest', und ? 'n/a' : fmtSigned(interest), und ? '' : pnlClass(interest)) +
+                box('Reg. fee adjustments', und ? 'n/a' : fmtSigned(fees), und ? '' : pnlClass(fees)) +
+                box('Deposits − withdrawals', und ? 'n/a' : fmtSigned(res.cash.deposits + res.cash.withdrawals)) +
+                box('Rows / date range', `${scoped.length}<div style="font-size:10px;font-weight:normal">${dates[0]} → ${dates[dates.length - 1]}</div>`) +
+                `</div>`;
+
+            // Monthly
+            const monthly = ledgerMonthly(res, und);
+            const months = Object.keys(monthly).sort();
+            let cum = 0;
+            document.getElementById('ledger-monthly').innerHTML = months.length ? `<table><thead><tr><th>Month</th><th>Short options</th><th>Long options</th><th>Shares</th><th>Interest</th><th>Fee adj.</th><th>Total</th><th>Cumulative</th></tr></thead><tbody>` +
+                months.map(m => {
+                    const s = monthly[m]; cum += s.total;
+                    return `<tr><td>${m}</td><td>${pnlCell(s.shortOptions)}</td><td>${pnlCell(s.longOptions)}</td><td>${pnlCell(s.equity)}</td><td>${pnlCell(s.interest)}</td><td>${pnlCell(s.fees)}</td><td>${pnlCell(s.total)}</td><td>${pnlCell(cum)}</td></tr>`;
+                }).join('') + `</tbody></table>` : '<em>No closed trades yet.</em>';
+
+            // Open positions
+            document.getElementById('ledger-open').innerHTML = open.length ? `<table><thead><tr><th>Broker</th><th>Position</th><th>Qty</th><th>Opened</th><th>DTE</th><th>Cash paid (−) / received (+)</th><th>Notes</th></tr></thead><tbody>` +
+                open.sort((a, b) => (a.expiry || '') < (b.expiry || '') ? -1 : 1).map(o => {
+                    const dte = o.expiry ? daysBetween(today, o.expiry) : '';
+                    const notes = [];
+                    if (o.instrument === 'option' && o.right === 'C' && o.qty > 0 && dte > 180) notes.push('LEAPS');
+                    if (o.instrument === 'option' && o.qty < 0) notes.push('short');
+                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files</span>');
+                    return `<tr><td>${o.broker === 'ibkr' ? 'IBKR' : 'Tastytrade'}</td><td>${escHtml(ledgerInstrumentLabel(o))}</td><td>${o.qty > 0 ? '+' : ''}${o.qty}</td><td>${o.openDate}</td><td>${dte}</td><td>${fmtSigned(o.cashBasis)}</td><td>${notes.join(', ')}</td></tr>`;
+                }).join('') + `</tbody></table>` : '<em>No open positions in the ledger.</em>';
+
+            // Closed trades
+            const closedSorted = closed.slice().sort((a, b) => a.closeDate < b.closeDate ? 1 : a.closeDate > b.closeDate ? -1 : 0);
+            const closedShown = ledgerShowAll ? closedSorted : closedSorted.slice(0, 50);
+            document.getElementById('ledger-closed').innerHTML = closed.length ? `<table><thead><tr><th>Closed</th><th>Broker</th><th>Position</th><th>Dir</th><th>Qty</th><th>Opened</th><th>Days</th><th>Open cash</th><th>Close cash</th><th>P&L</th><th>How</th></tr></thead><tbody>` +
+                closedShown.map(c => `<tr><td>${c.closeDate}</td><td>${c.broker === 'ibkr' ? 'IBKR' : 'Tasty'}</td><td>${escHtml(ledgerInstrumentLabel(c))}</td><td>${c.dir}</td><td>${c.qty}</td><td>${c.openDate}</td><td>${daysBetween(c.openDate, c.closeDate)}</td><td>${fmtSigned(c.openCash)}</td><td>${fmtSigned(c.closeCash)}</td><td>${pnlCell(c.pnl)}</td><td>${c.how}</td></tr>`).join('') +
+                `</tbody></table>` + (closed.length > closedShown.length ? `<div style="font-size:11px">Showing newest ${closedShown.length} of ${closed.length}.</div>` : '') : '<em>No closed trades yet.</em>';
+
+            // Unmatched closes
+            document.getElementById('ledger-orphans').innerHTML = orphans.length ? `<div style="font-size:11px;margin-bottom:6px">These closing trades have no opening trade in the imported files (opened before the first export). Their cash is <strong>excluded</strong> from realized P&L above; import an earlier export to include them. Total cash: <strong>${fmtSigned(orphans.reduce((s, o) => s + o.cash, 0))}</strong>.</div><table><thead><tr><th>Date</th><th>Broker</th><th>Position</th><th>Side</th><th>Qty</th><th>Cash</th></tr></thead><tbody>` +
+                orphans.map(o => `<tr><td>${o.row.date}</td><td>${o.row.broker === 'ibkr' ? 'IBKR' : 'Tasty'}</td><td>${escHtml(ledgerInstrumentLabel(o.row))}</td><td>${o.row.side}</td><td>${o.qty}</td><td>${fmtSigned(o.cash)}</td></tr>`).join('') + `</tbody></table>` : '<em>None — every close is matched to an open.</em>';
+
+            // Raw rows
+            const rawSorted = raw.slice().sort((a, b) => a.date < b.date ? 1 : a.date > b.date ? -1 : (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+            const rawShown = ledgerShowAll ? rawSorted : rawSorted.slice(0, 100);
+            document.getElementById('ledger-raw').innerHTML = `<table><thead><tr><th>Date</th><th>Broker</th><th>Kind</th><th>Side</th><th>Position</th><th>Qty</th><th>Price</th><th>Fees</th><th>Net cash</th><th>Description</th></tr></thead><tbody>` +
+                rawShown.map(r => `<tr><td>${r.date}</td><td>${r.broker === 'ibkr' ? 'IBKR' : 'Tasty'}</td><td>${r.kind}</td><td>${r.side}</td><td>${r.instrument ? escHtml(ledgerInstrumentLabel(r)) : ''}</td><td>${r.qty || ''}</td><td>${r.price ? r.price.toFixed(2) : ''}</td><td>${fmtSigned(r.commission + r.fees)}</td><td>${fmtSigned(r.net)}</td><td>${escHtml(r.desc)}</td></tr>`).join('') +
+                `</tbody></table>` + (raw.length > rawShown.length ? `<div style="font-size:11px">Showing newest ${rawShown.length} of ${raw.length}.</div>` : '');
+        }
+
+        function toggleLedgerShowAll(checked) { ledgerShowAll = checked; renderLedger(); }
+
         // ==================== MODALS & UI ====================
         
         function showTab(tabName) {
