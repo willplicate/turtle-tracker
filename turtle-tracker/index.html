@@ -422,7 +422,7 @@
                 </div>
             </div>
             <div class="panel"><div class="panel-header">Realized P&L by month (by close date)</div><div class="panel-body" id="ledger-monthly"></div></div>
-            <div class="panel"><div class="panel-header">Open positions (derived)</div><div class="panel-body" id="ledger-open"></div></div>
+            <div class="panel"><div class="panel-header">Unresolved positions (no close found in ledger)</div><div class="panel-body" id="ledger-open"></div></div>
             <div class="panel"><div class="panel-header">Closed trades</div><div class="panel-body" id="ledger-closed"></div></div>
             <div class="panel"><div class="panel-header">Unmatched closes</div><div class="panel-body" id="ledger-orphans"></div></div>
             <div class="panel"><div class="panel-header">Raw transactions</div><div class="panel-body" id="ledger-raw"></div></div>
@@ -3183,6 +3183,33 @@
                 lots.push({ date: r.date, qty: sgn * remaining, unitCash: closeCashPer, row: r });
             });
 
+            // Auto-expire: brokers like IBKR don't list expirations, so an option past its expiry with no
+            // closing row is treated as expired worthless (closed at $0 on its expiry date) when the underlying
+            // finished out of the money. Without a price for the expiry day (non-IWM) or when it finished in
+            // the money (possible assignment), it stays open and flagged.
+            const today = localToday();
+            const series = iwmSeries();
+            Object.keys(books).forEach(key => {
+                const lots = books[key];
+                if (!lots.length) return;
+                const r = lots[0].row;
+                if (r.instrument !== 'option' || !r.expiry || r.expiry >= today || r.underlying !== 'IWM') return;
+                const px = iwmAsOf(series, r.expiry);
+                if (!px || daysBetween(px.date, r.expiry) > 4) return;
+                const itm = r.right === 'C' ? px.price > r.strike : px.price < r.strike;
+                if (itm) return;
+                lots.splice(0).forEach(lot => {
+                    const m = Math.abs(lot.qty), openCash = lot.unitCash * m;
+                    closed.push({
+                        broker: r.broker, key, underlying: r.underlying, instrument: r.instrument,
+                        right: r.right, strike: r.strike, expiry: r.expiry,
+                        dir: lot.qty < 0 ? 'short' : 'long', qty: m, mult: r.mult,
+                        openDate: lot.date, closeDate: r.expiry, how: 'expired (auto)',
+                        openCash, closeCash: 0, pnl: openCash
+                    });
+                });
+            });
+
             // Open positions
             const open = [];
             Object.keys(books).forEach(key => {
@@ -3401,7 +3428,7 @@
                     const notes = [];
                     if (o.instrument === 'option' && o.right === 'C' && o.qty > 0 && dte > 180) notes.push('LEAPS');
                     if (o.instrument === 'option' && o.qty < 0) notes.push('short');
-                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files; marked at $0</span>');
+                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files; marked at $0 (ITM or no price on expiry, so not auto-expired)</span>');
                     const mark = ledgerMarkFor(o, today);
                     const saved = portfolio.ledgerMarks && typeof portfolio.ledgerMarks[o.key] === 'number';
                     const u = mark === null ? null : o.cashBasis + o.qty * mark * (o.mult || 1);
