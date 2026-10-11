@@ -368,15 +368,28 @@
                     Account:
                     <select id="monthly-account" onchange="renderMonthlyPnl()"></select>
                     <button onclick="downloadMonthlyCSV()" style="margin-left: 10px;">[ Download CSV ]</button>
+                    <span style="margin-left: 10px;">Shares benchmark:
+                        <select id="bench-mode" onchange="setBenchMode(this.value)">
+                            <option value="flows">Buy on every deposit / as capital is deployed (never sell)</option>
+                            <option value="lump">One purchase at first deposit (simple)</option>
+                        </select>
+                    </span>
                     <div style="font-size: 11px; color: #444; margin-top: 6px;">Short calls are realized in the month they close. LEAPS are marked to market at each month-end from your dated marks (as if liquidated), so LEAPS P&L is the month's change in value; when a LEAPS closes, the difference to its last mark lands in that month. Last column = what open LEAPS are up/down vs cost at month-end.</div>
+                    <div style="font-size: 11px; color: #444; margin-top: 6px;"><strong>Benchmarks (All accounts):</strong> <em>Hold LEAPS</em> = the LEAPS mark-to-market P&L alone, no short calls, so Strategy minus Hold LEAPS is what the calls added. <em>Hold Shares</em> = the money each account has put in, invested 100% in IWM shares at that day's close and never sold. It uses a starting balance or Ledger deposits when available, otherwise the capital deployed in your positions (LEAPS cost + cash reserve). To override an account with its real balance, add a starting balance in "Benchmark setup" below.</div>
                     <canvas id="monthly-chart" width="900" height="220" style="width: 100%; max-width: 900px; background: #000; margin-top: 10px; display: block;"></canvas>
+                    <div style="font-size: 12px; margin-top: 10px;"><strong>Cumulative P&L vs benchmarks</strong></div>
+                    <canvas id="monthly-bench-chart" width="900" height="260" style="width: 100%; max-width: 900px; background: #000; margin-top: 4px; display: block;"></canvas>
                     <table style="margin-top: 10px;">
                         <thead>
-                            <tr><th>Month</th><th>Short Calls (realized)</th><th>LEAPS P&L (mark-to-market change)</th><th>Total P&L</th><th>Cumulative</th><th>Open LEAPS unrealized (month-end snapshot)</th></tr>
+                            <tr><th>Month</th><th>Short Calls (realized)</th><th>LEAPS P&L (mark-to-market change)</th><th>Total P&L</th><th>Cumulative</th><th>Hold LEAPS cum.</th><th>Hold Shares cum.</th><th>Strategy vs Shares</th><th>Open LEAPS unrealized (month-end snapshot)</th></tr>
                         </thead>
                         <tbody id="monthly-tbody"></tbody>
                     </table>
                     <div id="monthly-unrealized" style="margin-top: 10px; font-size: 12px;"></div>
+                    <details style="margin-top: 12px;">
+                        <summary style="cursor: pointer; font-weight: bold;">Benchmark setup (starting balances, deposits, IWM prices)</summary>
+                        <div id="bench-setup" style="margin-top: 8px; font-size: 12px;"></div>
+                    </details>
                 </div>
             </div>
         </div>
@@ -858,7 +871,7 @@
     <script>
         // ==================== DATA STORE ====================
         
-        // Structure: { leaps: [], calls: [], history: {}, ledger: [] }
+        // Structure: { leaps: [], calls: [], history: {}, ledger: [], benchEntries: [], iwmOverrides: {} }
         // Each LEAPS has an ID, calls reference their parent LEAPS ID
         let portfolio = {
             leaps: [],
@@ -888,6 +901,8 @@
             if (!Array.isArray(portfolio.calls)) portfolio.calls = [];
             if (!portfolio.history || typeof portfolio.history !== 'object') portfolio.history = {};
             if (!Array.isArray(portfolio.ledger)) portfolio.ledger = [];
+            if (!Array.isArray(portfolio.benchEntries)) portfolio.benchEntries = [];
+            if (!portfolio.iwmOverrides || typeof portfolio.iwmOverrides !== 'object') portfolio.iwmOverrides = {};
             if (repairBlankHistoryDates()) saveData();
             updateDisplay();
         }
@@ -1166,8 +1181,10 @@
                 prevLeaps = leapsCum;
                 const total = calls + leapsChg;
                 cum += total;
-                rows.push({ month: m, calls: calls, leaps: leapsChg, unrealized: unrealized, total: total, cumulative: cum, stale: stale });
+                rows.push({ month: m, calls: calls, leaps: leapsChg, unrealized: unrealized, total: total, cumulative: cum, stale: stale, holdLeaps: leapsCum, shares: null });
             }
+            // Hold-shares benchmark is account-level, so it only applies to the all-accounts view.
+            if (!accountId) applySharesBenchmark(rows);
             return rows;
         }
 
@@ -1186,14 +1203,14 @@
             const rows = computeMonthlyPnl(accountId);
             const tbody = document.getElementById('monthly-tbody');
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6"><em>No trades yet</em></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9"><em>No trades yet</em></td></tr>';
             } else {
                 const sum = k => rows.reduce((a, r) => a + r[k], 0);
                 const cell = v => `<td class="${pnlClass(v)}">${formatMoney(v)}</td>`;
                 tbody.innerHTML = rows.slice().reverse().map(r =>
-                    `<tr><td>${r.month}${r.stale ? ' <span title="No LEAPS mark this month - value carried from an earlier mark">*</span>' : ''}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}${cell(r.unrealized)}</tr>`
+                    `<tr><td>${r.month}${r.stale ? ' <span title="No LEAPS mark this month - value carried from an earlier mark">*</span>' : ''}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}${cell(r.holdLeaps)}${sharesCells(r, cell)}${cell(r.unrealized)}</tr>`
                 ).join('') +
-                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td><td></td></tr>`;
+                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td><td></td><td></td><td></td><td></td></tr>`;
             }
 
             // Realized vs unrealized split of the lifetime total
@@ -1206,6 +1223,8 @@
                 (staleCount ? `<div style="margin-top:6px;color:#a00;">* ${staleCount} month(s) have no LEAPS mark, so the previous mark is carried forward. Add month-end marks (Update LEAPS) to fill them in.</div>` : '');
 
             drawMonthlyChart(rows);
+            drawBenchmarkChart(rows);
+            renderBenchSetup();
         }
 
         function drawMonthlyChart(rows) {
@@ -1243,13 +1262,277 @@
 
         function downloadMonthlyCSV() {
             const rows = computeMonthlyPnl(document.getElementById('monthly-account').value);
-            const csv = 'Month,Short Calls (realized),LEAPS P&L (mark-to-market change),Total,Cumulative,Open LEAPS unrealized (snapshot)\n' + rows.map(r =>
-                [r.month, r.calls, r.leaps, r.total, r.cumulative, r.unrealized].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
+            const csv = 'Month,Short Calls (realized),LEAPS P&L (mark-to-market change),Total,Cumulative,Hold LEAPS cumulative,Hold Shares cumulative,Strategy vs Shares,Open LEAPS unrealized (snapshot)\n' + rows.map(r =>
+                [r.month, r.calls, r.leaps, r.total, r.cumulative, r.holdLeaps, r.shares ? r.shares.pnl : '', r.shares ? r.cumulative - r.shares.pnl : '', r.unrealized].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
             ).join('\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
             a.download = `turtle-monthly-pnl-${localToday()}.csv`;
             a.click();
+        }
+
+        // ==================== BENCHMARKS (Monthly P&L) ====================
+        // Daily IWM closes 2025-10-10 to 2026-10-09 (from IBKR price history). Correct or extend them with
+        // portfolio.iwmOverrides {date: price}; today's live/manual price is layered on top.
+        const IWM_DAILY = [["2025-10-10",237.79],["2025-10-13",244.41],["2025-10-14",247.9],["2025-10-15",250.33],["2025-10-16",245.06],["2025-10-17",243.41],["2025-10-20",248.16],["2025-10-21",246.99],["2025-10-22",243.34],["2025-10-23",246.42],["2025-10-24",249.43],["2025-10-27",250.3],["2025-10-28",248.96],["2025-10-29",246.84],["2025-10-30",244.85],["2025-10-31",246.23],["2025-11-03",245.44],["2025-11-04",241.2],["2025-11-05",244.68],["2025-11-06",240.35],["2025-11-07",241.61],["2025-11-10",244.03],["2025-11-11",244.24],["2025-11-12",243.64],["2025-11-13",236.79],["2025-11-14",237.48],["2025-11-17",232.76],["2025-11-18",233.47],["2025-11-19",233.43],["2025-11-20",229.11],["2025-11-21",235.6],["2025-11-24",239.9],["2025-11-25",245.13],["2025-11-26",247.3],["2025-11-28",248.75],["2025-12-01",245.62],["2025-12-02",245.17],["2025-12-03",249.63],["2025-12-04",251.82],["2025-12-05",250.77],["2025-12-08",250.87],["2025-12-09",251.39],["2025-12-10",254.81],["2025-12-11",257.8],["2025-12-12",253.85],["2025-12-15",251.93],["2025-12-16",249.9],["2025-12-17",247.24],["2025-12-18",248.71],["2025-12-19",250.79],["2025-12-22",253.58],["2025-12-23",252.08],["2025-12-24",252.71],["2025-12-26",251.42],["2025-12-29",249.88],["2025-12-30",248.03],["2025-12-31",246.16],["2026-01-02",248.78],["2026-01-05",252.73],["2026-01-06",256.08],["2026-01-07",255.48],["2026-01-08",258.27],["2026-01-09",260.23],["2026-01-12",261.5],["2026-01-13",261.35],["2026-01-14",263.19],["2026-01-15",265.51],["2026-01-16",265.76],["2026-01-20",262.58],["2026-01-21",267.79],["2026-01-22",269.79],["2026-01-23",264.81],["2026-01-26",263.98],["2026-01-27",264.73],["2026-01-28",263.3],["2026-01-29",263.37],["2026-01-30",259.65],["2026-02-02",262.18],["2026-02-03",262.78],["2026-02-04",260.52],["2026-02-05",255.83],["2026-02-06",265.02],["2026-02-09",266.88],["2026-02-10",266.16],["2026-02-11",264.95],["2026-02-12",259.54],["2026-02-13",262.96],["2026-02-17",263.04],["2026-02-18",263.99],["2026-02-19",264.6],["2026-02-20",264.61],["2026-02-23",260.49],["2026-02-24",263.33],["2026-02-25",264.58],["2026-02-26",265.99],["2026-02-27",261.41],["2026-03-02",263.81],["2026-03-03",259.24],["2026-03-04",261.76],["2026-03-05",256.76],["2026-03-06",250.89],["2026-03-09",253.62],["2026-03-10",253.36],["2026-03-11",252.85],["2026-03-12",247.41],["2026-03-13",246.59],["2026-03-16",248.92],["2026-03-17",250.05],["2026-03-18",246.02],["2026-03-19",247.63],["2026-03-20",242.22],["2026-03-23",247.45],["2026-03-24",248.78],["2026-03-25",251.82],["2026-03-26",247.44],["2026-03-27",243.1],["2026-03-30",239.61],["2026-03-31",248],["2026-04-01",249.56],["2026-04-02",251.29],["2026-04-06",252.36],["2026-04-07",252.91],["2026-04-08",260.47],["2026-04-09",261.96],["2026-04-10",261.3],["2026-04-13",265.07],["2026-04-14",268.72],["2026-04-15",269.39],["2026-04-16",269.95],["2026-04-17",275.78],["2026-04-20",277.35],["2026-04-21",274.51],["2026-04-22",276.48],["2026-04-23",275.52],["2026-04-24",276.65],["2026-04-27",277.14],["2026-04-28",273.91],["2026-04-29",272.08],["2026-04-30",277.97],["2026-05-01",279.28],["2026-05-04",277.88],["2026-05-05",282.56],["2026-05-06",286.8],["2026-05-07",282.26],["2026-05-08",284.17],["2026-05-11",285.33],["2026-05-12",282.57],["2026-05-13",282.67],["2026-05-14",284.45],["2026-05-15",277.6],["2026-05-18",275.97],["2026-05-19",273],["2026-05-20",279.87],["2026-05-21",282.49],["2026-05-22",285.12],["2026-05-26",290.51],["2026-05-27",290.37],["2026-05-28",292.03],["2026-05-29",290.43],["2026-06-01",288.98],["2026-06-02",291.66],["2026-06-03",287.67],["2026-06-04",292.01],["2026-06-05",281.65],["2026-06-08",284.11],["2026-06-09",285.02],["2026-06-10",282.05],["2026-06-11",290.41],["2026-06-12",292.95],["2026-06-15",294.64],["2026-06-16",292.08],["2026-06-17",289.88],["2026-06-18",295.59],["2026-06-22",298.18],["2026-06-23",295.32],["2026-06-24",296.69],["2026-06-25",298.91],["2026-06-26",299.83],["2026-06-29",298.97],["2026-06-30",300.45],["2026-07-01",299.32],["2026-07-02",297.58],["2026-07-06",298.9],["2026-07-07",296.19],["2026-07-08",293.48],["2026-07-09",297.24],["2026-07-10",295.99],["2026-07-13",293.48],["2026-07-14",294.51],["2026-07-15",295.77],["2026-07-16",295.59],["2026-07-17",294.04],["2026-07-20",292.31],["2026-07-21",296.54],["2026-07-22",293.79],["2026-07-23",292.09],["2026-07-24",291.17],["2026-07-27",292.91],["2026-07-28",293.37],["2026-07-29",288.57],["2026-07-30",292.59],["2026-07-31",291.2],["2026-08-03",296.22],["2026-08-04",301.71],["2026-08-05",299.77],["2026-08-06",298.25],["2026-08-07",301.56],["2026-08-10",299.98],["2026-08-11",300.99],["2026-08-12",302.71],["2026-08-13",303.5],["2026-08-14",305.09],["2026-08-17",304.06],["2026-08-18",300.23],["2026-08-19",301.72],["2026-08-20",297.67],["2026-08-21",299.96],["2026-08-24",297.97],["2026-08-25",299.23],["2026-08-26",298.93],["2026-08-27",299.81],["2026-08-28",295.75],["2026-08-31",293.93],["2026-09-01",290.57],["2026-09-02",294.01],["2026-09-03",295.19],["2026-09-04",296.01],["2026-09-08",294.67],["2026-09-09",290.64],["2026-09-10",287.7],["2026-09-11",288.89],["2026-09-14",287.91],["2026-09-15",285.14],["2026-09-16",283.92],["2026-09-17",285.43],["2026-09-18",284.1],["2026-09-21",285.58],["2026-09-22",287.21],["2026-09-23",281.92],["2026-09-24",281.66],["2026-09-25",281.97],["2026-09-28",280.02],["2026-09-29",279.01],["2026-09-30",277.89],["2026-10-01",279.02],["2026-10-02",281.52],["2026-10-05",283.38],["2026-10-06",281.34],["2026-10-07",277.7],["2026-10-08",277.57],["2026-10-09",278.94]];
+
+        // Sorted [{date, price}] from the bundled closes, your overrides, and today's live/manual price.
+        function iwmSeries() {
+            const map = {};
+            IWM_DAILY.forEach(([d, c]) => { map[d] = c; });
+            Object.keys(portfolio.iwmOverrides || {}).forEach(d => {
+                const v = parseFloat(portfolio.iwmOverrides[d]);
+                if (isValidDateStr(d) && v > 0) map[d] = v;
+            });
+            if (currentIWM > 0) map[localToday()] = currentIWM;
+            return Object.keys(map).sort().map(d => ({ date: d, price: map[d] }));
+        }
+
+        function iwmAsOf(series, date) {
+            let r = null;
+            for (const s of series) { if (s.date <= date) r = s; else break; }
+            return r;
+        }
+
+        // 'Tastytrade'/'Tasty IWM $250' -> 'Tasty'; everything else -> 'IBKR'.
+        function benchAccountOf(name) { return /tasty/i.test(name || '') ? 'Tasty' : 'IBKR'; }
+
+        // Per account: the start entry plus signed cash flows after it (manual entries and Ledger deposits/withdrawals).
+        function benchAccounts() {
+            const accounts = {};
+            const entries = (portfolio.benchEntries || []).filter(e => e && isValidDateStr(e.date))
+                .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+            entries.filter(e => e.kind === 'start' && e.amount > 0).forEach(e => {
+                if (!accounts[e.account]) accounts[e.account] = { start: e, flows: [] };
+            });
+            entries.filter(e => e.kind === 'flow').forEach(e => {
+                const a = accounts[e.account];
+                if (a && e.date > a.start.date) a.flows.push({ date: e.date, amount: e.amount, price: e.iwmPrice > 0 ? e.iwmPrice : null, src: 'manual', id: e.id });
+            });
+            (portfolio.ledger || []).forEach(r => {
+                if (r.kind !== 'deposit' && r.kind !== 'withdrawal') return;
+                const a = accounts[r.broker === 'tastytrade' ? 'Tasty' : 'IBKR'];
+                if (a && isValidDateStr(r.date) && r.date > a.start.date) a.flows.push({ date: r.date, amount: r.net, price: null, src: 'ledger', id: r.id });
+            });
+            Object.keys(accounts).forEach(k => accounts[k].flows.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0)));
+            return accounts;
+        }
+
+        // Hold-shares cumulative P&L per month (all accounts summed): shares bought with the starting balance
+        // and with each deposit at that day's price, valued at the month-end price, minus money put in.
+        let benchSources = {};
+        function applySharesBenchmark(rows) {
+            benchSources = {};
+            const manual = benchAccounts();
+            const series = iwmSeries();
+            const currentMonth = localToday().slice(0, 7);
+            const events = {};
+            const toEvents = list => list.map(ev => {
+                const px = ev.price || (iwmAsOf(series, ev.date) || {}).price || 0;
+                return px > 0 ? { date: ev.date, amount: ev.amount, shares: ev.amount / px } : null;
+            }).filter(Boolean);
+            // Accounts with a manual starting balance use it (plus deposits and withdrawals); the rest are derived
+            // from positions: capital deployed = LEAPS cost + cash reserve per open LEAPS.
+            Object.keys(manual).forEach(n => {
+                const a = manual[n];
+                events[n] = toEvents([{ date: a.start.date, amount: a.start.amount, price: a.start.iwmPrice > 0 ? a.start.iwmPrice : null }].concat(a.flows));
+            });
+            // Accounts with real Ledger deposits/withdrawals (and no manual start) use those as the purchases.
+            // The account's opening money is the first deposit when it came before the first LEAPS opened;
+            // otherwise the account was funded before the file starts, so the first LEAPS's capital stands in
+            // for it (enter a starting balance in Benchmark setup to replace that estimate).
+            const ledgerFlowsBy = {};
+            (portfolio.ledger || []).forEach(r => {
+                if ((r.kind !== 'deposit' && r.kind !== 'withdrawal') || !isValidDateStr(r.date)) return;
+                const n = r.broker === 'tastytrade' ? 'Tasty' : 'IBKR';
+                (ledgerFlowsBy[n] = ledgerFlowsBy[n] || []).push({ date: r.date, amount: r.net, price: null });
+            });
+            const fromLedger = {};
+            Object.keys(ledgerFlowsBy).forEach(n => {
+                if (manual[n]) return;
+                const opens = portfolio.leaps.filter(l => benchAccountOf(l.accountName) === n && isValidDateStr(l.openDate))
+                    .sort((a, b) => (a.openDate < b.openDate ? -1 : a.openDate > b.openDate ? 1 : 0));
+                const flows = ledgerFlowsBy[n].slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+                let list = flows;
+                if (opens.length && flows[0].date > opens[0].openDate) {
+                    const l = opens[0];
+                    list = [{ date: l.openDate, amount: l.openPremium * getContracts(l) + (l.cashReserve || 0), price: null }].concat(flows);
+                    fromLedger[n] = 'estimated start + Ledger deposits';
+                } else fromLedger[n] = 'Ledger deposits';
+                events[n] = toEvents(list);
+            });
+            benchSources = fromLedger;
+            const derived = {};
+            portfolio.leaps.forEach(l => {
+                const n = benchAccountOf(l.accountName);
+                if (manual[n] || fromLedger[n] || !isValidDateStr(l.openDate)) return;
+                const cap = l.openPremium * getContracts(l) + (l.cashReserve || 0);
+                const list = derived[n] || (derived[n] = []);
+                list.push({ date: l.openDate, delta: cap });
+                if (l.status === 'closed' && isValidDateStr(l.closeDate)) list.push({ date: l.closeDate, delta: -cap });
+            });
+            // Buy and hold: shares are only ever bought. Capital deployed in positions is tracked day by day and
+            // new shares are bought only when it exceeds its previous high, so rolling or reopening
+            // positions never sells or rebuys.
+            Object.keys(derived).forEach(n => {
+                const byDate = {};
+                derived[n].forEach(e => { byDate[e.date] = (byDate[e.date] || 0) + e.delta; });
+                let capital = 0, peak = 0;
+                const buys = [];
+                Object.keys(byDate).sort().forEach(d => {
+                    capital += byDate[d];
+                    if (capital > peak + 0.005) { buys.push({ date: d, amount: capital - peak, price: null }); peak = capital; }
+                });
+                events[n] = toEvents(buys);
+            });
+            const names = Object.keys(events);
+            if (portfolio.benchMode === 'lump') {
+                // Simple: only the first purchase per account (its initial capital at that date's price), held to the end.
+                names.forEach(n => { events[n] = events[n].slice().sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0)).slice(0, 1); });
+            }
+            if (names.length === 0) return;
+            rows.forEach(r => {
+                const monthEnd = r.month + '-99';
+                const px = iwmAsOf(series, r.month === currentMonth ? '9999' : monthEnd);
+                let invested = 0, shares = 0, active = false;
+                names.forEach(n => events[n].forEach(ev => {
+                    if (ev.date > monthEnd) return;
+                    active = true; invested += ev.amount; shares += ev.shares;
+                }));
+                if (!active || !px) return;
+                const value = shares * px.price;
+                // invested = net cash put into shares; P&L covers both held and already-sold shares.
+                r.shares = { pnl: value - invested, value: value, invested: invested, shares: shares, price: px.price,
+                    stale: r.month < currentMonth && px.date.slice(0, 7) < r.month };
+            });
+        }
+
+        function sharesCells(r, cell) {
+            if (!r.shares) return '<td>—</td><td>—</td>';
+            const star = r.shares.stale ? ' <span title="No IWM price this month - carried from an earlier close">*</span>' : '';
+            return `<td class="${pnlClass(r.shares.pnl)}" title="${r.shares.shares.toFixed(1)} sh @ ${r.shares.price.toFixed(2)}; invested ${formatMoney(r.shares.invested)}">${formatMoney(r.shares.pnl)}${star}</td>${cell(r.cumulative - r.shares.pnl)}`;
+        }
+
+        function drawBenchmarkChart(rows) {
+            const canvas = document.getElementById('monthly-bench-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+            if (rows.length === 0) return;
+            const lines = [
+                { label: 'Strategy', color: '#00ff41', get: r => r.cumulative },
+                { label: 'Hold LEAPS (no calls)', color: '#ffaa00', get: r => r.holdLeaps },
+                { label: 'Hold Shares (IWM)', color: '#4da6ff', get: r => (r.shares ? r.shares.pnl : null) }
+            ];
+            const vals = [0];
+            lines.forEach(l => rows.forEach(r => { const v = l.get(r); if (v !== null && isFinite(v)) vals.push(v); }));
+            const padL = 70, padR = 10, padT = 28, padB = 28;
+            const max = Math.max(...vals), min = Math.min(...vals);
+            const span = (max - min) || 1;
+            const y = v => padT + (max - v) / span * (H - padT - padB);
+            const x = i => padL + (rows.length === 1 ? 0.5 : i / (rows.length - 1)) * (W - padL - padR);
+            ctx.font = '11px "Courier New", monospace';
+            ctx.strokeStyle = '#444';
+            ctx.beginPath(); ctx.moveTo(padL, y(0)); ctx.lineTo(W - padR, y(0)); ctx.stroke();
+            ctx.fillStyle = '#aaa'; ctx.textAlign = 'right';
+            ctx.fillText(formatMoney(max), padL - 4, y(max) + 4);
+            ctx.fillText('$0', padL - 4, y(0) + 4);
+            if (min < 0) ctx.fillText(formatMoney(min), padL - 4, y(min) + 4);
+            const labelEvery = Math.ceil(rows.length / 12);
+            rows.forEach((r, i) => {
+                if (i % labelEvery === 0) { ctx.fillStyle = '#aaa'; ctx.textAlign = 'center'; ctx.fillText(r.month.slice(2), x(i), H - 10); }
+            });
+            let lx = padL;
+            lines.forEach(l => {
+                ctx.strokeStyle = l.color; ctx.lineWidth = 2; ctx.beginPath();
+                let started = false;
+                rows.forEach((r, i) => {
+                    const v = l.get(r);
+                    if (v === null || !isFinite(v)) return;
+                    if (!started) { ctx.moveTo(x(i), y(v)); started = true; } else ctx.lineTo(x(i), y(v));
+                });
+                ctx.stroke(); ctx.lineWidth = 1;
+                ctx.fillStyle = l.color; ctx.textAlign = 'left';
+                ctx.fillRect(lx, 8, 10, 10); ctx.fillText(l.label, lx + 14, 17);
+                lx += 14 + ctx.measureText(l.label).width + 18;
+            });
+        }
+
+        // ---- Benchmark setup editor ----
+        function setBenchMode(v) {
+            portfolio.benchMode = v === 'lump' ? 'lump' : 'flows';
+            saveData(); renderMonthlyPnl();
+        }
+
+        function renderBenchSetup() {
+            const el = document.getElementById('bench-setup');
+            if (!el) return;
+            const modeSel = document.getElementById('bench-mode');
+            if (modeSel) modeSel.value = portfolio.benchMode === 'lump' ? 'lump' : 'flows';
+            const entries = (portfolio.benchEntries || []).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+            const accounts = benchAccounts();
+            const series = iwmSeries();
+            const px = d => { const r = iwmAsOf(series, d); return r ? r.price : null; };
+            const ledgerFlows = [];
+            Object.keys(accounts).forEach(n => accounts[n].flows.filter(f => f.src === 'ledger').forEach(f => ledgerFlows.push(Object.assign({ account: n }, f))));
+            const rowsHtml = entries.map(e => `<tr><td>${escHtml(e.account)}</td><td>${e.kind === 'start' ? 'Starting balance' : (e.amount >= 0 ? 'Deposit' : 'Withdrawal')}</td><td>${escHtml(e.date)}</td><td>${formatMoney(e.amount)}</td><td>${e.iwmPrice > 0 ? '$' + e.iwmPrice.toFixed(2) : 'auto' + (px(e.date) ? ' ($' + px(e.date).toFixed(2) + ')' : ' (none!)')}</td><td><button onclick="deleteBenchEntry('${escHtml(e.id)}')">Delete</button></td></tr>`).join('') +
+                ledgerFlows.map(f => `<tr style="color:#555;"><td>${escHtml(f.account)}</td><td>${f.amount >= 0 ? 'Deposit' : 'Withdrawal'} (Ledger)</td><td>${escHtml(f.date)}</td><td>${formatMoney(f.amount)}</td><td>auto${px(f.date) ? ' ($' + px(f.date).toFixed(2) + ')' : ' (none!)'}</td><td></td></tr>`).join('');
+            const ov = portfolio.iwmOverrides || {};
+            const ovHtml = Object.keys(ov).sort().map(d => `<tr><td>${escHtml(d)}</td><td>$${parseFloat(ov[d]).toFixed(2)}</td><td><button onclick="deleteIwmOverride('${escHtml(d)}')">Delete</button></td></tr>`).join('');
+            const latest = series.length ? series[series.length - 1] : null;
+            el.innerHTML =
+                `<div style="margin-bottom:6px;"><strong>Capital used now:</strong> ${Object.keys(benchSources).map(n => escHtml(n) + ': ' + escHtml(benchSources[n])).join('; ') || 'derived from LEAPS cost + cash reserve'}</div><div style="color:#444;margin-bottom:6px;">By default each account's share capital is derived from your positions (LEAPS cost + cash reserve). Adding a starting balance here overrides that for the account. Later deposits/withdrawals come from the Ledger automatically for any broker you imported; add the rest as manual flows. Leave IWM price blank to use the bundled close on or before the date.</div>` +
+                `<table><thead><tr><th>Account</th><th>Type</th><th>Date</th><th>Amount</th><th>IWM price</th><th></th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="6"><em>No overrides - capital is derived from your LEAPS cost + cash reserve.</em></td></tr>'}</tbody></table>` +
+                `<div style="margin-top:8px;">
+                    <select id="bench-account"><option>IBKR</option><option>Tasty</option></select>
+                    <select id="bench-kind"><option value="start">Starting balance</option><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select>
+                    <input type="date" id="bench-date">
+                    <input type="number" id="bench-amount" step="0.01" placeholder="Amount $" style="width:100px;">
+                    <input type="number" id="bench-price" step="0.01" placeholder="IWM (optional)" style="width:110px;">
+                    <button onclick="addBenchEntry()">[ Add ]</button>
+                </div>` +
+                `<div style="margin-top:12px;"><strong>IWM price overrides</strong> <span style="color:#444;">(bundled daily closes run to ${latest ? escHtml(latest.date) : 'n/a'}${latest ? ' at $' + latest.price.toFixed(2) : ''}; add a date to correct or extend it)</span></div>` +
+                `<table><thead><tr><th>Date</th><th>IWM close</th><th></th></tr></thead><tbody>${ovHtml || '<tr><td colspan="3"><em>None</em></td></tr>'}</tbody></table>` +
+                `<div style="margin-top:8px;"><input type="date" id="iwm-ov-date"> <input type="number" id="iwm-ov-price" step="0.01" placeholder="IWM close" style="width:100px;"> <button onclick="addIwmOverride()">[ Add ]</button></div>`;
+        }
+
+        function addBenchEntry() {
+            const account = document.getElementById('bench-account').value;
+            const kind = document.getElementById('bench-kind').value;
+            const date = document.getElementById('bench-date').value;
+            let amount = parseFloat(document.getElementById('bench-amount').value);
+            const price = parseFloat(document.getElementById('bench-price').value) || 0;
+            if (!isValidDateStr(date) || !(amount > 0)) { alert('Enter a date and a positive amount.'); return; }
+            if (kind === 'start' && (portfolio.benchEntries || []).some(e => e.kind === 'start' && e.account === account)) {
+                alert(account + ' already has a starting balance. Delete it first to replace it.'); return;
+            }
+            if (kind === 'withdrawal') amount = -amount;
+            portfolio.benchEntries.push({ id: 'B' + Date.now() + Math.floor(Math.random() * 1000), account: account,
+                kind: kind === 'start' ? 'start' : 'flow', date: date, amount: amount, iwmPrice: price });
+            saveData(); renderMonthlyPnl();
+            const d = document.querySelector('#tab-monthly details'); if (d) d.open = true;
+        }
+
+        function deleteBenchEntry(id) {
+            portfolio.benchEntries = (portfolio.benchEntries || []).filter(e => e.id !== id);
+            saveData(); renderMonthlyPnl();
+            const d = document.querySelector('#tab-monthly details'); if (d) d.open = true;
+        }
+
+        function addIwmOverride() {
+            const date = document.getElementById('iwm-ov-date').value;
+            const price = parseFloat(document.getElementById('iwm-ov-price').value);
+            if (!isValidDateStr(date) || !(price > 0)) { alert('Enter a date and an IWM close.'); return; }
+            portfolio.iwmOverrides[date] = price;
+            saveData(); renderMonthlyPnl();
+            const d = document.querySelector('#tab-monthly details'); if (d) d.open = true;
+        }
+
+        function deleteIwmOverride(date) {
+            delete portfolio.iwmOverrides[date];
+            saveData(); renderMonthlyPnl();
+            const d = document.querySelector('#tab-monthly details'); if (d) d.open = true;
         }
 
         function toggleArchive() {
@@ -1673,7 +1956,11 @@
                     leaps: data.filter(x => x && x.type === 'LEAPS'),
                     calls: data.filter(x => x && x.type === 'SHORT_CALL'),
                     history: {},
-                    ledger: []
+                    ledger: [],
+                    benchEntries: [],
+                    iwmOverrides: {},
+                    benchMode: null,
+                    ledgerMarks: null
                 };
             }
             if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls) || Array.isArray(data.ledger))) {
@@ -1681,7 +1968,11 @@
                     leaps: Array.isArray(data.leaps) ? data.leaps : [],
                     calls: Array.isArray(data.calls) ? data.calls : [],
                     history: data.history && typeof data.history === 'object' ? data.history : {},
-                    ledger: Array.isArray(data.ledger) ? data.ledger.filter(r => r && r.id) : []
+                    ledger: Array.isArray(data.ledger) ? data.ledger.filter(r => r && r.id) : [],
+                    benchEntries: Array.isArray(data.benchEntries) ? data.benchEntries.filter(e => e && e.id) : [],
+                    iwmOverrides: data.iwmOverrides && typeof data.iwmOverrides === 'object' ? data.iwmOverrides : {},
+                    benchMode: data.benchMode === 'lump' || data.benchMode === 'flows' ? data.benchMode : null,
+                    ledgerMarks: data.ledgerMarks && typeof data.ledgerMarks === 'object' ? data.ledgerMarks : null
                 };
             }
             return null;
@@ -1716,6 +2007,12 @@
                 });
             });
             if (incoming.ledger && incoming.ledger.length) stats.ledger = addToLedger(incoming.ledger).added;
+            if (!Array.isArray(portfolio.benchEntries)) portfolio.benchEntries = [];
+            const benchIds = new Set(portfolio.benchEntries.map(e => e.id));
+            (incoming.benchEntries || []).forEach(e => { if (!benchIds.has(e.id)) { portfolio.benchEntries.push(e); benchIds.add(e.id); } });
+            portfolio.iwmOverrides = Object.assign({}, incoming.iwmOverrides || {}, portfolio.iwmOverrides || {});
+            if (!portfolio.benchMode && incoming.benchMode) portfolio.benchMode = incoming.benchMode;
+            if (incoming.ledgerMarks) portfolio.ledgerMarks = Object.assign({}, incoming.ledgerMarks, portfolio.ledgerMarks || {});
             repairBlankHistoryDates();
             return stats;
         }
@@ -1735,7 +2032,10 @@
                     // A backup from before the ledger existed must not wipe the ledger.
                     portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history,
                         ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger,
-                        ledgerMarks: incoming.ledgerMarks || portfolio.ledgerMarks || {} };
+                        ledgerMarks: incoming.ledgerMarks || portfolio.ledgerMarks || {},
+                        benchEntries: incoming.benchEntries.length ? incoming.benchEntries : (portfolio.benchEntries || []),
+                        iwmOverrides: Object.keys(incoming.iwmOverrides).length ? incoming.iwmOverrides : (portfolio.iwmOverrides || {}),
+                        benchMode: incoming.benchMode || portfolio.benchMode };
                     repairBlankHistoryDates();
                     saveData();
                     updateDisplay();
@@ -2570,7 +2870,7 @@
         
         function clearAllData() {
             if (confirm('Delete ALL data?')) {
-                portfolio = { leaps: [], calls: [], history: {}, ledger: [] };
+                portfolio = { leaps: [], calls: [], history: {}, ledger: [], benchEntries: [], iwmOverrides: {} };
                 saveData();
                 updateDisplay();
             }
