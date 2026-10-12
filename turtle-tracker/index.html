@@ -3130,8 +3130,11 @@
         }
 
         function computeLedger(txs) {
+            // Expiration/assignment/exercise rows sort after same-day trades, so an option sold on its
+            // expiry day is opened before its expiration row tries to close it.
+            const lateKind = r => (r.kind === 'expire' || r.kind === 'assign' || r.kind === 'exercise') ? 1 : 0;
             const rows = txs.slice().sort((a, b) =>
-                a.date < b.date ? -1 : a.date > b.date ? 1 : (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) || (a.seq - b.seq));
+                a.date < b.date ? -1 : a.date > b.date ? 1 : (lateKind(a) - lateKind(b)) || (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0) || (a.seq - b.seq));
             const books = {};
             const closed = [], orphans = [];
             const cash = { deposits: 0, withdrawals: 0, interest: 0, fees: 0, other: 0 };
@@ -3184,27 +3187,26 @@
             });
 
             // Auto-expire: brokers like IBKR don't list expirations, so an option past its expiry with no
-            // closing row is treated as expired worthless (closed at $0 on its expiry date) when the underlying
-            // finished out of the money. Without a price for the expiry day (non-IWM) or when it finished in
-            // the money (possible assignment), it stays open and flagged.
+            // closing row is closed at $0 on its expiry date (premium realized). Assignment closes at $0 too,
+            // with the share trade as its own row, so P&L is the same. When the IWM close on expiry shows it
+            // finished in the money, it is labelled so you can check for an assignment.
             const today = localToday();
             const series = iwmSeries();
             Object.keys(books).forEach(key => {
                 const lots = books[key];
                 if (!lots.length) return;
                 const r = lots[0].row;
-                if (r.instrument !== 'option' || !r.expiry || r.expiry >= today || r.underlying !== 'IWM') return;
-                const px = iwmAsOf(series, r.expiry);
-                if (!px || daysBetween(px.date, r.expiry) > 4) return;
-                const itm = r.right === 'C' ? px.price > r.strike : px.price < r.strike;
-                if (itm) return;
+                if (r.instrument !== 'option' || !r.expiry || r.expiry >= today) return;
+                let how = 'expired (auto)';
+                const px = r.underlying === 'IWM' ? iwmAsOf(series, r.expiry) : null;
+                if (px && daysBetween(px.date, r.expiry) <= 4 && (r.right === 'C' ? px.price > r.strike : px.price < r.strike)) how = 'ITM at expiry (auto)';
                 lots.splice(0).forEach(lot => {
                     const m = Math.abs(lot.qty), openCash = lot.unitCash * m;
                     closed.push({
                         broker: r.broker, key, underlying: r.underlying, instrument: r.instrument,
                         right: r.right, strike: r.strike, expiry: r.expiry,
                         dir: lot.qty < 0 ? 'short' : 'long', qty: m, mult: r.mult,
-                        openDate: lot.date, closeDate: r.expiry, how: 'expired (auto)',
+                        openDate: lot.date, closeDate: r.expiry, how: how,
                         openCash, closeCash: 0, pnl: openCash
                     });
                 });
@@ -3428,7 +3430,7 @@
                     const notes = [];
                     if (o.instrument === 'option' && o.right === 'C' && o.qty > 0 && dte > 180) notes.push('LEAPS');
                     if (o.instrument === 'option' && o.qty < 0) notes.push('short');
-                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files; marked at $0 (ITM or no price on expiry, so not auto-expired)</span>');
+                    if (o.expiry && o.expiry < today) notes.push('<span style="color:#b36b00">past expiry – its expiration/assignment row isn\'t in the imported files; marked at $0</span>');
                     const mark = ledgerMarkFor(o, today);
                     const saved = portfolio.ledgerMarks && typeof portfolio.ledgerMarks[o.key] === 'number';
                     const u = mark === null ? null : o.cashBasis + o.qty * mark * (o.mult || 1);

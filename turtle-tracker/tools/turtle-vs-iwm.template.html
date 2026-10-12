@@ -1,0 +1,321 @@
+<title>Turtle vs IWM</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one headline comparison (three period tiles), one line chart on a single dollar axis, then the LEAPS trade log and method notes. */
+:root {
+  color-scheme: light;
+  --bg: #f1f2f3;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #75746f;
+  --line: #e2e1dd;
+  --grid: #e9e8e4;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --good: #0a7d0a;
+  --bad: #c23030;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #94938a;
+    --line: #2f2f2d;
+    --grid: #2a2a28;
+    --s1: #3987e5;
+    --s2: #d95926;
+    --good: #3cc23c;
+    --bad: #ef6b6b;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110;
+  --surface: #1a1a19;
+  --ink: #ffffff;
+  --ink-2: #c3c2b7;
+  --ink-3: #94938a;
+  --line: #2f2f2d;
+  --grid: #2a2a28;
+  --s1: #3987e5;
+  --s2: #d95926;
+  --good: #3cc23c;
+  --bad: #ef6b6b;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 56px; display: flex; flex-direction: column; gap: 20px; }
+header h1 { font-size: 26px; line-height: 1.2; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+header p { margin: 0; color: var(--ink-2); max-width: 65ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tile .label { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.tile .big { font-family: var(--mono); font-size: 28px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile .vs { color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tile .split { color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; }
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+.panel-head h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.toggle { font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.toggle:hover { border-color: var(--ink-3); }
+.toggle:focus-visible, svg:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+#chartbox { position: relative; width: 100%; }
+#chart { display: block; width: 100%; touch-action: pan-y; }
+#chart text { font-family: var(--mono); font-size: 11px; fill: var(--ink-3); }
+#chart .endlabel { font-family: var(--font); font-size: 12px; font-weight: 500; fill: var(--ink); }
+#chart .endlabel-sub { fill: var(--ink-2); }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.16); min-width: 190px; z-index: 2; }
+.tip[hidden] { display: none; }
+.tip .d { font-family: var(--mono); color: var(--ink-3); margin-bottom: 4px; }
+.tip .r { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+.tip .r.sub { color: var(--ink-3); padding-left: 16px; }
+.note { color: var(--ink-3); font-size: 13px; margin: 0; max-width: 80ch; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); }
+
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.log li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 4px 14px; padding: 9px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+.log li:last-child { border-bottom: 0; }
+.log .when { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+.log .amt { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.log .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); margin-right: 8px; }
+.method { display: flex; flex-direction: column; gap: 8px; color: var(--ink-2); font-size: 14px; max-width: 80ch; }
+.method p { margin: 0; }
+
+@media (max-width: 720px) {
+  .tiles { grid-template-columns: 1fr; }
+  .tile .big { font-size: 24px; }
+  .log li { grid-template-columns: 70px minmax(0, 1fr); }
+  .log .amt { grid-column: 2; }
+}
+@media (prefers-reduced-motion: no-preference) { .toggle { transition: border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">IBKR + Tastytrade · 2026 · weekly</p>
+    <h1>Turtle against IWM, year to date</h1>
+    <p>Short-call income plus LEAPS marks from both accounts, compared with the same capital sitting in IWM shares.</p>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Performance by period"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Cumulative profit and loss</h2>
+      <button class="toggle" id="toggle" type="button" aria-pressed="false">Show table</button>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span><span class="sw" style="background:var(--s1)"></span>Turtle: calls + LEAPS</span>
+      <span><span class="sw" style="background:var(--s2)"></span>Same capital in IWM</span>
+    </div>
+    <div id="chartbox">
+      <svg id="chart" role="img" tabindex="0" aria-label="Line chart of weekly cumulative profit for the Turtle strategy against the same capital held in IWM"></svg>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <p class="note">The dashed final segment is one jump. LEAPS marks were last recorded on Sep 11 and Sep 18, so three weeks of decline show up on Oct 8.</p>
+    <div class="tablewrap" id="tablewrap" hidden></div>
+  </section>
+
+  <section class="panel">
+    <h2 style="font-size:17px;font-weight:600;margin:0">LEAPS trades this year</h2>
+    <ul class="log" id="log"></ul>
+  </section>
+
+  <section class="panel method">
+    <h2 style="font-size:17px;font-weight:600;margin:0">How the lines are built</h2>
+    <p><strong>Turtle</strong> is every closed short call (sold minus bought back), plus realized gains on closed LEAPS, plus the open LEAPS mark minus what you paid. Open weekly calls are not counted until they close.</p>
+    <p><strong>Same capital in IWM</strong> takes the capital you had deployed at the start of each week and earns IWM's return for that week. Capital is Tastytrade cash from the export ($19,201 on Jan 1, plus the $4,000 deposit on Jun 24) and the tracker's IBKR allocation ($19,011 from Jan 26, $27,990 from Jun 23). It starts when each account bought its first LEAPS.</p>
+    <p><strong>Left out:</strong> commissions and fees, interest, and the QQQ trades. LEAPS marks come from your manual updates and carry forward between them. Weekly IWM closes are from Interactive Brokers.</p>
+  </section>
+</div>
+
+<script>
+const DATA = __DATA__;
+const EVENTS = [
+  ["Jan 7", "Tastytrade", "Bought Jun '27 $190 call", "−$7,745"],
+  ["Jan 26", "IBKR", "Bought Jun '27 $185 call", "−$9,011"],
+  ["Jun 23", "IBKR", "Sold Jun '27 $185 call", "+$12,100"],
+  ["Jun 23", "IBKR", "Bought 2 × Dec '27 $250 calls", "−$13,690"],
+  ["Jul 2", "Tastytrade", "Bought Dec '27 $250 call", "−$6,850"],
+  ["Jul 24", "Tastytrade", "Sold Jun '27 $190 call", "+$11,000"],
+  ["Jul 29", "Tastytrade", "Bought Dec '27 $225 call", "−$8,005"]
+];
+
+const $ = (id) => document.getElementById(id);
+const usd = (n, sign) => (n < 0 ? "−" : sign ? "+" : "") + "$" + Math.round(Math.abs(n)).toLocaleString("en-US");
+const cls = (n) => (n >= 0 ? "pos" : "neg");
+const T = (s) => Date.parse(s + "T12:00:00Z");
+const dlabel = (s) => new Date(T(s)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const last = DATA[DATA.length - 1];
+
+function at(daysBack) {
+  const cut = T(last.date) - daysBack * 86400000;
+  let r = DATA[0];
+  for (const p of DATA) { if (T(p.date) <= cut) r = p; }
+  return r;
+}
+
+/* Period tiles */
+(function tiles() {
+  const rows = [
+    { label: "Since Jan 7", from: DATA[0] },
+    { label: "Last 90 days", from: at(90) },
+    { label: "Last 30 days", from: at(30) }
+  ];
+  $("tiles").innerHTML = rows.map((r) => {
+    const t = last.total - r.from.total;
+    const b = last.bench - r.from.bench;
+    const real = last.realized - r.from.realized;
+    const unreal = last.unrealized - r.from.unrealized;
+    return '<div class="tile"><span class="label">' + r.label + '</span>' +
+      '<span class="big ' + cls(t) + '">' + usd(t, true) + '</span>' +
+      '<span class="vs">IWM on the same capital: ' + usd(b, true) + '</span>' +
+      '<span class="split">Premium and closed trades ' + usd(real, true) + '<br>LEAPS marks ' + usd(unreal, true) + '</span></div>';
+  }).join("");
+})();
+
+/* Chart */
+const svg = $("chart"), tip = $("tip");
+let geo = null;
+
+function niceStep(range) {
+  const cands = [500, 1000, 2000, 2500, 5000, 10000];
+  return cands.find((c) => range / c <= 6) || 10000;
+}
+
+function draw() {
+  const W = Math.max(300, $("chartbox").clientWidth);
+  const narrow = W < 560;
+  const H = narrow ? 300 : 380;
+  const m = { l: narrow ? 48 : 58, r: narrow ? 74 : 150, t: 14, b: 26 };
+  const x0 = T(DATA[0].date), x1 = T(last.date);
+  const vals = DATA.flatMap((p) => [p.total, p.bench]);
+  const step = niceStep(Math.max(...vals, 0) - Math.min(...vals, 0));
+  const ymin = Math.floor(Math.min(...vals, 0) / step) * step;
+  const ymax = Math.ceil(Math.max(...vals, 0) / step) * step;
+  const X = (s) => m.l + ((T(s) - x0) / (x1 - x0)) * (W - m.l - m.r);
+  const Y = (v) => m.t + (1 - (v - ymin) / (ymax - ymin)) * (H - m.t - m.b);
+  geo = { W, H, m, X, Y };
+
+  let g = "";
+  for (let v = ymin; v <= ymax + 1; v += step) {
+    g += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="' + (v === 0 ? "var(--ink-3)" : "var(--grid)") + '" stroke-width="' + (v === 0 ? 1.25 : 1) + '"/>';
+    g += '<text x="' + (m.l - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + (v < 0 ? "−" : "") + "$" + (Math.abs(v) >= 1000 ? Math.abs(v) / 1000 + "k" : Math.abs(v)) + "</text>";
+  }
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"];
+  months.forEach((mn, i) => {
+    const s = "2026-" + String(i + 1).padStart(2, "0") + "-01";
+    if (T(s) < x0 || T(s) > x1) return;
+    g += '<text x="' + X(s) + '" y="' + (H - 6) + '" text-anchor="middle">' + mn + "</text>";
+  });
+
+  const pts = (key, from, to) => DATA.slice(from, to).map((p) => X(p.date).toFixed(1) + "," + Y(p[key]).toFixed(1)).join(" ");
+  const n = DATA.length;
+  g += '<polyline fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + pts("bench", 0, n) + '"/>';
+  g += '<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + pts("total", 0, n - 1) + '"/>';
+  g += '<polyline fill="none" stroke="var(--s1)" stroke-width="2" stroke-dasharray="4 4" stroke-linecap="round" points="' + pts("total", n - 2, n) + '"/>';
+
+  const ex = X(last.date);
+  g += '<circle cx="' + ex + '" cy="' + Y(last.bench) + '" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>';
+  g += '<circle cx="' + ex + '" cy="' + Y(last.total) + '" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>';
+  const lx = ex + 10;
+  g += '<text class="endlabel" x="' + lx + '" y="' + (Y(last.total) - 2) + '">Turtle ' + usd(last.total, true) + "</text>";
+  g += '<text class="endlabel endlabel-sub" x="' + lx + '" y="' + (Y(last.bench) + 4) + '">IWM ' + usd(last.bench, true) + "</text>";
+
+  g += '<g id="cross" visibility="hidden"><line id="vline" y1="' + m.t + '" y2="' + (H - m.b) + '" stroke="var(--ink-3)" stroke-width="1"/>' +
+    '<circle id="d1" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>' +
+    '<circle id="d2" r="4.5" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/></g>';
+  g += '<rect id="hit" x="' + m.l + '" y="0" width="' + (W - m.l - m.r) + '" height="' + H + '" fill="transparent"/>';
+
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.setAttribute("height", H);
+  svg.innerHTML = g;
+
+  const hit = $("hit");
+  hit.addEventListener("pointermove", onMove);
+  hit.addEventListener("pointerdown", onMove);
+  hit.addEventListener("pointerleave", hide);
+}
+
+let kbIndex = DATA.length - 1;
+function nearest(clientX) {
+  const r = svg.getBoundingClientRect();
+  const px = ((clientX - r.left) / r.width) * geo.W;
+  let best = 0, bd = Infinity;
+  DATA.forEach((p, i) => { const d = Math.abs(geo.X(p.date) - px); if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function show(i) {
+  const p = DATA[i];
+  const px = geo.X(p.date);
+  $("cross").setAttribute("visibility", "visible");
+  $("vline").setAttribute("x1", px); $("vline").setAttribute("x2", px);
+  $("d1").setAttribute("cx", px); $("d1").setAttribute("cy", geo.Y(p.total));
+  $("d2").setAttribute("cx", px); $("d2").setAttribute("cy", geo.Y(p.bench));
+  tip.innerHTML = '<div class="d">Week ending ' + dlabel(p.date) + "</div>" +
+    '<div class="r"><span><span class="sw" style="background:var(--s1)"></span>Turtle</span><strong>' + usd(p.total, true) + "</strong></div>" +
+    '<div class="r sub"><span>Premium and closed trades</span><span>' + usd(p.realized, true) + "</span></div>" +
+    '<div class="r sub"><span>LEAPS marks</span><span>' + usd(p.unrealized, true) + "</span></div>" +
+    '<div class="r"><span><span class="sw" style="background:var(--s2)"></span>Same capital in IWM</span><strong>' + usd(p.bench, true) + "</strong></div>" +
+    '<div class="r sub"><span>IWM close</span><span>$' + p.iwm.toFixed(2) + "</span></div>";
+  tip.hidden = false;
+  const box = $("chartbox").getBoundingClientRect();
+  const tw = tip.offsetWidth;
+  let left = (px / geo.W) * box.width + 14;
+  if (left + tw > box.width) left = (px / geo.W) * box.width - tw - 14;
+  tip.style.left = Math.max(0, left) + "px";
+  tip.style.top = "12px";
+}
+function hide() { if (!geo) return; $("cross").setAttribute("visibility", "hidden"); tip.hidden = true; }
+function onMove(e) { kbIndex = nearest(e.clientX); show(kbIndex); }
+function onKey(e) {
+  if (e.key === "ArrowLeft") kbIndex = Math.max(0, kbIndex - 1);
+  else if (e.key === "ArrowRight") kbIndex = Math.min(DATA.length - 1, kbIndex + 1);
+  else if (e.key === "Escape") return hide();
+  else return;
+  e.preventDefault(); show(kbIndex);
+}
+
+/* Table view */
+(function table() {
+  const head = "<tr><th>Week ending</th><th>IWM close</th><th>Turtle total</th><th>Premium and closed</th><th>LEAPS marks</th><th>IWM on same capital</th></tr>";
+  const body = DATA.slice().reverse().map((p) =>
+    "<tr><td>" + dlabel(p.date) + "</td><td>$" + p.iwm.toFixed(2) + "</td><td>" + usd(p.total, true) + "</td><td>" + usd(p.realized, true) + "</td><td>" + usd(p.unrealized, true) + "</td><td>" + usd(p.bench, true) + "</td></tr>").join("");
+  $("tablewrap").innerHTML = "<table>" + head + body + "</table>";
+  $("toggle").addEventListener("click", () => {
+    const on = $("tablewrap").hidden;
+    $("tablewrap").hidden = !on;
+    $("toggle").textContent = on ? "Hide table" : "Show table";
+    $("toggle").setAttribute("aria-pressed", String(on));
+  });
+})();
+
+/* LEAPS log */
+$("log").innerHTML = EVENTS.map((e) =>
+  '<li><span class="when">' + e[0] + '</span><span><span class="tag">' + e[1] + "</span>" + e[2] + '</span><span class="amt ' + (e[3].startsWith("+") ? "pos" : "") + '">' + e[3] + "</span></li>").join("");
+
+svg.addEventListener("keydown", onKey);
+let lastW = 0;
+const redraw = () => { const w = Math.round($("chartbox").clientWidth); if (w > 0 && w !== lastW) { lastW = w; draw(); } };
+if (window.ResizeObserver) new ResizeObserver(redraw).observe($("chartbox"));
+window.addEventListener("resize", redraw);
+requestAnimationFrame(redraw);
+</script>
