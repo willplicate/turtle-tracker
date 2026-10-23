@@ -2261,7 +2261,9 @@
                         <div class="modal-body">
                             <div class="form-row"><label>Date:</label><input type="date" id="upd-date" value="${today}"></div>
                             <div class="form-row"><label>IWM Price:</label><input type="number" id="upd-iwm" step="0.01" placeholder="224.00"></div>
-                            <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}"><small style="color: #666; margin-left: 8px;">${getContracts(leaps) > 1 ? `Per contract (×${getContracts(leaps)} = total)` : 'Per contract'}</small></div>
+                            ${getContracts(leaps) > 1 ? `<div class="form-row"><label>Total (all ${getContracts(leaps)}):</label><input type="number" id="upd-total" step="0.01" placeholder="IBKR Market Value" oninput="syncLeapsInputs('total', ${getContracts(leaps)})"><small style="color: #666; margin-left: 8px;">Paste IBKR's market value; per-contract fills in</small></div>` : ''}
+                            <div class="form-row"><label>Option price:</label><input type="number" id="upd-px" step="0.01" placeholder="IBKR Last, e.g. 48.25" oninput="syncLeapsInputs('px', ${getContracts(leaps)})"><small style="color: #666; margin-left: 8px;">Per share, ×100</small></div>
+                            <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}" oninput="syncLeapsInputs('value', ${getContracts(leaps)})"><small style="color: #666; margin-left: 8px;">Per contract</small></div>
                             <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="upd-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"><small style="color: #666; margin-left: 10px;">Current: ${normalizeDelta(leaps.delta).toFixed(2)}</small></div>
                             <div class="form-row"><label>Notes:</label><input type="text" id="upd-notes" placeholder="Weekly update"></div>
                         </div>
@@ -2276,6 +2278,18 @@
             document.body.insertAdjacentHTML('beforeend', modalHtml);
         }
         
+        // The three value inputs in the Update LEAPS modal describe the same number; editing one fills the others.
+        function syncLeapsInputs(src, n) {
+            const el = id => document.getElementById(id);
+            const v = parseFloat(el('upd-' + src).value);
+            let perContract = NaN;
+            if (!isNaN(v)) perContract = src === 'total' ? v / n : src === 'px' ? v * 100 : v;
+            const set = (id, x) => { const e = el(id); if (e) e.value = isNaN(x) ? '' : round2(x); };
+            if (src !== 'value') set('upd-value', perContract);
+            if (src !== 'total') set('upd-total', perContract * n);
+            if (src !== 'px') set('upd-px', perContract / 100);
+        }
+
         function saveLEAPSUpdate(leapsId) {
             const date = document.getElementById('upd-date').value;
             const iwmPrice = parseFloat(document.getElementById('upd-iwm').value) || 0;
