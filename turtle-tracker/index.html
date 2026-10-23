@@ -402,6 +402,7 @@
                     <div style="font-size: 11px; color: #444; margin-bottom: 8px;">Import raw broker exports; positions and realized P&L below are derived from the fills (FIFO, net of commissions and fees). Supports the <strong>Tastytrade Transactions CSV</strong> and the <strong>IBKR Transaction History statement</strong>. Import as many files as you like: overlapping rows are recognised and skipped, so re-importing is safe. The ledger is separate from your hand-entered LEAPS / call records and is included in the JSON backup.</div>
                     <input type="file" id="ledger-files" accept=".csv" multiple>
                     <button onclick="importLedgerFiles()" class="primary">[ Import Files ]</button>
+                    <button onclick="syncCallsFromLedger()">[ Create Calls from Ledger ]</button>
                     <div id="ledger-import-msg" style="margin-top: 8px; font-size: 12px;"></div>
                 </div>
             </div>
@@ -3297,6 +3298,90 @@
             msg.innerHTML = lines.join('<br>');
             saveData();
             renderLedger();
+        }
+
+        // Builds hand-entered short-call records (portfolio.calls) from the ledger's IWM short calls so they
+        // needn't be keyed twice. Existing records are matched on strike + open date: a match is skipped,
+        // or, if it is still open but the ledger shows it closed, its close fields are filled in.
+        function syncCallsFromLedger() {
+            const msg = document.getElementById('ledger-import-msg');
+            const res = computeLedger(portfolio.ledger || []);
+            const groups = {};
+            res.closed.filter(c => c.instrument === 'option' && c.right === 'C' && c.dir === 'short' && c.underlying === 'IWM').forEach(c => {
+                const k = [c.broker, c.strike, c.expiry, c.openDate, c.closeDate, c.how].join('|');
+                const g = groups[k] || (groups[k] = { broker: c.broker, strike: c.strike, expiry: c.expiry, openDate: c.openDate, closeDate: c.closeDate, how: c.how, qty: 0, openCash: 0, closeCash: 0 });
+                g.qty += c.qty; g.openCash += c.openCash; g.closeCash += c.closeCash;
+            });
+            const calls = Object.values(groups).map(g => Object.assign(g, { status: 'closed' }));
+            res.open.filter(o => o.instrument === 'option' && o.right === 'C' && o.underlying === 'IWM' && o.qty < 0).forEach(o => {
+                calls.push({ broker: o.broker, strike: o.strike, expiry: o.expiry, openDate: o.openDate, closeDate: '', how: '', qty: Math.abs(o.qty), openCash: o.cashBasis, closeCash: 0, status: 'open' });
+            });
+
+            const acct = { ibkr: /ibkr|interactive/i, tastytrade: /tasty/i };
+            const parentFor = c => {
+                const all = portfolio.leaps.filter(l => !l.openDate || l.openDate <= c.openDate);
+                const byAcct = all.filter(l => acct[c.broker] && acct[c.broker].test(l.accountName || ''));
+                return (byAcct.length ? byAcct : all).sort((a, b) => (a.openDate || '') < (b.openDate || '') ? 1 : -1)[0];
+            };
+
+            const toAdd = [], toClose = [], noParent = [];
+            calls.forEach(c => {
+                // Same strike + open date can hold several records (partial buybacks on different days).
+                const cands = portfolio.calls.filter(x => x.strike === c.strike && x.openDate === c.openDate);
+                const claimed = x => toClose.some(t => t.ex === x);
+                if (c.status === 'closed') {
+                    const openEx = cands.find(x => x.status === 'open' && !claimed(x));
+                    if (openEx) { toClose.push({ ex: openEx, c }); return; }
+                    if (cands.some(x => x.status === 'closed' && x.closeDate === c.closeDate)) return;
+                } else if (cands.some(x => x.status === 'open')) return;
+                const parent = parentFor(c);
+                if (!parent) { noParent.push(c); return; }
+                toAdd.push({ c, parent });
+            });
+
+            if (!toAdd.length && !toClose.length && !noParent.length) {
+                msg.innerHTML = 'Short-call records already match the ledger. Nothing to add.';
+                return;
+            }
+            const line = c => `$${c.strike} ${c.openDate}${c.closeDate ? ' -> ' + c.closeDate : ' (open)'}  sold $${round2(c.openCash).toFixed(2)}${c.status === 'closed' ? ', closed $' + round2(-c.closeCash).toFixed(2) : ''}`;
+            const summary = [
+                toAdd.length ? 'ADD:\n' + toAdd.map(x => '  ' + line(x.c)).join('\n') : '',
+                toClose.length ? 'CLOSE existing open record:\n' + toClose.map(x => '  ' + line(x.c)).join('\n') : '',
+                noParent.length ? 'SKIPPED (no LEAPS record to attach to):\n' + noParent.map(c => '  ' + line(c)).join('\n') : ''
+            ].filter(Boolean).join('\n\n');
+            if (!toAdd.length && !toClose.length) { alert(summary); return; }
+            if (!confirm(summary + '\n\nApply these changes to your short-call records?')) return;
+
+            toAdd.forEach(({ c, parent }) => {
+                const call = {
+                    id: `CALL_L_${c.broker}_${c.strike}_${c.expiry}_${c.openDate}_${c.closeDate || 'open'}`,
+                    type: 'SHORT_CALL',
+                    parentLeapsId: parent.id,
+                    symbol: 'IWM',
+                    strike: c.strike,
+                    expiration: c.expiry,
+                    openDate: c.openDate,
+                    openStockPrice: 0,
+                    openPremium: round2(c.openCash),
+                    status: c.status,
+                    notes: 'From ledger'
+                };
+                if (c.status === 'closed') {
+                    call.closeDate = c.closeDate;
+                    call.closePremium = round2(-c.closeCash);
+                    call.status = 'closed';
+                    if (/auto/.test(c.how)) call.notes = 'From ledger: ' + c.how;
+                }
+                portfolio.calls.push(call);
+            });
+            toClose.forEach(({ ex, c }) => {
+                ex.closeDate = c.closeDate;
+                ex.closePremium = round2(-c.closeCash);
+                ex.status = 'closed';
+            });
+            saveData();
+            updateDisplay();
+            msg.innerHTML = `✓ Short calls: ${toAdd.length} added, ${toClose.length} closed` + (noParent.length ? `, ${noParent.length} skipped (no LEAPS)` : '') + '.';
         }
 
         function clearLedger() {
