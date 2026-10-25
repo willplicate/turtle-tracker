@@ -279,6 +279,15 @@
                 </div>
             </div>
             
+            <!-- Trailing P&L -->
+            <div class="panel">
+                <div class="panel-header">📅 Trailing P&amp;L (All Accounts)</div>
+                <div class="panel-body">
+                    <div class="stats-grid" id="trailing-grid"></div>
+                    <div id="trailing-note" style="font-size: 11px; color: #666; margin-top: 8px;"></div>
+                </div>
+            </div>
+
             <!-- Summary Stats -->
             <div class="panel">
                 <div class="panel-header">📊 Portfolio Summary</div>
@@ -999,6 +1008,61 @@
             }
         }
         
+        // Cumulative P&L as of a date (YYYY-MM-DD): short calls realized on/before it plus LEAPS
+        // mark-to-market (latest mark on/before it, or cost if none) or realized P&L once closed.
+        function pnlAsOfDate(date, today) {
+            let total = 0, noMark = false;
+            portfolio.leaps.forEach(l => {
+                const n = getContracts(l), cost = l.openPremium * n;
+                if (isValidDateStr(l.openDate) && l.openDate > date) return;
+                if (l.status === 'closed' && isValidDateStr(l.closeDate) && l.closeDate <= date) {
+                    total += ((l.closePremium || 0) - l.openPremium) * n - leapsFees(l);
+                    return;
+                }
+                let value;
+                if (date >= today && l.status !== 'closed') value = getCurrentLEAPSValue(l.id);
+                else {
+                    const marks = (portfolio.history[l.id] || []).filter(h => isValidDateStr(h.date) && h.date <= date)
+                        .map((h, i) => ({ h, i })).sort((x, y) => (x.h.date < y.h.date ? -1 : x.h.date > y.h.date ? 1 : x.i - y.i));
+                    if (marks.length) value = marks[marks.length - 1].h.value * n;
+                    else { value = cost; noMark = true; }
+                }
+                total += value - cost;
+            });
+            portfolio.calls.forEach(c => {
+                if (c.status === 'closed' && isValidDateStr(c.closeDate) && c.closeDate <= date) total += callNetPnl(c);
+            });
+            return { total, noMark };
+        }
+
+        function updateTrailingPnl() {
+            const grid = document.getElementById('trailing-grid');
+            if (!grid) return;
+            const today = localToday();
+            const end = pnlAsOfDate(today, today);
+            let missing = false;
+            grid.innerHTML = [30, 90, 365].map(days => {
+                const d = new Date(today + 'T00:00:00');
+                d.setDate(d.getDate() - days);
+                const start = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                const s = pnlAsOfDate(start, today);
+                const pnl = end.total - s.total;
+                // Capital base: LEAPS cost + reserve for positions held at the window start, else those open now.
+                const held = l => !(isValidDateStr(l.openDate) && l.openDate > start) && !(l.status === 'closed' && isValidDateStr(l.closeDate) && l.closeDate <= start);
+                let base = portfolio.leaps.filter(held).reduce((a, l) => a + l.openPremium * getContracts(l) + (l.cashReserve || 0), 0);
+                if (!base) base = portfolio.leaps.filter(l => l.status !== 'closed').reduce((a, l) => a + l.openPremium * getContracts(l) + (l.cashReserve || 0), 0);
+                const pct = base ? pnl / base * 100 : 0;
+                // Only flag a missing start mark if a position was actually held then.
+                if (s.noMark && portfolio.leaps.some(l => held(l) && isValidDateStr(l.openDate) && l.openDate <= start)) missing = true;
+                return `<div class="stat-box"><div class="stat-label">Last ${days} days</div>` +
+                    `<div class="stat-value ${pnlClass(pnl)}">${formatMoney(pnl)}</div>` +
+                    `<div style="font-size: 11px;" class="${pnlClass(pnl)}">${pct.toFixed(2)}% | ${(pct / days * 365).toFixed(1)}% ann.</div></div>`;
+            }).join('');
+            document.getElementById('trailing-note').textContent =
+                'Change in LEAPS mark-to-market + short calls realized in the window. Return is on LEAPS cost + cash reserve held at the window start.' +
+                (missing ? ' * A window starts before the earliest LEAPS value mark, so the starting value is assumed flat at cost.' : '');
+        }
+
         function updateCombinedDashboard() {
             // Calculate totals across all accounts
             let totalLeapsCost = 0;
@@ -1049,6 +1113,7 @@
             document.getElementById('combined-leaps-pnl').textContent = `LEAPS Unrealized: ${formatMoney(leapsUnrealized)}`;
             document.getElementById('combined-calls-pnl').textContent = `Calls Realized (365d): ${formatMoney(callsRealized365)}`;
             document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
+            updateTrailingPnl();
 
             // Update stats
             document.getElementById('total-leaps-count').textContent = portfolio.leaps.filter(l => l.status !== 'closed').length;
@@ -1818,7 +1883,7 @@
                     console.log('Drawing chart for ID:', leapsId);
                     drawLEAPSValueChart(leapsId, costBasis);
                 }, 10);
-            })(leaps.id, totalCost);
+            })(leaps.id, leaps.openPremium); // history values are per contract, so cost basis must be too
         }
         
         // ==================== UTILITIES ====================
@@ -3338,11 +3403,17 @@
                 return (byAcct.length ? byAcct : all).sort((a, b) => (a.openDate || '') < (b.openDate || '') ? 1 : -1)[0];
             };
 
-            const toAdd = [], toClose = [], noParent = [];
+            const toAdd = [], toClose = [], toMove = [], noParent = [];
             calls.forEach(c => {
                 // Same strike + open date can hold several records (partial buybacks on different days).
                 const cands = portfolio.calls.filter(x => x.strike === c.strike && x.openDate === c.openDate);
                 const claimed = x => toClose.some(t => t.ex === x);
+                // A record hanging off a closed (or missing) LEAPS card moves to the card that was open on its open date.
+                const newParent = parentFor(c);
+                if (newParent) cands.forEach(x => {
+                    const old = portfolio.leaps.find(l => l.id === x.parentLeapsId);
+                    if (x.parentLeapsId !== newParent.id && (!old || old.status === 'closed') && !toMove.some(m => m.ex === x)) toMove.push({ ex: x, parent: newParent, c });
+                });
                 if (c.status === 'closed') {
                     const openEx = cands.find(x => x.status === 'open' && !claimed(x));
                     if (openEx) { toClose.push({ ex: openEx, c }); return; }
@@ -3353,17 +3424,18 @@
                 toAdd.push({ c, parent });
             });
 
-            if (!toAdd.length && !toClose.length && !noParent.length) {
+            if (!toAdd.length && !toClose.length && !toMove.length && !noParent.length) {
                 msg.innerHTML = 'Short-call records already match the ledger. Nothing to add.';
                 return;
             }
             const line = c => `$${c.strike} ${c.openDate}${c.closeDate ? ' -> ' + c.closeDate : ' (open)'}  sold $${round2(c.openCash).toFixed(2)}${c.status === 'closed' ? ', closed $' + round2(-c.closeCash).toFixed(2) : ''}`;
             const summary = [
                 toAdd.length ? 'ADD:\n' + toAdd.map(x => '  ' + line(x.c)).join('\n') : '',
+                toMove.length ? 'RE-ATTACH to the current LEAPS card:\n' + toMove.map(x => '  ' + line(x.c) + '  -> ' + x.parent.accountName + ' $' + x.parent.strike + ' ' + (x.parent.expiration || '')).join('\n') : '',
                 toClose.length ? 'CLOSE existing open record:\n' + toClose.map(x => '  ' + line(x.c)).join('\n') : '',
                 noParent.length ? 'SKIPPED (no LEAPS record to attach to):\n' + noParent.map(c => '  ' + line(c)).join('\n') : ''
             ].filter(Boolean).join('\n\n');
-            if (!toAdd.length && !toClose.length) { alert(summary); return; }
+            if (!toAdd.length && !toClose.length && !toMove.length) { alert(summary); return; }
             if (!confirm(summary + '\n\nApply these changes to your short-call records?')) return;
 
             toAdd.forEach(({ c, parent }) => {
@@ -3388,6 +3460,7 @@
                 }
                 portfolio.calls.push(call);
             });
+            toMove.forEach(({ ex, parent }) => { ex.parentLeapsId = parent.id; });
             toClose.forEach(({ ex, c }) => {
                 ex.closeDate = c.closeDate;
                 ex.closePremium = round2(-c.closeCash);
@@ -3395,7 +3468,7 @@
             });
             saveData();
             updateDisplay();
-            msg.innerHTML = `✓ Short calls: ${toAdd.length} added, ${toClose.length} closed` + (noParent.length ? `, ${noParent.length} skipped (no LEAPS)` : '') + '.';
+            msg.innerHTML = `✓ Short calls: ${toAdd.length} added, ${toClose.length} closed, ${toMove.length} re-attached` + (noParent.length ? `, ${noParent.length} skipped (no LEAPS)` : '') + '.';
         }
 
         function clearLedger() {
