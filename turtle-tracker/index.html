@@ -943,8 +943,9 @@
         }
 
         // Commissions/fees are total dollars (not per contract), default 0.
+        // sharesPnl: signed P&L (gain +) on the shares sold at the strike on assignment and later bought back.
         function callNetPnl(c) {
-            return (c.openPremium || 0) - (c.closePremium || 0) - (c.openCommission || 0) - (c.closeCommission || 0);
+            return (c.openPremium || 0) - (c.closePremium || 0) - (c.openCommission || 0) - (c.closeCommission || 0) + (c.sharesPnl || 0);
         }
         function leapsFees(l) {
             return (l.openCommission || 0) + (l.closeCommission || 0);
@@ -1807,7 +1808,7 @@
                         <h4>Short Call History</h4>
                         <table>
                             <thead>
-                                <tr><th>Week</th><th>Date</th><th>Strike</th><th>Sold</th><th>Close Cost</th><th>P&L</th><th>Running Realized</th><th>If Expires</th><th>Status</th><th>Action</th></tr>
+                                <tr><th>Week</th><th>Date</th><th>Strike</th><th>Sold</th><th>Close Cost</th><th>Shares</th><th>P&L</th><th>Running Realized</th><th>If Expires</th><th>Status</th><th>Action</th></tr>
                             </thead>
                             <tbody>
             `;
@@ -1833,10 +1834,11 @@
                         <td>$${c.strike}</td>
                         <td>${formatMoney(c.openPremium)}</td>
                         <td>${c.closePremium !== undefined ? formatMoney(c.closePremium) : '--'}</td>
+                        <td class="${(c.sharesPnl || 0) >= 0 ? 'pnl-positive' : 'pnl-negative'}" title="Shares sold at the strike on assignment, then bought back">${c.sharesPnl ? formatMoney(c.sharesPnl) : ''}</td>
                         <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl !== null ? formatMoney(pnl) : '--'}</td>
                         <td class="${runningRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-weight: bold;">${formatMoney(runningRealized)}</td>
                         <td style="color: #808080;">${ifExpires !== null ? '+' + formatMoney(ifExpires) : '--'}</td>
-                        <td>${c.status}</td>
+                        <td>${c.assigned ? 'assigned' : c.status}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;
@@ -3392,6 +3394,21 @@
                 g.qty += c.qty; g.openCash += c.openCash; g.closeCash += c.closeCash;
             });
             const calls = Object.values(groups).map(g => Object.assign(g, { status: 'closed' }));
+
+            // Assignment: the ITM call closes at $0 and you end up short shares sold at the strike, which you
+            // later buy back. Match those IWM share lots (opened on the call's close date at ~strike) to the call.
+            const usedLots = new Set();
+            calls.forEach(c => {
+                if (!/assign|ITM at expiry/.test(c.how)) return;
+                let need = c.qty * 100, pnl = 0, found = false;
+                res.closed.forEach(l => {
+                    if (need <= 0 || usedLots.has(l) || l.instrument !== 'equity' || l.underlying !== 'IWM' || l.dir !== 'short' || l.broker !== c.broker) return;
+                    if (l.openDate !== c.closeDate || Math.abs(l.openCash / l.qty - c.strike) > 0.5) return;
+                    usedLots.add(l); need -= l.qty; pnl += l.pnl; found = true;
+                });
+                if (found) { c.sharesPnl = round2(pnl); c.assigned = true; }
+            });
+            const uncoveredShares = res.open.filter(o => o.instrument === 'equity' && o.underlying === 'IWM' && o.qty < 0);
             res.open.filter(o => o.instrument === 'option' && o.right === 'C' && o.underlying === 'IWM' && o.qty < 0).forEach(o => {
                 calls.push({ broker: o.broker, strike: o.strike, expiry: o.expiry, openDate: o.openDate, closeDate: '', how: '', qty: Math.abs(o.qty), openCash: o.cashBasis, closeCash: 0, status: 'open' });
             });
@@ -3403,7 +3420,7 @@
                 return (byAcct.length ? byAcct : all).sort((a, b) => (a.openDate || '') < (b.openDate || '') ? 1 : -1)[0];
             };
 
-            const toAdd = [], toClose = [], toMove = [], noParent = [];
+            const toAdd = [], toClose = [], toMove = [], noParent = [], toShares = [];
             calls.forEach(c => {
                 // Same strike + open date can hold several records (partial buybacks on different days).
                 const cands = portfolio.calls.filter(x => x.strike === c.strike && x.openDate === c.openDate);
@@ -3417,14 +3434,18 @@
                 if (c.status === 'closed') {
                     const openEx = cands.find(x => x.status === 'open' && !claimed(x));
                     if (openEx) { toClose.push({ ex: openEx, c }); return; }
-                    if (cands.some(x => x.status === 'closed' && x.closeDate === c.closeDate)) return;
+                    const done = cands.find(x => x.status === 'closed' && x.closeDate === c.closeDate);
+                    if (done) {
+                        if (c.assigned && round2(done.sharesPnl || 0) !== c.sharesPnl) toShares.push({ ex: done, c });
+                        return;
+                    }
                 } else if (cands.some(x => x.status === 'open')) return;
                 const parent = parentFor(c);
                 if (!parent) { noParent.push(c); return; }
                 toAdd.push({ c, parent });
             });
 
-            if (!toAdd.length && !toClose.length && !toMove.length && !noParent.length) {
+            if (!toAdd.length && !toClose.length && !toMove.length && !noParent.length && !toShares.length) {
                 msg.innerHTML = 'Short-call records already match the ledger. Nothing to add.';
                 return;
             }
@@ -3432,10 +3453,11 @@
             const summary = [
                 toAdd.length ? 'ADD:\n' + toAdd.map(x => '  ' + line(x.c)).join('\n') : '',
                 toMove.length ? 'RE-ATTACH to the current LEAPS card:\n' + toMove.map(x => '  ' + line(x.c) + '  -> ' + x.parent.accountName + ' $' + x.parent.strike + ' ' + (x.parent.expiration || '')).join('\n') : '',
+                toShares.length ? 'ADD ASSIGNMENT SHARE P&L:\n' + toShares.map(x => '  ' + line(x.c) + '  shares ' + (x.c.sharesPnl >= 0 ? '+' : '-') + '$' + Math.abs(x.c.sharesPnl).toFixed(2)).join('\n') : '',
                 toClose.length ? 'CLOSE existing open record:\n' + toClose.map(x => '  ' + line(x.c)).join('\n') : '',
                 noParent.length ? 'SKIPPED (no LEAPS record to attach to):\n' + noParent.map(c => '  ' + line(c)).join('\n') : ''
             ].filter(Boolean).join('\n\n');
-            if (!toAdd.length && !toClose.length && !toMove.length) { alert(summary); return; }
+            if (!toAdd.length && !toClose.length && !toMove.length && !toShares.length) { alert(summary); return; }
             if (!confirm(summary + '\n\nApply these changes to your short-call records?')) return;
 
             toAdd.forEach(({ c, parent }) => {
@@ -3457,10 +3479,12 @@
                     call.closePremium = round2(-c.closeCash);
                     call.status = 'closed';
                     if (/auto/.test(c.how)) call.notes = 'From ledger: ' + c.how;
+                    if (c.assigned) { call.sharesPnl = c.sharesPnl; call.assigned = true; }
                 }
                 portfolio.calls.push(call);
             });
             toMove.forEach(({ ex, parent }) => { ex.parentLeapsId = parent.id; });
+            toShares.forEach(({ ex, c }) => { ex.sharesPnl = c.sharesPnl; ex.assigned = true; });
             toClose.forEach(({ ex, c }) => {
                 ex.closeDate = c.closeDate;
                 ex.closePremium = round2(-c.closeCash);
@@ -3468,7 +3492,7 @@
             });
             saveData();
             updateDisplay();
-            msg.innerHTML = `✓ Short calls: ${toAdd.length} added, ${toClose.length} closed, ${toMove.length} re-attached` + (noParent.length ? `, ${noParent.length} skipped (no LEAPS)` : '') + '.';
+            msg.innerHTML = `✓ Short calls: ${toAdd.length} added, ${toClose.length} closed, ${toMove.length} re-attached, ${toShares.length} assignment share P&L updated` + (uncoveredShares.length ? ` (WARNING: ${Math.abs(uncoveredShares.reduce((a, o) => a + o.qty, 0))} IWM shares still short, not yet bought back)` : '') + (noParent.length ? `, ${noParent.length} skipped (no LEAPS)` : '') + '.';
         }
 
         function clearLedger() {
