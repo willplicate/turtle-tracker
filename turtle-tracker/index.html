@@ -279,6 +279,12 @@
                 </div>
             </div>
             
+            <!-- Net Liq -->
+            <div class="panel">
+                <div class="panel-header">💰 Account Net Liq</div>
+                <div class="panel-body" id="netliq-body"></div>
+            </div>
+
             <!-- Trailing P&L -->
             <div class="panel">
                 <div class="panel-header">📅 Trailing P&amp;L (All Accounts)</div>
@@ -913,6 +919,7 @@
             if (!Array.isArray(portfolio.ledger)) portfolio.ledger = [];
             if (!Array.isArray(portfolio.benchEntries)) portfolio.benchEntries = [];
             if (!portfolio.iwmOverrides || typeof portfolio.iwmOverrides !== 'object') portfolio.iwmOverrides = {};
+            if (!Array.isArray(portfolio.netLiq)) portfolio.netLiq = [];
             if (repairBlankHistoryDates()) saveData();
             updateDisplay();
         }
@@ -1050,8 +1057,8 @@
                 const pnl = end.total - s.total;
                 // Capital base: LEAPS cost + reserve for positions held at the window start, else those open now.
                 const held = l => !(isValidDateStr(l.openDate) && l.openDate > start) && !(l.status === 'closed' && isValidDateStr(l.closeDate) && l.closeDate <= start);
-                let base = portfolio.leaps.filter(held).reduce((a, l) => a + l.openPremium * getContracts(l) + (l.cashReserve || 0), 0);
-                if (!base) base = portfolio.leaps.filter(l => l.status !== 'closed').reduce((a, l) => a + l.openPremium * getContracts(l) + (l.cashReserve || 0), 0);
+                let base = portfolio.leaps.filter(held).reduce((a, l) => a + l.openPremium * getContracts(l) + effectiveReserve(l), 0);
+                if (!base) base = portfolio.leaps.filter(l => l.status !== 'closed').reduce((a, l) => a + l.openPremium * getContracts(l) + effectiveReserve(l), 0);
                 const pct = base ? pnl / base * 100 : 0;
                 // Only flag a missing start mark if a position was actually held then.
                 if (s.noMark && portfolio.leaps.some(l => held(l) && isValidDateStr(l.openDate) && l.openDate <= start)) missing = true;
@@ -1082,7 +1089,7 @@
                     const currentVal = getCurrentLEAPSValue(leaps.id);
                     totalLeapsCost += leaps.openPremium * n;
                     totalLeapsValue += currentVal;
-                    totalActiveAllocation += leaps.openPremium * n + (leaps.cashReserve || 0);
+                    totalActiveAllocation += leaps.openPremium * n + effectiveReserve(leaps);
                 } else if (leaps.closeDate && new Date(leaps.closeDate) >= oneYearAgo) {
                     leapsRealized365 += ((leaps.closePremium || 0) - leaps.openPremium) * n - leapsFees(leaps);
                 }
@@ -1115,6 +1122,7 @@
             document.getElementById('combined-calls-pnl').textContent = `Calls Realized (365d): ${formatMoney(callsRealized365)}`;
             document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
             updateTrailingPnl();
+            renderNetLiqPanel();
 
             // Update stats
             document.getElementById('total-leaps-count').textContent = portfolio.leaps.filter(l => l.status !== 'closed').length;
@@ -1148,7 +1156,7 @@
                 });
 
                 const netRealized = leapsPnl + callsRealized;
-                const cashReserve = leaps.cashReserve || 0;
+                const cashReserve = effectiveReserve(leaps);
                 const totalAllocation = totalCost + cashReserve;
                 const returnPct = totalAllocation > 0 ? (netRealized / totalAllocation) * 100 : 0;
 
@@ -1423,7 +1431,7 @@
                 let list = flows;
                 if (opens.length && flows[0].date > opens[0].openDate) {
                     const l = opens[0];
-                    list = [{ date: l.openDate, amount: l.openPremium * getContracts(l) + (l.cashReserve || 0), price: null }].concat(flows);
+                    list = [{ date: l.openDate, amount: l.openPremium * getContracts(l) + effectiveReserve(l), price: null }].concat(flows);
                     fromLedger[n] = 'estimated start + Ledger deposits';
                 } else fromLedger[n] = 'Ledger deposits';
                 events[n] = toEvents(list);
@@ -1433,7 +1441,7 @@
             portfolio.leaps.forEach(l => {
                 const n = benchAccountOf(l.accountName);
                 if (manual[n] || fromLedger[n] || !isValidDateStr(l.openDate)) return;
-                const cap = l.openPremium * getContracts(l) + (l.cashReserve || 0);
+                const cap = l.openPremium * getContracts(l) + effectiveReserve(l);
                 const list = derived[n] || (derived[n] = []);
                 list.push({ date: l.openDate, delta: cap });
                 if (l.status === 'closed' && isValidDateStr(l.closeDate)) list.push({ date: l.closeDate, delta: -cap });
@@ -1713,7 +1721,7 @@
             const maxPotentialNet = leapsPnl + maxPotentialCalls;
 
             // Calculate returns
-            const cashReserve = leaps.cashReserve || 0;
+            const cashReserve = effectiveReserve(leaps);
             const totalAllocation = totalCost + cashReserve;
             const realizedReturnPct = totalAllocation > 0 ? (netRealizedPnl / totalAllocation) * 100 : 0;
             const potentialReturnPct = totalAllocation > 0 ? (maxPotentialNet / totalAllocation) * 100 : 0;
@@ -1897,6 +1905,108 @@
                            .sort((a, b) => (new Date(b.date).getTime() || 0) - (new Date(a.date).getTime() || 0) || b._origIdx - a._origIdx);
         }
 
+        // ==================== NET LIQ SNAPSHOTS ====================
+        // portfolio.netLiq: [{ id, account:'IBKR'|'Tasty', date, amount }] typed from the broker's Net Liq figure.
+        // The latest snapshot per account replaces the hand-typed cash reserve; deposits/withdrawals are
+        // taken out of the time-weighted return so adding cash doesn't look like a loss.
+
+        function netLiqSnapshots(account) {
+            return (portfolio.netLiq || []).filter(e => e && e.account === account && isValidDateStr(e.date) && e.amount > 0)
+                .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        }
+
+        // Cash implied by the latest snapshot: Net Liq minus the current value of the account's active LEAPS.
+        // Open short calls are not subtracted (the tracker has no mark for them).
+        function derivedCashFor(account) {
+            const snaps = netLiqSnapshots(account);
+            if (!snaps.length) return null;
+            const active = portfolio.leaps.filter(l => l.status !== 'closed' && benchAccountOf(l.accountName) === account);
+            const value = active.reduce((a, l) => a + getCurrentLEAPSValue(l.id), 0);
+            return { cash: Math.max(0, snaps[snaps.length - 1].amount - value), value: value, snap: snaps[snaps.length - 1] };
+        }
+
+        // Cash reserve to use for a LEAPS: its share (by cost) of the account's derived cash when a snapshot
+        // exists, otherwise the hand-typed reserve.
+        function effectiveReserve(leaps) {
+            if (leaps.status === 'closed') return leaps.cashReserve || 0;
+            const account = benchAccountOf(leaps.accountName);
+            const d = derivedCashFor(account);
+            if (!d) return leaps.cashReserve || 0;
+            const active = portfolio.leaps.filter(l => l.status !== 'closed' && benchAccountOf(l.accountName) === account);
+            const cost = l => l.openPremium * getContracts(l);
+            const total = active.reduce((a, l) => a + cost(l), 0);
+            return total > 0 ? d.cash * cost(leaps) / total : d.cash / active.length;
+        }
+
+        // Signed deposits/withdrawals for an account: Ledger rows plus manual flows from Benchmark setup.
+        function netLiqFlows(account) {
+            const flows = [];
+            (portfolio.ledger || []).forEach(r => {
+                if ((r.kind === 'deposit' || r.kind === 'withdrawal') && isValidDateStr(r.date) &&
+                    (r.broker === 'tastytrade' ? 'Tasty' : 'IBKR') === account) flows.push({ date: r.date, amount: r.net });
+            });
+            (portfolio.benchEntries || []).forEach(e => {
+                if (e && e.kind === 'flow' && e.account === account && isValidDateStr(e.date)) flows.push({ date: e.date, amount: e.amount });
+            });
+            return flows;
+        }
+
+        // Chain-linked return between snapshots: each period is (end - flows) / start - 1, so deposits drop out.
+        function netLiqReturn(account) {
+            const snaps = netLiqSnapshots(account);
+            if (snaps.length < 2) return null;
+            const flows = netLiqFlows(account);
+            let growth = 1, totalFlows = 0;
+            for (let i = 1; i < snaps.length; i++) {
+                const f = flows.filter(x => x.date > snaps[i - 1].date && x.date <= snaps[i].date).reduce((a, x) => a + x.amount, 0);
+                growth *= (snaps[i].amount - f) / snaps[i - 1].amount;
+                totalFlows += f;
+            }
+            const first = snaps[0], last = snaps[snaps.length - 1];
+            return { twr: (growth - 1) * 100, pnl: last.amount - first.amount - totalFlows, flows: totalFlows, from: first.date, to: last.date };
+        }
+
+        function renderNetLiqPanel() {
+            const el = document.getElementById('netliq-body');
+            if (!el) return;
+            const rows = ['IBKR', 'Tasty'].map(acct => {
+                const d = derivedCashFor(acct);
+                if (!d) return `<tr><td>${acct}</td><td colspan="6"><em>No snapshot yet</em></td></tr>`;
+                const active = portfolio.leaps.filter(l => l.status !== 'closed' && benchAccountOf(l.accountName) === acct);
+                const oldAlloc = active.reduce((a, l) => a + l.openPremium * getContracts(l) + effectiveReserve(l), 0);
+                const r = netLiqReturn(acct);
+                return `<tr><td>${acct}</td><td>${formatMoney(d.snap.amount)}<br><span style="font-size:10px;color:#666;">${escHtml(d.snap.date)}</span></td>` +
+                    `<td>${formatMoney(d.value)}</td><td>${formatMoney(d.cash)}</td><td>${formatMoney(oldAlloc)}</td>` +
+                    (r ? `<td class="${pnlClass(r.pnl)}">${formatMoney(r.pnl)}<br><span style="font-size:10px;">net of ${formatMoney(r.flows)} deposits</span></td>` +
+                         `<td class="${pnlClass(r.twr)}">${r.twr.toFixed(2)}%<br><span style="font-size:10px;">${escHtml(r.from)} to ${escHtml(r.to)}</span></td>`
+                       : `<td colspan="2"><em>Add a second snapshot for a return</em></td>`) + `</tr>`;
+            }).join('');
+            const list = (portfolio.netLiq || []).filter(e => e && e.id).slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+            const listHtml = list.map(e => `<tr><td>${escHtml(e.account)}</td><td>${escHtml(e.date)}</td><td>${formatMoney(e.amount)}</td><td><button onclick="deleteNetLiq('${escHtml(e.id)}')">Delete</button></td></tr>`).join('');
+            el.innerHTML =
+                `<table><thead><tr><th>Account</th><th>Net Liq</th><th>LEAPS value</th><th>Cash (derived)</th><th>Old LEAPS + reserve</th><th>P&amp;L</th><th>Return (time-weighted)</th></tr></thead><tbody>${rows}</tbody></table>` +
+                `<div style="font-size:11px;color:#444;margin-top:6px;">Cash = latest Net Liq - active LEAPS value. It replaces the typed cash reserve in the return % figures once an account has a snapshot. Time-weighted return removes Ledger and Benchmark-setup deposits/withdrawals, so adding cash doesn't change it.</div>` +
+                `<div style="margin-top:8px;"><select id="netliq-account"><option>IBKR</option><option>Tasty</option></select> ` +
+                `<input type="date" id="netliq-date" value="${localToday()}"> <input type="number" id="netliq-amount" step="0.01" placeholder="Net Liq $" style="width:110px;"> <button onclick="addNetLiq()">[ Add snapshot ]</button></div>` +
+                (listHtml ? `<table style="margin-top:8px;"><thead><tr><th>Account</th><th>Date</th><th>Net Liq</th><th></th></tr></thead><tbody>${listHtml}</tbody></table>` : '');
+        }
+
+        function addNetLiq() {
+            const account = document.getElementById('netliq-account').value;
+            const date = document.getElementById('netliq-date').value;
+            const amount = parseFloat(document.getElementById('netliq-amount').value);
+            if (!isValidDateStr(date) || !(amount > 0)) { alert('Enter a date and a positive Net Liq amount.'); return; }
+            // One snapshot per account per day: replace.
+            portfolio.netLiq = (portfolio.netLiq || []).filter(e => !(e.account === account && e.date === date));
+            portfolio.netLiq.push({ id: 'N' + Date.now() + Math.floor(Math.random() * 1000), account: account, date: date, amount: amount });
+            saveData(); updateDisplay();
+        }
+
+        function deleteNetLiq(id) {
+            portfolio.netLiq = (portfolio.netLiq || []).filter(e => e.id !== id);
+            saveData(); updateDisplay();
+        }
+
         function getCurrentLEAPSValue(leapsId) {
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return 0;
@@ -2026,6 +2136,7 @@
                     history: {},
                     ledger: [],
                     benchEntries: [],
+                    netLiq: [],
                     iwmOverrides: {},
                     benchMode: null,
                     ledgerMarks: null
@@ -2038,6 +2149,7 @@
                     history: data.history && typeof data.history === 'object' ? data.history : {},
                     ledger: Array.isArray(data.ledger) ? data.ledger.filter(r => r && r.id) : [],
                     benchEntries: Array.isArray(data.benchEntries) ? data.benchEntries.filter(e => e && e.id) : [],
+                    netLiq: Array.isArray(data.netLiq) ? data.netLiq.filter(e => e && e.id) : [],
                     iwmOverrides: data.iwmOverrides && typeof data.iwmOverrides === 'object' ? data.iwmOverrides : {},
                     benchMode: data.benchMode === 'lump' || data.benchMode === 'flows' ? data.benchMode : null,
                     ledgerMarks: data.ledgerMarks && typeof data.ledgerMarks === 'object' ? data.ledgerMarks : null
@@ -2078,6 +2190,9 @@
             if (!Array.isArray(portfolio.benchEntries)) portfolio.benchEntries = [];
             const benchIds = new Set(portfolio.benchEntries.map(e => e.id));
             (incoming.benchEntries || []).forEach(e => { if (!benchIds.has(e.id)) { portfolio.benchEntries.push(e); benchIds.add(e.id); } });
+            if (!Array.isArray(portfolio.netLiq)) portfolio.netLiq = [];
+            const nlIds = new Set(portfolio.netLiq.map(e => e.id));
+            (incoming.netLiq || []).forEach(e => { if (!nlIds.has(e.id)) { portfolio.netLiq.push(e); nlIds.add(e.id); } });
             portfolio.iwmOverrides = Object.assign({}, incoming.iwmOverrides || {}, portfolio.iwmOverrides || {});
             if (!portfolio.benchMode && incoming.benchMode) portfolio.benchMode = incoming.benchMode;
             if (incoming.ledgerMarks) portfolio.ledgerMarks = Object.assign({}, incoming.ledgerMarks, portfolio.ledgerMarks || {});
@@ -2102,6 +2217,7 @@
                         ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger,
                         ledgerMarks: incoming.ledgerMarks || portfolio.ledgerMarks || {},
                         benchEntries: incoming.benchEntries.length ? incoming.benchEntries : (portfolio.benchEntries || []),
+                        netLiq: incoming.netLiq.length ? incoming.netLiq : (portfolio.netLiq || []),
                         iwmOverrides: Object.keys(incoming.iwmOverrides).length ? incoming.iwmOverrides : (portfolio.iwmOverrides || {}),
                         benchMode: incoming.benchMode || portfolio.benchMode };
                     repairBlankHistoryDates();
@@ -2952,7 +3068,7 @@
         
         function clearAllData() {
             if (confirm('Delete ALL data?')) {
-                portfolio = { leaps: [], calls: [], history: {}, ledger: [], benchEntries: [], iwmOverrides: {} };
+                portfolio = { leaps: [], calls: [], history: {}, ledger: [], benchEntries: [], netLiq: [], iwmOverrides: {} };
                 saveData();
                 updateDisplay();
             }
