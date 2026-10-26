@@ -268,6 +268,7 @@
                     <span id="combined-calls-pnl">Short Calls: $0</span> | 
                     <span id="combined-open-premium">Open: $0</span>
                 </div>
+                <div id="combined-netliq" style="font-size: 12px; margin-top: 10px;"></div>
             </div>
             
             <!-- Account Selector -->
@@ -279,12 +280,6 @@
                 </div>
             </div>
             
-            <!-- Net Liq -->
-            <div class="panel">
-                <div class="panel-header">💰 Account Net Liq</div>
-                <div class="panel-body" id="netliq-body"></div>
-            </div>
-
             <!-- Trailing P&L -->
             <div class="panel">
                 <div class="panel-header">📅 Trailing P&amp;L (All Accounts)</div>
@@ -411,6 +406,10 @@
 
         <!-- BROKER LEDGER TAB -->
         <div id="tab-ledger" class="tab-content">
+            <div class="panel">
+                <div class="panel-header">💰 Account Net Liq</div>
+                <div class="panel-body" id="netliq-body"></div>
+            </div>
             <div class="panel">
                 <div class="panel-header">📒 Broker Trade Ledger</div>
                 <div class="panel-body">
@@ -1018,9 +1017,11 @@
         
         // Cumulative P&L as of a date (YYYY-MM-DD): short calls realized on/before it plus LEAPS
         // mark-to-market (latest mark on/before it, or cost if none) or realized P&L once closed.
-        function pnlAsOfDate(date, today) {
+        function pnlAsOfDate(date, today, account) {
             let total = 0, noMark = false;
+            const inAcct = l => !account || benchAccountOf(l.accountName) === account;
             portfolio.leaps.forEach(l => {
+                if (!inAcct(l)) return;
                 const n = getContracts(l), cost = l.openPremium * n;
                 if (isValidDateStr(l.openDate) && l.openDate > date) return;
                 if (l.status === 'closed' && isValidDateStr(l.closeDate) && l.closeDate <= date) {
@@ -1038,6 +1039,8 @@
                 total += value - cost;
             });
             portfolio.calls.forEach(c => {
+                const parent = portfolio.leaps.find(l => l.id === c.parentLeapsId);
+                if (account && !(parent && inAcct(parent))) return;
                 if (c.status === 'closed' && isValidDateStr(c.closeDate) && c.closeDate <= date) total += callNetPnl(c);
             });
             return { total, noMark };
@@ -1915,14 +1918,25 @@
                 .slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
         }
 
-        // Cash implied by the latest snapshot: Net Liq minus the current value of the account's active LEAPS.
-        // Open short calls are not subtracted (the tracker has no mark for them).
-        function derivedCashFor(account) {
+        // Net Liq today: the latest snapshot plus P&L since that date plus deposits/withdrawals since.
+        function liveNetLiq(account) {
             const snaps = netLiqSnapshots(account);
             if (!snaps.length) return null;
+            const snap = snaps[snaps.length - 1];
+            const today = localToday();
+            const pnlSince = snap.date >= today ? 0 : pnlAsOfDate(today, today, account).total - pnlAsOfDate(snap.date, today, account).total;
+            const flowsSince = netLiqFlows(account).filter(f => f.date > snap.date).reduce((a, f) => a + f.amount, 0);
+            return { amount: snap.amount + pnlSince + flowsSince, snap: snap, pnlSince: pnlSince, flowsSince: flowsSince };
+        }
+
+        // Cash implied by live Net Liq: Net Liq minus the current value of the account's active LEAPS.
+        // Open short calls are not subtracted (the tracker has no mark for them).
+        function derivedCashFor(account) {
+            const live = liveNetLiq(account);
+            if (!live) return null;
             const active = portfolio.leaps.filter(l => l.status !== 'closed' && benchAccountOf(l.accountName) === account);
             const value = active.reduce((a, l) => a + getCurrentLEAPSValue(l.id), 0);
-            return { cash: Math.max(0, snaps[snaps.length - 1].amount - value), value: value, snap: snaps[snaps.length - 1] };
+            return { cash: Math.max(0, live.amount - value), value: value, snap: live.snap, live: live };
         }
 
         // Cash reserve to use for a LEAPS: its share (by cost) of the account's derived cash when a snapshot
@@ -1975,7 +1989,7 @@
                 const active = portfolio.leaps.filter(l => l.status !== 'closed' && benchAccountOf(l.accountName) === acct);
                 const oldAlloc = active.reduce((a, l) => a + l.openPremium * getContracts(l) + effectiveReserve(l), 0);
                 const r = netLiqReturn(acct);
-                return `<tr><td>${acct}</td><td>${formatMoney(d.snap.amount)}<br><span style="font-size:10px;color:#666;">${escHtml(d.snap.date)}</span></td>` +
+                return `<tr><td>${acct}</td><td>${formatMoney(d.live.amount)}<br><span style="font-size:10px;color:#666;">${formatMoney(d.snap.amount)} on ${escHtml(d.snap.date)}, ${d.live.pnlSince >= 0 ? '+' : '-'}${formatMoney(Math.abs(d.live.pnlSince))} P&amp;L${d.live.flowsSince ? ', ' + formatMoney(d.live.flowsSince) + ' deposits' : ''}</span></td>` +
                     `<td>${formatMoney(d.value)}</td><td>${formatMoney(d.cash)}</td><td>${formatMoney(oldAlloc)}</td>` +
                     (r ? `<td class="${pnlClass(r.pnl)}">${formatMoney(r.pnl)}<br><span style="font-size:10px;">net of ${formatMoney(r.flows)} deposits</span></td>` +
                          `<td class="${pnlClass(r.twr)}">${r.twr.toFixed(2)}%<br><span style="font-size:10px;">${escHtml(r.from)} to ${escHtml(r.to)}</span></td>`
@@ -1983,12 +1997,31 @@
             }).join('');
             const list = (portfolio.netLiq || []).filter(e => e && e.id).slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
             const listHtml = list.map(e => `<tr><td>${escHtml(e.account)}</td><td>${escHtml(e.date)}</td><td>${formatMoney(e.amount)}</td><td><button onclick="deleteNetLiq('${escHtml(e.id)}')">Delete</button></td></tr>`).join('');
+            renderNetLiqBanner();
             el.innerHTML =
-                `<table><thead><tr><th>Account</th><th>Net Liq</th><th>LEAPS value</th><th>Cash (derived)</th><th>Old LEAPS + reserve</th><th>P&amp;L</th><th>Return (time-weighted)</th></tr></thead><tbody>${rows}</tbody></table>` +
-                `<div style="font-size:11px;color:#444;margin-top:6px;">Cash = latest Net Liq - active LEAPS value. It replaces the typed cash reserve in the return % figures once an account has a snapshot. Time-weighted return removes Ledger and Benchmark-setup deposits/withdrawals, so adding cash doesn't change it.</div>` +
+                `<table><thead><tr><th>Account</th><th>Net Liq (live)</th><th>LEAPS value</th><th>Cash (derived)</th><th>Old LEAPS + reserve</th><th>P&amp;L</th><th>Return (time-weighted)</th></tr></thead><tbody>${rows}</tbody></table>` +
+                `<div style="font-size:11px;color:#444;margin-top:6px;">Live Net Liq = latest snapshot + P&amp;L since + deposits since. Cash = live Net Liq - active LEAPS value. It replaces the typed cash reserve in the return % figures once an account has a snapshot. Time-weighted return removes Ledger and Benchmark-setup deposits/withdrawals, so adding cash doesn't change it.</div>` +
                 `<div style="margin-top:8px;"><select id="netliq-account"><option>IBKR</option><option>Tasty</option></select> ` +
                 `<input type="date" id="netliq-date" value="${localToday()}"> <input type="number" id="netliq-amount" step="0.01" placeholder="Net Liq $" style="width:110px;"> <button onclick="addNetLiq()">[ Add snapshot ]</button></div>` +
                 (listHtml ? `<table style="margin-top:8px;"><thead><tr><th>Account</th><th>Date</th><th>Net Liq</th><th></th></tr></thead><tbody>${listHtml}</tbody></table>` : '');
+        }
+
+        function renderNetLiqBanner() {
+            const el = document.getElementById('combined-netliq');
+            if (!el) return;
+            const accts = ['IBKR', 'Tasty'];
+            const lives = accts.map(a => ({ a: a, v: liveNetLiq(a) }));
+            const have = lives.filter(x => x.v);
+            if (!have.length) {
+                el.innerHTML = `ALL ACCOUNTS NET LIQ: not set <a href="#" onclick="showTab('ledger');return false;" style="color:#ffd700;">[ add ]</a>`;
+                return;
+            }
+            const total = have.reduce((a, x) => a + x.v.amount, 0);
+            const missing = lives.filter(x => !x.v).map(x => x.a);
+            const oldest = have.map(x => x.v.snap.date).sort()[0];
+            el.innerHTML = `ALL ACCOUNTS NET LIQ: <strong style="font-size:18px;">${formatMoney(total)}</strong> ` +
+                `<span style="font-size:10px;color:#ccc;">(snapshot ${escHtml(oldest)} + P&amp;L${missing.length ? '; ' + missing.join(', ') + ' not included' : ''})</span> ` +
+                `<a href="#" onclick="showTab('ledger');return false;" style="color:#ffd700;font-size:11px;">[ update ]</a>`;
         }
 
         function addNetLiq() {
