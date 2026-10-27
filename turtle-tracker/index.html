@@ -411,6 +411,10 @@
                 <div class="panel-body" id="netliq-body"></div>
             </div>
             <div class="panel">
+                <div class="panel-header">💵 Deposits &amp; Withdrawals</div>
+                <div class="panel-body" id="funds-body"></div>
+            </div>
+            <div class="panel">
                 <div class="panel-header">📒 Broker Trade Ledger</div>
                 <div class="panel-body">
                     <div style="font-size: 11px; color: #444; margin-bottom: 8px;">Import raw broker exports; positions and realized P&L below are derived from the fills (FIFO, net of commissions and fees). Supports the <strong>Tastytrade Transactions CSV</strong> and the <strong>IBKR Transaction History statement</strong>. Import as many files as you like: overlapping rows are recognised and skipped, so re-importing is safe. The ledger is separate from your hand-entered LEAPS / call records and is included in the JSON backup.</div>
@@ -1953,16 +1957,114 @@
         }
 
         // Signed deposits/withdrawals for an account: Ledger rows plus manual flows from Benchmark setup.
-        function netLiqFlows(account) {
+        function fundsFlows() {
             const flows = [];
             (portfolio.ledger || []).forEach(r => {
-                if ((r.kind === 'deposit' || r.kind === 'withdrawal') && isValidDateStr(r.date) &&
-                    (r.broker === 'tastytrade' ? 'Tasty' : 'IBKR') === account) flows.push({ date: r.date, amount: r.net });
+                if ((r.kind === 'deposit' || r.kind === 'withdrawal') && isValidDateStr(r.date))
+                    flows.push({ id: r.id, date: r.date, account: r.broker === 'tastytrade' ? 'Tasty' : 'IBKR', amount: r.net, source: 'ledger', desc: r.desc || '' });
             });
             (portfolio.benchEntries || []).forEach(e => {
-                if (e && e.kind === 'flow' && e.account === account && isValidDateStr(e.date)) flows.push({ date: e.date, amount: e.amount });
+                if (e && e.kind === 'flow' && isValidDateStr(e.date))
+                    flows.push({ id: e.id, date: e.date, account: e.account, amount: e.amount, source: 'manual', desc: '' });
             });
-            return flows;
+            return flows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        }
+
+        function netLiqFlows(account) {
+            return fundsFlows().filter(f => f.account === account);
+        }
+
+        function addFundsFlow() {
+            const account = document.getElementById('funds-account').value;
+            const kind = document.getElementById('funds-kind').value;
+            const date = document.getElementById('funds-date').value;
+            let amount = parseFloat(document.getElementById('funds-amount').value);
+            if (!isValidDateStr(date) || !(amount > 0)) { alert('Enter a date and a positive amount.'); return; }
+            if (kind === 'withdrawal') amount = -amount;
+            portfolio.benchEntries.push({ id: 'B' + Date.now() + Math.floor(Math.random() * 1000), account: account,
+                kind: 'flow', date: date, amount: amount, iwmPrice: 0 });
+            saveData(); updateDisplay();
+        }
+
+        function deleteFundsFlow(id) {
+            portfolio.benchEntries = (portfolio.benchEntries || []).filter(e => e.id !== id);
+            saveData(); updateDisplay();
+        }
+
+        function renderFundsPanel() {
+            const el = document.getElementById('funds-body');
+            if (!el) return;
+            const prevSel = document.getElementById('funds-filter');
+            const filter = prevSel ? prevSel.value : '';
+            const all = fundsFlows();
+            const flows = filter ? all.filter(f => f.account === filter) : all;
+            const dep = flows.filter(f => f.amount > 0).reduce((a, f) => a + f.amount, 0);
+            const wd = flows.filter(f => f.amount < 0).reduce((a, f) => a + f.amount, 0);
+            const net = dep + wd;
+            const acctNet = a => all.filter(f => f.account === a).reduce((s, f) => s + f.amount, 0);
+            let run = 0;
+            const rows = flows.map(f => { run += f.amount; return Object.assign({ running: run }, f); });
+            const tr = rows.slice().reverse().map(f =>
+                `<tr><td>${escHtml(f.date)}</td><td>${escHtml(f.account)}</td><td>${f.amount >= 0 ? 'Deposit' : 'Withdrawal'}</td>` +
+                `<td class="${pnlClass(f.amount)}">${formatMoney(f.amount)}</td><td>${formatMoney(f.running)}</td>` +
+                `<td>${f.source === 'manual' ? 'Manual' : 'Import'}</td>` +
+                `<td>${f.source === 'manual' ? `<button onclick="deleteFundsFlow('${escHtml(f.id)}')">Delete</button>` : ''}</td></tr>`).join('');
+            el.innerHTML =
+                `<div style="margin-bottom:8px;">Account: <select id="funds-filter" onchange="renderFundsPanel()">` +
+                ['', 'IBKR', 'Tasty'].map(a => `<option value="${a}"${a === filter ? ' selected' : ''}>${a || 'All'}</option>`).join('') + `</select></div>` +
+                `<table><thead><tr><th>Total deposited</th><th>Total withdrawn</th><th>Net funds in</th><th>IBKR net</th><th>Tasty net</th></tr></thead><tbody><tr>` +
+                `<td class="${pnlClass(dep)}">${formatMoney(dep)}</td><td class="${pnlClass(wd)}">${formatMoney(wd)}</td><td><strong>${formatMoney(net)}</strong></td>` +
+                `<td>${formatMoney(acctNet('IBKR'))}</td><td>${formatMoney(acctNet('Tasty'))}</td></tr></tbody></table>` +
+                `<canvas id="funds-chart" width="900" height="220" style="max-width:100%;background:#000;margin-top:8px;"></canvas>` +
+                `<div style="margin-top:8px;"><select id="funds-account"><option>IBKR</option><option>Tasty</option></select> ` +
+                `<select id="funds-kind"><option value="deposit">Deposit</option><option value="withdrawal">Withdrawal</option></select> ` +
+                `<input type="date" id="funds-date" value="${localToday()}"> <input type="number" id="funds-amount" step="0.01" min="0" placeholder="Amount $" style="width:110px;"> ` +
+                `<button onclick="addFundsFlow()">[ Add funds entry ]</button>` +
+                `<div style="font-size:11px;color:#444;margin-top:4px;">Imported broker deposits/withdrawals appear automatically. Use this form for transfers not in an imported file.</div></div>` +
+                (tr ? `<table style="margin-top:8px;"><thead><tr><th>Date</th><th>Account</th><th>Type</th><th>Amount</th><th>Running net</th><th>Source</th><th></th></tr></thead><tbody>${tr}</tbody></table>` : '<div style="margin-top:8px;"><em>No deposits or withdrawals found.</em></div>');
+            drawFundsChart(rows, filter);
+        }
+
+        function drawFundsChart(rows, filter) {
+            const canvas = document.getElementById('funds-chart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.width, H = canvas.height;
+            ctx.clearRect(0, 0, W, H);
+            ctx.font = '11px "Courier New", monospace';
+            if (rows.length === 0) { ctx.fillStyle = '#aaa'; ctx.textAlign = 'center'; ctx.fillText('No deposits or withdrawals yet', W / 2, H / 2); return; }
+            const day = s => Date.parse(s + 'T00:00:00Z') / 86400000;
+            const t0 = day(rows[0].date), t1 = Math.max(day(localToday()), day(rows[rows.length - 1].date));
+            const series = [{ label: filter ? filter + ' net funds in' : 'Net funds in', color: '#00ff41', pts: rows.map(r => ({ t: day(r.date), v: r.running })) }];
+            if (!filter) ['IBKR', 'Tasty'].forEach((a, k) => {
+                let s = 0;
+                const pts = rows.filter(r => r.account === a).map(r => ({ t: day(r.date), v: (s += r.amount) }));
+                if (pts.length) series.push({ label: a, color: k ? '#ffaa00' : '#4da6ff', pts: pts });
+            });
+            const vals = [0]; series.forEach(s => s.pts.forEach(p => vals.push(p.v)));
+            const padL = 70, padR = 10, padT = 28, padB = 28;
+            const max = Math.max(...vals), min = Math.min(...vals), span = (max - min) || 1;
+            const y = v => padT + (max - v) / span * (H - padT - padB);
+            const x = t => padL + (t1 === t0 ? 0.5 : (t - t0) / (t1 - t0)) * (W - padL - padR);
+            ctx.strokeStyle = '#444'; ctx.beginPath(); ctx.moveTo(padL, y(0)); ctx.lineTo(W - padR, y(0)); ctx.stroke();
+            ctx.fillStyle = '#aaa'; ctx.textAlign = 'right';
+            ctx.fillText(formatMoney(max), padL - 4, y(max) + 4); ctx.fillText('$0', padL - 4, y(0) + 4);
+            if (min < 0) ctx.fillText(formatMoney(min), padL - 4, y(min) + 4);
+            ctx.textAlign = 'left'; ctx.fillText(rows[0].date, padL, H - 10);
+            ctx.textAlign = 'right'; ctx.fillText(localToday(), W - padR, H - 10);
+            let lx = padL;
+            series.forEach(s => {
+                ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+                s.pts.forEach((p, i) => {
+                    if (i === 0) { ctx.moveTo(x(p.t), y(0)); ctx.lineTo(x(p.t), y(p.v)); }
+                    else { ctx.lineTo(x(p.t), y(s.pts[i - 1].v)); ctx.lineTo(x(p.t), y(p.v)); }
+                });
+                ctx.lineTo(x(t1), y(s.pts[s.pts.length - 1].v)); // hold level to today
+                ctx.stroke(); ctx.lineWidth = 1;
+                ctx.fillStyle = s.color; ctx.textAlign = 'left';
+                ctx.fillRect(lx, 8, 10, 10); ctx.fillText(s.label, lx + 14, 17);
+                lx += 14 + ctx.measureText(s.label).width + 18;
+            });
         }
 
         // Chain-linked return between snapshots: each period is (end - flows) / start - 1, so deposits drop out.
@@ -3691,6 +3793,7 @@
         }
 
         function renderLedger() {
+            renderFundsPanel();
             const statsEl = document.getElementById('ledger-stats');
             if (!statsEl) return;
             const all = Array.isArray(portfolio.ledger) ? portfolio.ledger : [];
