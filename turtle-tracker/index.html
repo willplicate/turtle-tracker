@@ -1853,7 +1853,7 @@
                         <td class="${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}">${pnl !== null ? formatMoney(pnl) : '--'}</td>
                         <td class="${runningRealized >= 0 ? 'pnl-positive' : 'pnl-negative'}" style="font-weight: bold;">${formatMoney(runningRealized)}</td>
                         <td style="color: #808080;">${ifExpires !== null ? '+' + formatMoney(ifExpires) : '--'}</td>
-                        <td>${c.assigned ? 'assigned' : c.status}</td>
+                        <td>${c.assigned ? 'assigned' : (c.status === 'open' ? `<button onclick="addShortCall('${leaps.id}', '${c.id}')" title="Buy to close this call" style="font-size: 11px; padding: 1px 6px; cursor: pointer;">open</button>` : c.status)}</td>
                         <td>${actionButtons}</td>
                     </tr>
                 `;
@@ -2766,31 +2766,33 @@
             document.getElementById('update-reserve-modal').remove();
         }
         
-        function addShortCall(leapsId) {
+        function addShortCall(leapsId, closeCallId) {
             const leaps = portfolio.leaps.find(l => l.id === leapsId);
             if (!leaps) return;
+            // When opened from a call's "open" status button, pre-fill as Buy to Close for that call
+            const target = closeCallId ? portfolio.calls.find(c => c.id === closeCallId && c.status === 'open') : null;
             
             const today = new Date().toISOString().split('T')[0];
             
             const modalHtml = `
                 <div class="modal-overlay" id="add-call-modal" style="display: block;">
                     <div class="modal">
-                        <div class="modal-header">Add Short Call - ${leaps.accountName}</div>
+                        <div class="modal-header">${target ? 'Buy to Close' : 'Add Short Call'} - ${leaps.accountName}</div>
                         <div class="modal-body">
                             <div class="form-row"><label>Action:</label>
                                 <select id="call-action">
-                                    <option value="open">Sell to Open (New Call)</option>
-                                    <option value="close">Buy to Close</option>
+                                    <option value="open"${target ? '' : ' selected'}>Sell to Open (New Call)</option>
+                                    <option value="close"${target ? ' selected' : ''}>Buy to Close</option>
                                 </select>
                             </div>
                             <div class="form-row"><label>Date:</label><input type="date" id="call-date" value="${today}"></div>
-                            <div class="form-row"><label>Strike:</label><input type="number" id="call-strike" step="0.01"></div>
-                            <div class="form-row"><label>Expiration:</label><input type="date" id="call-exp"></div>
-                            <div class="form-row"><label>Premium:</label><input type="number" id="call-premium" step="0.01"></div>
+                            <div class="form-row"><label>Strike:</label><input type="number" id="call-strike" step="0.01" value="${target ? target.strike : ''}"></div>
+                            <div class="form-row"><label>Expiration:</label><input type="date" id="call-exp" value="${target ? (target.expiration || '') : ''}"></div>
+                            <div class="form-row"><label>Premium:</label><input type="number" id="call-premium" step="0.01"${target ? ' autofocus' : ''}></div>
                             <div class="form-row"><label>Commission:</label><input type="number" id="call-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"><small style="color:#666; margin-left:8px;">Total $, optional</small></div>
                         </div>
                         <div class="modal-footer">
-                            <button onclick="saveNewCall('${leapsId}')" class="primary">[ Save ]</button>
+                            <button onclick="saveNewCall('${leapsId}'${target ? `, '${target.id}'` : ''})" class="primary">[ Save ]</button>
                             <button onclick="document.getElementById('add-call-modal').remove()">[ Cancel ]</button>
                         </div>
                     </div>
@@ -2798,9 +2800,10 @@
             `;
             
             document.body.insertAdjacentHTML('beforeend', modalHtml);
+            if (target) document.getElementById('call-premium').focus();
         }
         
-        function saveNewCall(leapsId) {
+        function saveNewCall(leapsId, closeCallId) {
             const action = document.getElementById('call-action').value;
             const date = document.getElementById('call-date').value;
             const strike = parseFloat(document.getElementById('call-strike').value);
@@ -2825,7 +2828,8 @@
                 });
             } else {
                 // Close existing
-                const openCall = portfolio.calls.find(c => 
+                const openCall = (closeCallId && portfolio.calls.find(c => c.id === closeCallId && c.status === 'open')) ||
+                    portfolio.calls.find(c => 
                     c.parentLeapsId === leapsId && 
                     c.status === 'open' && 
                     c.strike === strike
