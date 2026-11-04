@@ -1813,6 +1813,7 @@
                         ${leaps.status !== 'closed' ? `
                         <button onclick="showUpdateLEAPSModal('${leaps.id}')" class="primary">[ Update LEAPS Value ]</button>
                         <button onclick="showUpdateCashReserveModal('${leaps.id}')" style="margin-left: 10px;">[ Update Cash Reserve ]</button>
+                        <button onclick="editLEAPS('${leaps.id}')" style="margin-left: 10px;">[ Edit Contract ]</button>
                         <button onclick="addShortCall('${leaps.id}')" style="margin-left: 10px;">[ Add Short Call ]</button>
                         <button onclick="closeLEAPS('${leaps.id}')" style="margin-left: 10px; background: #800000; color: #fff; border-color: #ff4444 #440000 #440000 #ff4444;">[ Close LEAPS ]</button>
                         ` : `
@@ -2583,6 +2584,7 @@
                             <div class="form-row"><label>Option price:</label><input type="number" id="upd-px" step="0.01" placeholder="IBKR Last, e.g. 48.25" oninput="syncLeapsInputs('px', ${getContracts(leaps)})"><small style="color: #666; margin-left: 8px;">Per share, ×100</small></div>
                             <div class="form-row"><label>LEAPS Value:</label><input type="number" id="upd-value" step="0.01" placeholder="${leaps.currentValue}" oninput="syncLeapsInputs('value', ${getContracts(leaps)})"><small style="color: #666; margin-left: 8px;">Per contract</small></div>
                             <div class="form-row"><label>Delta (0.00-1.00):</label><input type="number" id="upd-delta" step="0.01" min="0" max="1" value="${normalizeDelta(leaps.delta).toFixed(2)}" style="width: 80px;"><small style="color: #666; margin-left: 10px;">Current: ${normalizeDelta(leaps.delta).toFixed(2)}</small></div>
+                            <div class="form-row"><label>Expiration:</label><input type="date" id="upd-exp" value="${leaps.expiration || ''}"><small style="color: #666; margin-left: 10px;">Contract expiry (drives DTE)</small></div>
                             <div class="form-row"><label>Notes:</label><input type="text" id="upd-notes" placeholder="Weekly update"></div>
                         </div>
                         <div class="modal-footer">
@@ -2614,7 +2616,13 @@
             const value = parseFloat(document.getElementById('upd-value').value);
             const delta = normalizeDelta(parseFloat(document.getElementById('upd-delta').value));
             const notes = document.getElementById('upd-notes').value;
+            const expInput = document.getElementById('upd-exp');
+            const newExp = expInput ? expInput.value : '';
             
+            if (newExp && !isValidDateStr(newExp)) {
+                alert('Please enter a valid expiration date');
+                return;
+            }
             if (!value || isNaN(value)) {
                 alert('Please enter a valid LEAPS value');
                 return;
@@ -2628,6 +2636,7 @@
             if (leaps) {
                 leaps.currentValue = value;
                 leaps.markedAt = date;
+                if (newExp) leaps.expiration = newExp;
                 if (!isNaN(delta)) {
                     leaps.delta = delta;
                 }
