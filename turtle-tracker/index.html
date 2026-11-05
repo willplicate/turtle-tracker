@@ -266,7 +266,8 @@
                 <div style="font-size: 11px; margin-top: 10px; color: #ccc;">
                     <span id="combined-leaps-pnl">LEAPS: $0</span> | 
                     <span id="combined-calls-pnl">Short Calls: $0</span> | 
-                    <span id="combined-open-premium">Open: $0</span>
+                    <span id="combined-open-premium">Open: $0</span> |
+                    <span id="combined-puts-pnl">Short Puts: $0</span>
                 </div>
                 <div id="combined-netliq" style="font-size: 12px; margin-top: 10px;"></div>
             </div>
@@ -322,10 +323,34 @@
                             <div class="stat-label">Open Call Premium</div>
                             <div class="stat-value" id="total-open-premium">$0</div>
                         </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Short Puts Realized</div>
+                            <div class="stat-value" id="total-puts-realized">$0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Short Puts Unrealized</div>
+                            <div class="stat-value" id="total-puts-unrealized">$0</div>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Short Puts -->
+            <div class="panel">
+                <div class="panel-header">🔻 Short Puts (cash-secured)</div>
+                <div class="panel-body">
+                    <button onclick="addPut()">[ Sell Put ]</button>
+                    <div id="puts-summary" style="font-size: 12px; margin: 8px 0;"></div>
+                    <table>
+                        <thead>
+                            <tr><th>Put</th><th>Contracts</th><th>Opened</th><th>Premium</th><th>Collateral</th><th>Days Left</th><th>Cost to Close (mark)</th><th>P&L</th><th>Status</th><th></th></tr>
+                        </thead>
+                        <tbody id="puts-tbody"><tr><td colspan="10"><em>No puts</em></td></tr></tbody>
+                    </table>
+                    <div style="font-size: 11px; color: #444; margin-top: 6px;">Premium is the total $ received. Enter the broker's current cost to close ("Mark") to include open-put unrealized P&amp;L in the totals; with no mark, an open put contributes $0 until it closes/expires. Assignment is recorded as a close with no buyback; any shares you receive are not tracked here.</div>
+                </div>
+            </div>
+
             <!-- Breakdown Table -->
             <div class="panel">
                 <div class="panel-header">📋 Account Breakdown</div>
@@ -391,7 +416,7 @@
                     <canvas id="monthly-bench-chart" width="900" height="260" style="width: 100%; max-width: 900px; background: #000; margin-top: 4px; display: block;"></canvas>
                     <table style="margin-top: 10px;">
                         <thead>
-                            <tr><th>Month</th><th>Short Calls (realized)</th><th>LEAPS P&L (mark-to-market change)</th><th>Total P&L</th><th>Cumulative</th><th>Hold LEAPS cum.</th><th>Hold Shares cum.</th><th>Strategy vs Shares</th><th>Open LEAPS unrealized (month-end snapshot)</th></tr>
+                            <tr><th>Month</th><th>Short Calls (realized)</th><th>Short Puts (realized + marked)</th><th>LEAPS P&L (mark-to-market change)</th><th>Total P&L</th><th>Cumulative</th><th>Hold LEAPS cum.</th><th>Hold Shares cum.</th><th>Strategy vs Shares</th><th>Open LEAPS unrealized (month-end snapshot)</th></tr>
                         </thead>
                         <tbody id="monthly-tbody"></tbody>
                     </table>
@@ -923,6 +948,7 @@
             if (!Array.isArray(portfolio.benchEntries)) portfolio.benchEntries = [];
             if (!portfolio.iwmOverrides || typeof portfolio.iwmOverrides !== 'object') portfolio.iwmOverrides = {};
             if (!Array.isArray(portfolio.netLiq)) portfolio.netLiq = [];
+            if (!Array.isArray(portfolio.puts)) portfolio.puts = [];
             if (repairBlankHistoryDates()) saveData();
             updateDisplay();
         }
@@ -957,6 +983,20 @@
         function callNetPnl(c) {
             return (c.openPremium || 0) - (c.closePremium || 0) - (c.openCommission || 0) - (c.closeCommission || 0) + (c.sharesPnl || 0);
         }
+        // ---- Short puts (standalone cash-secured puts, e.g. GOOG; not tied to a LEAPS) ----
+        // Premiums are TOTAL dollars for the whole position (same as short calls).
+        // closePremium = total cost to buy back (0 if expired worthless / assigned).
+        // markValue = optional current cost to close (total $) used for open-put unrealized P&L.
+        function putNetPnl(p) {
+            return (p.openPremium || 0) - (p.closePremium || 0) - (p.openCommission || 0) - (p.closeCommission || 0);
+        }
+        function putUnrealized(p) {
+            if (p.status === 'closed' || !(p.markValue >= 0) || p.markValue === null || p.markValue === '') return 0;
+            return (p.openPremium || 0) - p.markValue - (p.openCommission || 0);
+        }
+        function putCollateral(p) { return (p.strike || 0) * 100 * (p.contracts || 1); }
+        function putsList() { return Array.isArray(portfolio.puts) ? portfolio.puts : []; }
+
         function leapsFees(l) {
             return (l.openCommission || 0) + (l.closeCommission || 0);
         }
@@ -1010,6 +1050,7 @@
         function updateDisplay() {
             updateBackupBanner();
             updateCombinedDashboard();
+            renderPuts();
             updateAccountCards();
             updatePositionSelector();
             renderMonthlyPnl();
@@ -1047,6 +1088,13 @@
                 if (account && !(parent && inAcct(parent))) return;
                 if (c.status === 'closed' && isValidDateStr(c.closeDate) && c.closeDate <= date) total += callNetPnl(c);
             });
+            if (!account) {
+                putsList().forEach(p => {
+                    if (isValidDateStr(p.openDate) && p.openDate > date) return;
+                    if (p.status === 'closed' && isValidDateStr(p.closeDate) && p.closeDate <= date) total += putNetPnl(p);
+                    else if (p.status !== 'closed' && date >= today) total += putUnrealized(p);
+                });
+            }
             return { total, noMark };
         }
 
@@ -1115,12 +1163,23 @@
                 });
             });
 
+            let putsRealized = 0, putsRealized365 = 0, putsUnrealized = 0;
+            putsList().forEach(p => {
+                if (p.status === 'closed') {
+                    const pnl = putNetPnl(p);
+                    putsRealized += pnl;
+                    if (p.closeDate && new Date(p.closeDate) >= oneYearAgo) putsRealized365 += pnl;
+                } else {
+                    putsUnrealized += putUnrealized(p);
+                }
+            });
+
             const leapsUnrealized = totalLeapsValue - totalLeapsCost;
             // "Last 365 days" P&L = current unrealized gain on active LEAPS (a live mark-to-market
             // figure) plus anything actually realized (calls or LEAPS closed) within the trailing year.
             // Older realized gains (e.g. positions closed years ago) are excluded so this reflects
             // recent performance rather than all-time cumulative P&L.
-            const combinedPnl365 = leapsUnrealized + callsRealized365 + leapsRealized365;
+            const combinedPnl365 = leapsUnrealized + callsRealized365 + leapsRealized365 + putsRealized365 + putsUnrealized;
 
             // Update combined box
             document.getElementById('combined-total-pnl').textContent = formatMoney(combinedPnl365);
@@ -1128,6 +1187,7 @@
             document.getElementById('combined-leaps-pnl').textContent = `LEAPS Unrealized: ${formatMoney(leapsUnrealized)}`;
             document.getElementById('combined-calls-pnl').textContent = `Calls Realized (365d): ${formatMoney(callsRealized365)}`;
             document.getElementById('combined-open-premium').textContent = `Open: ${formatMoney(totalOpenPremium)}`;
+            document.getElementById('combined-puts-pnl').textContent = `Short Puts (365d realized + unrealized): ${formatMoney(putsRealized365 + putsUnrealized)}`;
             updateTrailingPnl();
             renderNetLiqPanel();
 
@@ -1138,6 +1198,8 @@
             document.getElementById('total-leaps-unrealized').textContent = formatMoney(leapsUnrealized);
             document.getElementById('total-calls-realized').textContent = formatMoney(totalCallsRealized);
             document.getElementById('total-open-premium').textContent = formatMoney(totalOpenPremium);
+            document.getElementById('total-puts-realized').textContent = formatMoney(putsRealized);
+            document.getElementById('total-puts-unrealized').textContent = formatMoney(putsUnrealized);
             document.getElementById('total-account-value').textContent = formatMoney(totalActiveAllocation);
 
             // Update breakdown table
@@ -1242,7 +1304,15 @@
                     callsBy[m] = (callsBy[m] || 0) + callNetPnl(c);
                 }
             });
-            const dates = Object.keys(callsBy);
+            const putsBy = {};
+            if (!accountId) putsList().forEach(p => {
+                if (p.status === 'closed' && isValidDateStr(p.closeDate)) {
+                    const m = p.closeDate.slice(0, 7);
+                    putsBy[m] = (putsBy[m] || 0) + putNetPnl(p);
+                }
+            });
+            const dates = Object.keys(callsBy).concat(Object.keys(putsBy));
+            if (!accountId) putsList().forEach(p => { if (isValidDateStr(p.openDate)) dates.push(p.openDate.slice(0, 7)); });
             leaps.forEach(l => {
                 if (isValidDateStr(l.openDate)) dates.push(l.openDate.slice(0, 7));
                 if (isValidDateStr(l.closeDate)) dates.push(l.closeDate.slice(0, 7));
@@ -1251,7 +1321,7 @@
             if (dates.length === 0) return [];
             dates.sort();
             const rows = [];
-            let prevLeaps = 0, cum = 0;
+            let prevLeaps = 0, cum = 0, prevPutsUn = 0;
             for (let m = dates[0]; m <= currentMonth; m = nextMonth(m)) {
                 let leapsCum = 0, unrealized = 0, stale = false;
                 leaps.forEach(l => {
@@ -1261,9 +1331,14 @@
                 const calls = callsBy[m] || 0;
                 const leapsChg = leapsCum - prevLeaps;
                 prevLeaps = leapsCum;
-                const total = calls + leapsChg;
+                const putsRl = putsBy[m] || 0;
+                // Open puts: unrealized (marked) only shown in the current month.
+                const putsUn = (!accountId && m === currentMonth) ? putsList().reduce((a, p) => a + (p.status !== 'closed' ? putUnrealized(p) : 0), 0) : 0;
+                const putsChg = putsRl + putsUn - prevPutsUn;
+                prevPutsUn = putsUn;
+                const total = calls + leapsChg + putsChg;
                 cum += total;
-                rows.push({ month: m, calls: calls, leaps: leapsChg, unrealized: unrealized, total: total, cumulative: cum, stale: stale, holdLeaps: leapsCum, shares: null });
+                rows.push({ month: m, puts: putsChg, calls: calls, leaps: leapsChg, unrealized: unrealized, total: total, cumulative: cum, stale: stale, holdLeaps: leapsCum, shares: null });
             }
             // Hold-shares benchmark is account-level, so it only applies to the all-accounts view.
             if (!accountId) applySharesBenchmark(rows);
@@ -1285,14 +1360,14 @@
             const rows = computeMonthlyPnl(accountId);
             const tbody = document.getElementById('monthly-tbody');
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9"><em>No trades yet</em></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10"><em>No trades yet</em></td></tr>';
             } else {
                 const sum = k => rows.reduce((a, r) => a + r[k], 0);
                 const cell = v => `<td class="${pnlClass(v)}">${formatMoney(v)}</td>`;
                 tbody.innerHTML = rows.slice().reverse().map(r =>
-                    `<tr><td>${r.month}${r.stale ? ' <span title="No LEAPS mark this month - value carried from an earlier mark">*</span>' : ''}</td>${cell(r.calls)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}${cell(r.holdLeaps)}${sharesCells(r, cell)}${cell(r.unrealized)}</tr>`
+                    `<tr><td>${r.month}${r.stale ? ' <span title="No LEAPS mark this month - value carried from an earlier mark">*</span>' : ''}</td>${cell(r.calls)}${cell(r.puts || 0)}${cell(r.leaps)}${cell(r.total)}${cell(r.cumulative)}${cell(r.holdLeaps)}${sharesCells(r, cell)}${cell(r.unrealized)}</tr>`
                 ).join('') +
-                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td><td></td><td></td><td></td><td></td></tr>`;
+                    `<tr style="font-weight:bold;"><td>TOTAL</td>${cell(sum('calls'))}${cell(sum('puts'))}${cell(sum('leaps'))}${cell(sum('total'))}<td></td><td></td><td></td><td></td><td></td></tr>`;
             }
 
             // Realized vs unrealized split of the lifetime total
@@ -1344,8 +1419,8 @@
 
         function downloadMonthlyCSV() {
             const rows = computeMonthlyPnl(document.getElementById('monthly-account').value);
-            const csv = 'Month,Short Calls (realized),LEAPS P&L (mark-to-market change),Total,Cumulative,Hold LEAPS cumulative,Hold Shares cumulative,Strategy vs Shares,Open LEAPS unrealized (snapshot)\n' + rows.map(r =>
-                [r.month, r.calls, r.leaps, r.total, r.cumulative, r.holdLeaps, r.shares ? r.shares.pnl : '', r.shares ? r.cumulative - r.shares.pnl : '', r.unrealized].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
+            const csv = 'Month,Short Calls (realized),Short Puts (realized + marked),LEAPS P&L (mark-to-market change),Total,Cumulative,Hold LEAPS cumulative,Hold Shares cumulative,Strategy vs Shares,Open LEAPS unrealized (snapshot)\n' + rows.map(r =>
+                [r.month, r.calls, r.puts || 0, r.leaps, r.total, r.cumulative, r.holdLeaps, r.shares ? r.shares.pnl : '', r.shares ? r.cumulative - r.shares.pnl : '', r.unrealized].map(v => typeof v === 'number' ? v.toFixed(2) : v).join(',')
             ).join('\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -2269,6 +2344,7 @@
                 return {
                     leaps: data.filter(x => x && x.type === 'LEAPS'),
                     calls: data.filter(x => x && x.type === 'SHORT_CALL'),
+                    puts: data.filter(x => x && x.type === 'SHORT_PUT'),
                     history: {},
                     ledger: [],
                     benchEntries: [],
@@ -2278,10 +2354,11 @@
                     ledgerMarks: null
                 };
             }
-            if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls) || Array.isArray(data.ledger))) {
+            if (data && typeof data === 'object' && (Array.isArray(data.leaps) || Array.isArray(data.calls) || Array.isArray(data.ledger) || Array.isArray(data.puts))) {
                 return {
                     leaps: Array.isArray(data.leaps) ? data.leaps : [],
                     calls: Array.isArray(data.calls) ? data.calls : [],
+                    puts: Array.isArray(data.puts) ? data.puts.filter(p => p && p.id) : [],
                     history: data.history && typeof data.history === 'object' ? data.history : {},
                     ledger: Array.isArray(data.ledger) ? data.ledger.filter(r => r && r.id) : [],
                     benchEntries: Array.isArray(data.benchEntries) ? data.benchEntries.filter(e => e && e.id) : [],
@@ -2311,6 +2388,9 @@
                 callIds.add(c.id);
                 stats.calls++;
             });
+            if (!Array.isArray(portfolio.puts)) portfolio.puts = [];
+            const putIds = new Set(portfolio.puts.map(p => p.id));
+            (incoming.puts || []).forEach(p => { if (p && p.id && !putIds.has(p.id)) { portfolio.puts.push(p); putIds.add(p.id); } });
             Object.keys(incoming.history).forEach(id => {
                 if (!Array.isArray(incoming.history[id])) return;
                 const existing = portfolio.history[id] || (portfolio.history[id] = []);
@@ -2350,6 +2430,7 @@
                 if (replace) {
                     // A backup from before the ledger existed must not wipe the ledger.
                     portfolio = { leaps: incoming.leaps, calls: incoming.calls, history: incoming.history,
+                        puts: (incoming.puts && incoming.puts.length) ? incoming.puts : putsList(),
                         ledger: incoming.ledger.length ? incoming.ledger : portfolio.ledger,
                         ledgerMarks: incoming.ledgerMarks || portfolio.ledgerMarks || {},
                         benchEntries: incoming.benchEntries.length ? incoming.benchEntries : (portfolio.benchEntries || []),
@@ -2860,6 +2941,170 @@
             document.getElementById('add-call-modal').remove();
         }
         
+        // ==================== SHORT PUTS ====================
+
+        function renderPuts() {
+            const tbody = document.getElementById('puts-tbody');
+            if (!tbody) return;
+            const puts = putsList().slice().sort((a, b) => (a.status === b.status ? (a.expiration < b.expiration ? -1 : 1) : (a.status === 'open' ? -1 : 1)));
+            const open = puts.filter(p => p.status !== 'closed');
+            const closed = puts.filter(p => p.status === 'closed');
+            const premOpen = open.reduce((a, p) => a + (p.openPremium || 0), 0);
+            const collat = open.reduce((a, p) => a + putCollateral(p), 0);
+            const realized = closed.reduce((a, p) => a + putNetPnl(p), 0);
+            const unreal = open.reduce((a, p) => a + putUnrealized(p), 0);
+            const summary = document.getElementById('puts-summary');
+            if (summary) summary.innerHTML = puts.length === 0 ? '' :
+                `Open: ${open.length} put(s), premium ${formatMoney(premOpen)}, collateral at risk ${formatMoney(collat)} (${collat ? (premOpen / collat * 100).toFixed(2) : '0.00'}% premium yield) | ` +
+                `Realized <span class="${pnlClass(realized)}">${formatMoney(realized)}</span> | Unrealized <span class="${pnlClass(unreal)}">${formatMoney(unreal)}</span>`;
+            if (puts.length === 0) { tbody.innerHTML = '<tr><td colspan="10"><em>No puts</em></td></tr>'; return; }
+            const today = localToday();
+            tbody.innerHTML = puts.map(p => {
+                const isOpen = p.status !== 'closed';
+                const dte = isValidDateStr(p.expiration) ? Math.round((new Date(p.expiration) - new Date(today)) / 86400000) : null;
+                const pnl = isOpen ? putUnrealized(p) : putNetPnl(p);
+                const hasMark = isOpen && p.markValue !== undefined && p.markValue !== null && p.markValue !== '';
+                const statusTxt = isOpen ? 'open' : (p.closeReason || 'closed');
+                const btns = isOpen
+                    ? `<button onclick="markPut('${p.id}')" style="font-size:10px;padding:2px 6px;">[ Mark ]</button> <button onclick="closePut('${p.id}')" style="font-size:10px;padding:2px 6px;">[ Close ]</button> `
+                    : '';
+                return `<tr>
+                    <td><strong>${p.symbol || 'GOOG'} $${p.strike} P ${p.expiration || ''}</strong></td>
+                    <td>${p.contracts || 1}</td>
+                    <td>${p.openDate || ''}</td>
+                    <td>${formatMoney(p.openPremium)}</td>
+                    <td>${formatMoney(putCollateral(p))}</td>
+                    <td>${isOpen && dte !== null ? dte : '—'}</td>
+                    <td>${isOpen ? (hasMark ? formatMoney(p.markValue) : '—') : formatMoney(p.closePremium || 0)}</td>
+                    <td class="${pnlClass(pnl)}">${isOpen && !hasMark ? '—' : formatMoney(pnl)}</td>
+                    <td>${statusTxt}${!isOpen && p.closeDate ? ' ' + p.closeDate : ''}</td>
+                    <td>${btns}<button onclick="deletePut('${p.id}')" style="font-size:10px;padding:2px 6px;color:#f00;">[ X ]</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function addPut() {
+            const today = localToday();
+            const modalHtml = `
+                <div class="modal-overlay" id="add-put-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Sell Put (to open)</div>
+                        <div class="modal-body">
+                            <div class="form-row"><label>Symbol:</label><input type="text" id="put-symbol" value="GOOG" style="width:100px;"></div>
+                            <div class="form-row"><label>Date sold:</label><input type="date" id="put-date" value="${today}"></div>
+                            <div class="form-row"><label>Strike:</label><input type="number" id="put-strike" step="0.01"></div>
+                            <div class="form-row"><label>Expiration:</label><input type="date" id="put-exp"></div>
+                            <div class="form-row"><label>Contracts:</label><input type="number" id="put-contracts" min="1" step="1" value="1" style="width:80px;"></div>
+                            <div class="form-row"><label>Premium:</label><input type="number" id="put-premium" step="0.01"><small style="color:#666; margin-left:8px;">Total $ received</small></div>
+                            <div class="form-row"><label>Commission:</label><input type="number" id="put-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"><small style="color:#666; margin-left:8px;">Total $, optional</small></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveNewPut()" class="primary">[ Save ]</button>
+                            <button onclick="document.getElementById('add-put-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        function saveNewPut() {
+            const strike = parseFloat(document.getElementById('put-strike').value);
+            const premium = parseFloat(document.getElementById('put-premium').value);
+            const expiration = document.getElementById('put-exp').value;
+            const date = document.getElementById('put-date').value;
+            if (!(strike > 0) || !(premium >= 0) || !isValidDateStr(expiration) || !isValidDateStr(date)) {
+                alert('Strike, premium, sold date and expiration are required.');
+                return;
+            }
+            if (!Array.isArray(portfolio.puts)) portfolio.puts = [];
+            portfolio.puts.push({
+                id: 'PUT_' + Date.now() + Math.floor(Math.random() * 1000),
+                type: 'SHORT_PUT',
+                symbol: (document.getElementById('put-symbol').value || 'GOOG').toUpperCase(),
+                strike: strike,
+                expiration: expiration,
+                openDate: date,
+                contracts: Math.max(1, parseInt(document.getElementById('put-contracts').value) || 1),
+                openPremium: premium,
+                openCommission: Math.abs(parseFloat(document.getElementById('put-commission').value)) || 0,
+                status: 'open'
+            });
+            saveData();
+            updateDisplay();
+            document.getElementById('add-put-modal').remove();
+        }
+
+        function markPut(id) {
+            const p = putsList().find(x => x.id === id);
+            if (!p) return;
+            const cur = (p.markValue !== undefined && p.markValue !== null && p.markValue !== '') ? p.markValue : '';
+            const v = prompt(`Current cost to buy back ${p.symbol} $${p.strike} put (TOTAL $ for all contracts, e.g. 800). Leave blank to clear the mark.`, cur);
+            if (v === null) return;
+            if (v.trim() === '') delete p.markValue;
+            else {
+                const n = parseFloat(v);
+                if (isNaN(n) || n < 0) { alert('Enter a non-negative number.'); return; }
+                p.markValue = n;
+            }
+            saveData();
+            updateDisplay();
+        }
+
+        function closePut(id) {
+            const p = putsList().find(x => x.id === id);
+            if (!p) return;
+            const today = localToday();
+            const modalHtml = `
+                <div class="modal-overlay" id="close-put-modal" style="display: block;">
+                    <div class="modal">
+                        <div class="modal-header">Close Put - ${p.symbol} $${p.strike} ${p.expiration}</div>
+                        <div class="modal-body">
+                            <div class="form-row"><label>Outcome:</label>
+                                <select id="cput-reason">
+                                    <option value="bought">Bought to close</option>
+                                    <option value="expired">Expired worthless</option>
+                                    <option value="assigned">Assigned (shares put to me)</option>
+                                </select>
+                            </div>
+                            <div class="form-row"><label>Date:</label><input type="date" id="cput-date" value="${today}"></div>
+                            <div class="form-row"><label>Buyback cost:</label><input type="number" id="cput-premium" step="0.01" min="0" value="0"><small style="color:#666; margin-left:8px;">Total $; 0 if expired/assigned</small></div>
+                            <div class="form-row"><label>Commission:</label><input type="number" id="cput-commission" step="0.01" min="0" placeholder="0.00" style="width:100px;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button onclick="saveClosePut('${id}')" class="primary">[ Save ]</button>
+                            <button onclick="document.getElementById('close-put-modal').remove()">[ Cancel ]</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        function saveClosePut(id) {
+            const p = putsList().find(x => x.id === id);
+            if (!p) return;
+            const reason = document.getElementById('cput-reason').value;
+            const date = document.getElementById('cput-date').value;
+            if (!isValidDateStr(date)) { alert('Enter a valid date.'); return; }
+            p.status = 'closed';
+            p.closeReason = reason;
+            p.closeDate = date;
+            p.closePremium = reason === 'bought' ? (Math.abs(parseFloat(document.getElementById('cput-premium').value)) || 0) : 0;
+            p.closeCommission = Math.abs(parseFloat(document.getElementById('cput-commission').value)) || 0;
+            delete p.markValue;
+            saveData();
+            updateDisplay();
+            document.getElementById('close-put-modal').remove();
+        }
+
+        function deletePut(id) {
+            const p = putsList().find(x => x.id === id);
+            if (!p) return;
+            if (!confirm(`Delete ${p.symbol} $${p.strike} put (${p.expiration})? This removes it from all totals.`)) return;
+            portfolio.puts = portfolio.puts.filter(x => x.id !== id);
+            saveData();
+            updateDisplay();
+        }
+
         // ==================== EDIT SHORT CALL ====================
         
         function editShortCall(leapsId, callId) {
@@ -3216,7 +3461,7 @@
         
         function clearAllData() {
             if (confirm('Delete ALL data?')) {
-                portfolio = { leaps: [], calls: [], history: {}, ledger: [], benchEntries: [], netLiq: [], iwmOverrides: {} };
+                portfolio = { leaps: [], calls: [], puts: [], history: {}, ledger: [], benchEntries: [], netLiq: [], iwmOverrides: {} };
                 saveData();
                 updateDisplay();
             }
